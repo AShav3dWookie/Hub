@@ -1,0 +1,28 @@
+{
+  "name": "logger",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace server",
+    "dev:client": "npm run dev --workspace client",
+    "build": "npm run build --workspace shared && npm run build --workspace server && npm run build --workspace client",
+    "test": "npm run test --workspace server && npm run test --workspace client",
+    "test:server": "npm run test --workspace server",
+    "test:client": "npm run test --workspace client",
+    "lint": "npm run lint --workspace server && npm run lint --workspace client",
+    "db:generate": "drizzle-kit generate --config server/drizzle.config.ts",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up --build",
+    "docker:test": "bash scripts/docker-smoke-test.sh",
+    "seed:test-data": "npm run build --workspace shared && npm run seed:test-data --workspace server"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "drizzle-orm": "^0.45.2"
+  }
+}

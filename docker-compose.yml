@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    image: logger:local
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - DB_PATH=/app/data/logger.db
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+    volumes:
+      - logger-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  logger-data:
