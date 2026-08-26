@@ -12,6 +12,9 @@ export interface EntitySummary {
   category: Category;
   title: string;
   createdAt: string;
+  /** Entity-level fields, set once at creation. Only present for categories that support them (see CATEGORY_FIELDS). */
+  releaseYear: number | null;
+  author: string | null;
 }
 
 export interface LogDTO {
@@ -64,6 +67,9 @@ export interface SearchQuery {
   dateTo?: string;
   ratingMin?: number;
   ratingMax?: number;
+  authorContains?: string;
+  releaseYearMin?: number;
+  releaseYearMax?: number;
   sortBy?: SortBy;
   sortOrder?: SortOrder;
   groupBy?: GroupBy;
@@ -88,6 +94,8 @@ export interface PersonSearchResult {
 export interface CreateEntityRequest {
   category: Category;
   title: string;
+  releaseYear?: number | null;
+  author?: string | null;
 }
 
 export interface PersonTagInput {
@@ -103,6 +111,9 @@ export interface CreateLogRequest {
   /** Or create a new entity (category must be loggable, not "person") */
   category?: LoggableCategory;
   title?: string;
+  /** Entity-level fields, only used when creating a new entity (ignored when attaching to an existing one). */
+  releaseYear?: number | null;
+  author?: string | null;
   rating: number | null;
   date: string;
   notes: string | null;
@@ -122,6 +133,10 @@ export interface EntityNoteDTO {
   entityId: number;
   category: NoteCategory;
   body: string;
+  /** Short custom label, required for category "important_date" (e.g. "Birthday", "New job"). */
+  tag: string | null;
+  /** ISO date (YYYY-MM-DD) the tag refers to, required for category "important_date". Recurs annually by month+day. */
+  eventDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,9 +144,32 @@ export interface EntityNoteDTO {
 export interface CreateEntityNoteRequest {
   category?: NoteCategory;
   body: string;
+  tag?: string | null;
+  eventDate?: string | null;
 }
 
 export interface UpdateEntityNoteRequest {
   category?: NoteCategory;
   body: string;
+  tag?: string | null;
+  eventDate?: string | null;
+}
+
+/** A single important-date note surfaced on the home screen, with its parent person entity inlined. */
+export interface ImportantDateEntry {
+  noteId: number;
+  entityId: number;
+  entityName: string;
+  tag: string;
+  /** The original stored ISO date (YYYY-MM-DD); recurs annually by month+day. */
+  eventDate: string;
+  /** This year's (or next year's, if already passed) occurrence, as an ISO date (YYYY-MM-DD). */
+  nextOccurrence: string;
+  body: string;
+}
+
+/** Response for GET /api/important-dates/upcoming. */
+export interface UpcomingImportantDatesResponse {
+  today: ImportantDateEntry[];
+  next7Days: ImportantDateEntry[];
 }

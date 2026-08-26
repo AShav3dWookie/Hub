@@ -14,14 +14,28 @@ const CATEGORY_BADGE_STYLES: Record<NoteCategory, string> = {
   general: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
   gift_idea: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   conversation_topic: "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200",
+  important_date: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
 };
+
+function formatMonthDay(eventDate: string): string {
+  const [, month, day] = eventDate.split("-").map(Number);
+  return new Date(Date.UTC(2000, month - 1, day)).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+const EDITABLE_NOTE_CATEGORIES = NOTE_CATEGORIES.filter((c) => c !== "important_date");
 
 function CategorySelect({
   value,
   onChange,
+  categories = NOTE_CATEGORIES,
 }: {
   value: NoteCategory;
   onChange: (category: NoteCategory) => void;
+  categories?: readonly NoteCategory[];
 }) {
   return (
     <select
@@ -29,7 +43,7 @@ function CategorySelect({
       onChange={(e) => onChange(e.target.value as NoteCategory)}
       className="rounded-md border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
     >
-      {NOTE_CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <option key={c} value={c}>
           {NOTE_CATEGORY_META[c].label}
         </option>
@@ -43,14 +57,27 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [category, setCategory] = useState<NoteCategory>(note.category);
   const [body, setBody] = useState(note.body);
+  const [tag, setTag] = useState(note.tag ?? "");
+  const [eventDate, setEventDate] = useState(note.eventDate ?? "");
+  const isImportantDate = note.category === "important_date";
 
   const updateNote = useUpdateEntityNote(entityId, note.id);
   const deleteNote = useDeleteEntityNote(entityId);
   const { showToast } = useToast();
 
   async function handleSave() {
-    if (!body.trim()) return;
-    await updateNote.mutateAsync({ category, body: body.trim() });
+    if (isImportantDate) {
+      if (!tag.trim() || !eventDate) return;
+      await updateNote.mutateAsync({
+        category,
+        body: body.trim(),
+        tag: tag.trim(),
+        eventDate,
+      });
+    } else {
+      if (!body.trim()) return;
+      await updateNote.mutateAsync({ category, body: body.trim() });
+    }
     setEditing(false);
     showToast("Note updated");
   }
@@ -63,10 +90,29 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
   if (editing) {
     return (
       <li className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <CategorySelect value={category} onChange={setCategory} />
+        {isImportantDate ? (
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="Tag (e.g. Birthday)"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+        ) : (
+          <CategorySelect value={category} onChange={setCategory} categories={EDITABLE_NOTE_CATEGORIES} />
+        )}
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          placeholder={isImportantDate ? "Optional notes" : undefined}
           rows={3}
           className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
         />
@@ -96,15 +142,17 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
         <span
           className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_BADGE_STYLES[note.category]}`}
         >
-          {NOTE_CATEGORY_META[note.category].label}
+          {isImportantDate ? note.tag : NOTE_CATEGORY_META[note.category].label}
         </span>
         <span className="text-xs text-slate-400 dark:text-slate-500">
-          {note.createdAt.slice(0, 10)}
+          {isImportantDate && note.eventDate ? formatMonthDay(note.eventDate) : note.createdAt.slice(0, 10)}
         </span>
       </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">
-        {note.body}
-      </p>
+      {note.body && (
+        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">
+          {note.body}
+        </p>
+      )}
       {confirmingDelete ? (
         <div className="mt-2 flex items-center gap-3 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this note?</span>
@@ -193,10 +241,13 @@ export function EntityNotes({ entityId }: { entityId: number }) {
   const { data: notes, isLoading } = useEntityNotes(entityId);
   const [newCategory, setNewCategory] = useState<NoteCategory>("general");
   const [newBody, setNewBody] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [newEventDate, setNewEventDate] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<NoteCategory>>(new Set());
 
   const createNote = useCreateEntityNote(entityId);
   const { showToast } = useToast();
+  const isImportantDate = newCategory === "important_date";
 
   function toggleCategory(category: NoteCategory) {
     setExpandedCategories((prev) => {
@@ -212,8 +263,20 @@ export function EntityNotes({ entityId }: { entityId: number }) {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!newBody.trim()) return;
-    await createNote.mutateAsync({ category: newCategory, body: newBody.trim() });
+    if (isImportantDate) {
+      if (!newTag.trim() || !newEventDate) return;
+      await createNote.mutateAsync({
+        category: newCategory,
+        body: newBody.trim(),
+        tag: newTag.trim(),
+        eventDate: newEventDate,
+      });
+      setNewTag("");
+      setNewEventDate("");
+    } else {
+      if (!newBody.trim()) return;
+      await createNote.mutateAsync({ category: newCategory, body: newBody.trim() });
+    }
     setNewBody("");
     setNewCategory("general");
     showToast("Note added");
@@ -223,6 +286,7 @@ export function EntityNotes({ entityId }: { entityId: number }) {
     general: [],
     gift_idea: [],
     conversation_topic: [],
+    important_date: [],
   };
   for (const note of notes ?? []) {
     notesByCategory[note.category].push(note);
@@ -239,16 +303,39 @@ export function EntityNotes({ entityId }: { entityId: number }) {
         className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
       >
         <CategorySelect value={newCategory} onChange={setNewCategory} />
+        {isImportantDate && (
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="Tag (e.g. Birthday)"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+            <input
+              type="date"
+              value={newEventDate}
+              onChange={(e) => setNewEventDate(e.target.value)}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+        )}
         <textarea
           value={newBody}
           onChange={(e) => setNewBody(e.target.value)}
-          placeholder="Conversation topics, gift ideas, anything to remember…"
+          placeholder={
+            isImportantDate
+              ? "Optional notes (e.g. Don't forget the card!)"
+              : "Conversation topics, gift ideas, anything to remember…"
+          }
           rows={2}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
         />
         <button
           type="submit"
-          disabled={createNote.isPending || !newBody.trim()}
+          disabled={
+            createNote.isPending || (isImportantDate ? !newTag.trim() || !newEventDate : !newBody.trim())
+          }
           className="min-h-[44px] self-start rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-slate-700"
         >
           Add note

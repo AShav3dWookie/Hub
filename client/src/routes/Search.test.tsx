@@ -26,10 +26,10 @@ describe("Search", () => {
     await screen.findByText("No results.");
     await userEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
-    await userEvent.selectOptions(screen.getByDisplayValue("All categories"), "restaurant");
+    await userEvent.click(screen.getByRole("tab", { name: "Eating Out" }));
 
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining("category=restaurant"),
+      expect.stringContaining("category=eating_out"),
       expect.anything(),
     );
   });
@@ -81,7 +81,7 @@ describe("Search", () => {
     await screen.findByText("No results.");
     await userEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
-    await userEvent.selectOptions(screen.getByDisplayValue("All categories"), "person");
+    await userEvent.click(screen.getByRole("tab", { name: "Person" }));
 
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("category=person"),

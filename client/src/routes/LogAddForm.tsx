@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
-import { CATEGORY_META } from "@logger/shared";
+import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
@@ -9,11 +9,16 @@ import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 import { useToast } from "../components/ToastProvider.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
+  const fields = CATEGORY_FIELDS[category];
   const [title, setTitle] = useState("");
   const debouncedTitle = useDebouncedValue(title, 300);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [rating, setRating] = useState<number | null>(null);
+  const currentYear = new Date().getFullYear();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [year, setYear] = useState(() => String(currentYear));
+  const [releaseYear, setReleaseYear] = useState("");
+  const [author, setAuthor] = useState("");
   const [people, setPeople] = useState<PersonTagInput[]>([]);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +35,31 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       setError("Title is required");
       return;
     }
+    if (fields.dateGranularity === "year" && !year.trim()) {
+      setError("Year is required");
+      return;
+    }
+    const logDate = fields.dateGranularity === "year" ? `${year.trim()}-01-01` : date;
     try {
       await createLog.mutateAsync(
         selectedEntityId
-          ? { entityId: selectedEntityId, rating, date, notes: notes || null, people }
-          : { category, title: title.trim(), rating, date, notes: notes || null, people },
+          ? {
+              entityId: selectedEntityId,
+              rating,
+              date: logDate,
+              notes: notes || null,
+              people: fields.hasPeople ? people : [],
+            }
+          : {
+              category,
+              title: title.trim(),
+              releaseYear: fields.hasReleaseYear && releaseYear.trim() ? Number(releaseYear) : null,
+              author: fields.hasAuthor && author.trim() ? author.trim() : null,
+              rating,
+              date: logDate,
+              notes: notes || null,
+              people: fields.hasPeople ? people : [],
+            },
       );
       navigate("/");
       showToast("Saved!");
@@ -79,25 +104,63 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
         )}
       </label>
 
+      {fields.hasReleaseYear && !selectedEntityId && (
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Release Year</span>
+          <input
+            type="number"
+            value={releaseYear}
+            onChange={(e) => setReleaseYear(e.target.value)}
+            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </label>
+      )}
+
+      {fields.hasAuthor && !selectedEntityId && (
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Author</span>
+          <input
+            type="text"
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </label>
+      )}
+
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium">Rating</span>
         <StarRating value={rating} onChange={setRating} />
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Date</span>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-        />
-      </label>
+      {fields.dateGranularity === "year" ? (
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">{fields.dateLabel}</span>
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </label>
+      ) : (
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">{fields.dateLabel}</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </label>
+      )}
 
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium">People</span>
-        <PeopleTagInput value={people} onChange={setPeople} />
-      </div>
+      {fields.hasPeople && (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">People</span>
+          <PeopleTagInput value={people} onChange={setPeople} />
+        </div>
+      )}
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium">Notes</span>
@@ -121,3 +184,4 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
     </form>
   );
 }
+

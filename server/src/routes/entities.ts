@@ -43,8 +43,8 @@ export function createEntitiesRouter(db: AppDb): Router {
   });
 
   router.post("/", (req, res) => {
-    const { category, title } = createEntitySchema.parse(req.body);
-    const entity = createBareEntity(db, category, title);
+    const { category, title, releaseYear, author } = createEntitySchema.parse(req.body);
+    const entity = createBareEntity(db, category, title, { releaseYear, author });
     res.status(201).json(entity);
   });
 

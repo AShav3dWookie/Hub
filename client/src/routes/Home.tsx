@@ -1,12 +1,42 @@
 import { Link } from "react-router-dom";
-import { PlusCircle, Search } from "lucide-react";
+import { PlusCircle, Search, CalendarHeart } from "lucide-react";
 import { CATEGORY_META } from "@logger/shared";
-import { useSearch } from "../api/hooks.js";
+import type { ImportantDateEntry } from "@logger/shared";
+import { useSearch, useUpcomingImportantDates } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+
+function ImportantDatesWidget({ title, entries }: { title: string; entries: ImportantDateEntry[] }) {
+  return (
+    <div className="w-full max-w-md">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <CalendarHeart size={16} />
+        {title}
+      </h2>
+      <ul className="flex flex-col gap-2">
+        {entries.map((entry) => (
+          <li key={entry.noteId}>
+            <Link
+              to={`/person/${entry.entityId}`}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500"
+            >
+              <span className="flex flex-col">
+                <span className="font-medium">{entry.entityName}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {entry.tag} · {entry.nextOccurrence}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function Home() {
   const { data, isLoading } = useSearch({ groupBy: "log", sortBy: "date", sortOrder: "desc" });
   const recentLogs = (data?.groupBy === "log" ? data.logs : [])?.slice(0, 5) ?? [];
+  const { data: importantDates } = useUpcomingImportantDates();
 
   return (
     <div className="flex flex-col items-center gap-10 pt-10">
@@ -27,6 +57,14 @@ export function Home() {
           <span className="font-medium">Search</span>
         </Link>
       </div>
+
+      {importantDates && importantDates.today.length > 0 && (
+        <ImportantDatesWidget title="Today's important dates" entries={importantDates.today} />
+      )}
+
+      {importantDates && importantDates.next7Days.length > 0 && (
+        <ImportantDatesWidget title="Next 7 days" entries={importantDates.next7Days} />
+      )}
 
       {!isLoading && recentLogs.length > 0 && (
         <div className="w-full max-w-md">
@@ -56,3 +94,4 @@ export function Home() {
     </div>
   );
 }
+

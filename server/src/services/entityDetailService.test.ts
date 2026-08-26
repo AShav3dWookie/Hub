@@ -13,7 +13,7 @@ describe("entityDetailService", () => {
 
   it("aggregates visit count, average rating, and latest date for an entity", () => {
     ctx = createTestDb();
-    const entity = findOrCreateEntity(ctx.db, "restaurant", "Chipotle");
+    const entity = findOrCreateEntity(ctx.db, "eating_out", "Chipotle");
     createLog(ctx.db, { entityId: entity.id, rating: 4, date: "2024-01-01", notes: null, people: [] });
     createLog(ctx.db, { entityId: entity.id, rating: 2, date: "2024-06-01", notes: null, people: [] });
 
@@ -43,7 +43,7 @@ describe("entityDetailService", () => {
       people: [{ name: "Sarah" }],
     });
     createLog(ctx.db, {
-      category: "restaurant",
+      category: "eating_out",
       title: "Chipotle",
       rating: 3,
       date: "2024-03-01",

@@ -11,6 +11,8 @@ export function toEntityNoteDTO(row: typeof entityNotes.$inferSelect): EntityNot
     entityId: row.entityId,
     category: row.category as EntityNoteDTO["category"],
     body: row.body,
+    tag: row.tag,
+    eventDate: row.eventDate,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -39,6 +41,8 @@ export function createEntityNote(
       entityId,
       category: input.category ?? "general",
       body: input.body,
+      tag: input.tag ?? null,
+      eventDate: input.eventDate ?? null,
     })
     .returning()
     .get();
@@ -59,6 +63,8 @@ export function updateEntityNote(
     .set({
       category: input.category ?? existing.category,
       body: input.body,
+      tag: input.tag ?? null,
+      eventDate: input.eventDate ?? null,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(entityNotes.id, noteId))

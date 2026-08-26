@@ -104,7 +104,10 @@ export function createLog(db: AppDb, input: CreateLogRequest): LogDTO {
     if (!isLoggableCategory(input.category)) {
       throw new BadRequestError(`${input.category} is not a loggable category`);
     }
-    const entity = findOrCreateEntity(db, input.category, input.title);
+    const entity = findOrCreateEntity(db, input.category, input.title, {
+      releaseYear: input.releaseYear,
+      author: input.author,
+    });
     entityId = entity.id;
   } else {
     throw new BadRequestError("Either entityId or category+title is required");

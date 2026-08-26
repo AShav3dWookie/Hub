@@ -12,6 +12,7 @@ import type {
   EntityNoteDTO,
   CreateEntityNoteRequest,
   UpdateEntityNoteRequest,
+  UpcomingImportantDatesResponse,
 } from "@logger/shared";
 import { api } from "./client.js";
 
@@ -142,3 +143,11 @@ export function useDeleteEntityNote(entityId: number) {
     },
   });
 }
+
+export function useUpcomingImportantDates() {
+  return useQuery({
+    queryKey: ["important-dates", "upcoming"],
+    queryFn: () => api.get<UpcomingImportantDatesResponse>("/important-dates/upcoming"),
+  });
+}
+

@@ -18,7 +18,16 @@ describe("EntityNotes", () => {
 
   it("lists existing notes with their category badge, once the section is expanded", async () => {
     const notes: EntityNoteDTO[] = [
-      { id: 1, entityId: 5, category: "gift_idea", body: "Concert tickets", createdAt: NOW, updatedAt: NOW },
+      {
+        id: 1,
+        entityId: 5,
+        category: "gift_idea",
+        body: "Concert tickets",
+        tag: null,
+        eventDate: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
     ];
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(notes));
 
@@ -73,7 +82,16 @@ describe("EntityNotes", () => {
 
   it("shows a delete confirmation before removing a note", async () => {
     const notes: EntityNoteDTO[] = [
-      { id: 1, entityId: 5, category: "general", body: "Note body", createdAt: NOW, updatedAt: NOW },
+      {
+        id: 1,
+        entityId: 5,
+        category: "general",
+        body: "Note body",
+        tag: null,
+        eventDate: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
     ];
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(notes));
 

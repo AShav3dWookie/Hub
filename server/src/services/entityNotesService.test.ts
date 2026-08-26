@@ -80,4 +80,39 @@ describe("entityNotesService", () => {
 
     expect(() => listEntityNotes(ctx.db, sarah.id)).toThrow();
   });
+
+  it("creates and updates an important_date note with tag and eventDate", () => {
+    ctx = createTestDb();
+    const sarah = findOrCreateEntity(ctx.db, "person", "Sarah");
+
+    const note = createEntityNote(ctx.db, sarah.id, {
+      category: "important_date",
+      body: "Don't forget the card!",
+      tag: "Birthday",
+      eventDate: "1990-05-12",
+    });
+
+    expect(note.category).toBe("important_date");
+    expect(note.tag).toBe("Birthday");
+    expect(note.eventDate).toBe("1990-05-12");
+
+    const updated = updateEntityNote(ctx.db, note.id, {
+      category: "important_date",
+      body: "Updated note",
+      tag: "Anniversary",
+      eventDate: "1990-06-01",
+    });
+
+    expect(updated.tag).toBe("Anniversary");
+    expect(updated.eventDate).toBe("1990-06-01");
+  });
+
+  it("leaves tag/eventDate null for non important_date notes", () => {
+    ctx = createTestDb();
+    const sarah = findOrCreateEntity(ctx.db, "person", "Sarah");
+    const note = createEntityNote(ctx.db, sarah.id, { body: "Loves hiking" });
+
+    expect(note.tag).toBeNull();
+    expect(note.eventDate).toBeNull();
+  });
 });

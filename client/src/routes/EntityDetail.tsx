@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Navigate, Link } from "react-router-dom";
-import type { PersonTagInput, LogDTO } from "@logger/shared";
-import { CATEGORY_META } from "@logger/shared";
+import type { PersonTagInput, LogDTO, LoggableCategory } from "@logger/shared";
+import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityDetail, useUpdateLog, useDeleteLog } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
@@ -16,12 +16,18 @@ export function EntityDetail() {
   if (!data) return <p className="text-slate-500 dark:text-slate-400">Not found.</p>;
   if (data.type === "person") return <Navigate to={`/person/${entityId}`} replace />;
 
+  const fields = CATEGORY_FIELDS[data.category as LoggableCategory];
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">{data.title}</h1>
         <p className="text-slate-500 dark:text-slate-400">
-          {CATEGORY_META[data.category].label} · {data.visitCount} log
+          {CATEGORY_META[data.category].label}
+          {fields.hasReleaseYear && data.releaseYear != null && ` · ${data.releaseYear}`}
+          {fields.hasAuthor && data.author && ` · ${data.author}`}
+          {" · "}
+          {data.visitCount} log
           {data.visitCount === 1 ? "" : "s"}
           {data.averageRating != null && ` · avg ${data.averageRating.toFixed(1)}★`}
         </p>
@@ -29,18 +35,25 @@ export function EntityDetail() {
 
       <div className="flex flex-col gap-3">
         {data.logs.map((log) => (
-          <LogRow key={log.id} log={log} />
+          <LogRow key={log.id} log={log} fields={fields} />
         ))}
       </div>
     </div>
   );
 }
 
-function LogRow({ log }: { log: LogDTO }) {
+function LogRow({
+  log,
+  fields,
+}: {
+  log: LogDTO;
+  fields: (typeof CATEGORY_FIELDS)[LoggableCategory];
+}) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [rating, setRating] = useState<number | null>(log.rating);
   const [date, setDate] = useState(log.date);
+  const [year, setYear] = useState(log.date.slice(0, 4));
   const [notes, setNotes] = useState(log.notes ?? "");
   const [people, setPeople] = useState<PersonTagInput[]>(
     log.people.map((p) => ({ id: p.id, name: p.name })),
@@ -51,7 +64,13 @@ function LogRow({ log }: { log: LogDTO }) {
   const { showToast } = useToast();
 
   async function handleSave() {
-    await updateLog.mutateAsync({ rating, date, notes: notes || null, people });
+    const nextDate = fields.dateGranularity === "year" ? `${year}-01-01` : date;
+    await updateLog.mutateAsync({
+      rating,
+      date: nextDate,
+      notes: notes || null,
+      people: fields.hasPeople ? people : [],
+    });
     setEditing(false);
     showToast("Log updated");
   }
@@ -65,15 +84,26 @@ function LogRow({ log }: { log: LogDTO }) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
         <StarRating value={rating} onChange={setRating} />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="mt-2 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-        />
-        <div className="mt-2">
-          <PeopleTagInput value={people} onChange={setPeople} />
-        </div>
+        {fields.dateGranularity === "year" ? (
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="mt-2 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        ) : (
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="mt-2 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        )}
+        {fields.hasPeople && (
+          <div className="mt-2">
+            <PeopleTagInput value={people} onChange={setPeople} />
+          </div>
+        )}
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -103,10 +133,12 @@ function LogRow({ log }: { log: LogDTO }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between">
-        <span className="font-medium">{log.date}</span>
+        <span className="font-medium">
+          {fields.dateGranularity === "year" ? log.date.slice(0, 4) : log.date}
+        </span>
         <StarRating value={log.rating} readOnly />
       </div>
-      {log.people.length > 0 && (
+      {fields.hasPeople && log.people.length > 0 && (
         <p className="text-sm text-slate-500 dark:text-slate-400">
           with{" "}
           {log.people.map((p, i) => (
@@ -159,3 +191,4 @@ function LogRow({ log }: { log: LogDTO }) {
     </div>
   );
 }
+

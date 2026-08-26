@@ -1,4 +1,4 @@
-import { ne, eq, inArray } from "drizzle-orm";
+import { ne, eq, inArray, and, like, gte, lte } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs, logPeople } from "../db/schema.js";
 import { tokenizeQuery, matchesTokens } from "@logger/shared";
@@ -74,10 +74,22 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
   const people = searchPeople(db, query, queryTokens);
 
   // 1. Candidate entities (loggable categories only; person entities aren't logged directly).
+  const entityConditions = [
+    query.category ? eq(entities.category, query.category) : ne(entities.category, "person"),
+  ];
+  if (query.authorContains) {
+    entityConditions.push(like(entities.author, `%${query.authorContains}%`));
+  }
+  if (query.releaseYearMin != null) {
+    entityConditions.push(gte(entities.releaseYear, query.releaseYearMin));
+  }
+  if (query.releaseYearMax != null) {
+    entityConditions.push(lte(entities.releaseYear, query.releaseYearMax));
+  }
   const entityRows = db
     .select()
     .from(entities)
-    .where(query.category ? eq(entities.category, query.category) : ne(entities.category, "person"))
+    .where(and(...entityConditions))
     .all();
   const entityById = new Map(entityRows.map((e) => [e.id, e]));
 
@@ -200,6 +212,8 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
       category: entity.category,
       title: entity.title,
       createdAt: entity.createdAt,
+      releaseYear: entity.releaseYear,
+      author: entity.author,
       logs: entityLogs,
       visitCount: entityLogs.length,
       averageRating,
@@ -232,6 +246,8 @@ function toLogWithEntity(
     category: entity.category,
     title: entity.title,
     createdAt: entity.createdAt,
+    releaseYear: entity.releaseYear,
+    author: entity.author,
   };
   return {
     id: row.id,

@@ -9,6 +9,7 @@ import { healthRouter } from "./routes/health.js";
 import { createEntitiesRouter } from "./routes/entities.js";
 import { createLogsRouter } from "./routes/logs.js";
 import { createSearchRouter } from "./routes/search.js";
+import { createImportantDatesRouter } from "./routes/importantDates.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -34,6 +35,7 @@ export function createApp(db: AppDb): Express {
   app.use("/api/entities", requireAuth, createEntitiesRouter(db));
   app.use("/api/logs", requireAuth, createLogsRouter(db));
   app.use("/api/search", requireAuth, createSearchRouter(db));
+  app.use("/api/important-dates", requireAuth, createImportantDatesRouter(db));
 
   const clientDist = path.resolve(process.cwd(), "public");
   if (fs.existsSync(clientDist)) {

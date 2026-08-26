@@ -28,7 +28,7 @@ describe("logService", () => {
 
   it("attaches a new log to an existing entity via entityId", () => {
     ctx = createTestDb();
-    const entity = findOrCreateEntity(ctx.db, "restaurant", "Chipotle");
+    const entity = findOrCreateEntity(ctx.db, "eating_out", "Chipotle");
     const log = createLog(ctx.db, {
       entityId: entity.id,
       rating: 4,

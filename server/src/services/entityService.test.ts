@@ -19,8 +19,8 @@ describe("entityService", () => {
 
   it("dedupes on case/whitespace-insensitive title match within the same category", () => {
     ctx = createTestDb();
-    const first = findOrCreateEntity(ctx.db, "restaurant", "Chipotle");
-    const second = findOrCreateEntity(ctx.db, "restaurant", "  chipotle  ");
+    const first = findOrCreateEntity(ctx.db, "eating_out", "Chipotle");
+    const second = findOrCreateEntity(ctx.db, "eating_out", "  chipotle  ");
     expect(second.id).toBe(first.id);
   });
 
@@ -33,9 +33,9 @@ describe("entityService", () => {
 
   it("autocompletes by partial, case-insensitive title", () => {
     ctx = createTestDb();
-    findOrCreateEntity(ctx.db, "restaurant", "Chipotle Mexican Grill");
-    findOrCreateEntity(ctx.db, "restaurant", "Burger King");
-    const results = searchEntitiesByTitle(ctx.db, "restaurant", "chip");
+    findOrCreateEntity(ctx.db, "eating_out", "Chipotle Mexican Grill");
+    findOrCreateEntity(ctx.db, "eating_out", "Burger King");
+    const results = searchEntitiesByTitle(ctx.db, "eating_out", "chip");
     expect(results).toHaveLength(1);
     expect(results[0].title).toBe("Chipotle Mexican Grill");
   });

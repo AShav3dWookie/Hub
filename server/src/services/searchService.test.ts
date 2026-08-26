@@ -13,7 +13,7 @@ describe("searchService", () => {
   function seed() {
     ctx = createTestDb();
     createLog(ctx.db, {
-      category: "restaurant",
+      category: "eating_out",
       title: "Chipotle",
       rating: 4,
       date: "2024-01-01",
@@ -21,7 +21,7 @@ describe("searchService", () => {
       people: [{ name: "Sarah" }],
     });
     createLog(ctx.db, {
-      category: "restaurant",
+      category: "eating_out",
       title: "Chipotle",
       rating: 5,
       date: "2024-06-01",
@@ -147,5 +147,57 @@ describe("searchService", () => {
     seed();
     const result = search(ctx.db, {});
     expect(result.people).toEqual([]);
+  });
+
+  it("filters by author (case-insensitive contains)", () => {
+    ctx = createTestDb();
+    createLog(ctx.db, {
+      category: "book",
+      title: "Dune",
+      author: "Frank Herbert",
+      rating: 5,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    createLog(ctx.db, {
+      category: "book",
+      title: "Foundation",
+      author: "Isaac Asimov",
+      rating: 4,
+      date: "2024-02-01",
+      notes: null,
+      people: [],
+    });
+
+    const result = search(ctx.db, { authorContains: "herbert" });
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities![0].title).toBe("Dune");
+  });
+
+  it("filters by release year range", () => {
+    ctx = createTestDb();
+    createLog(ctx.db, {
+      category: "movie",
+      title: "Old Movie",
+      releaseYear: 1985,
+      rating: 3,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    createLog(ctx.db, {
+      category: "movie",
+      title: "New Movie",
+      releaseYear: 2020,
+      rating: 4,
+      date: "2024-02-01",
+      notes: null,
+      people: [],
+    });
+
+    const result = search(ctx.db, { releaseYearMin: 2000, releaseYearMax: 2025 });
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities![0].title).toBe("New Movie");
   });
 });

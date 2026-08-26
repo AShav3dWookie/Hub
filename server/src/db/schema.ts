@@ -9,6 +9,8 @@ export const entities = sqliteTable(
     category: text("category").$type<Category>().notNull(),
     title: text("title").notNull(),
     normalizedTitle: text("normalized_title").notNull(),
+    releaseYear: integer("release_year"),
+    author: text("author"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -72,6 +74,8 @@ export const entityNotes = sqliteTable(
       .references(() => entities.id, { onDelete: "cascade" }),
     category: text("category").notNull().default("general"),
     body: text("body").notNull(),
+    tag: text("tag"),
+    eventDate: text("event_date"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),

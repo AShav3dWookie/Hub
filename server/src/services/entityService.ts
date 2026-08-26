@@ -11,7 +11,14 @@ export function toEntitySummary(row: typeof entities.$inferSelect): EntitySummar
     category: row.category,
     title: row.title,
     createdAt: row.createdAt,
+    releaseYear: row.releaseYear,
+    author: row.author,
   };
+}
+
+export interface EntityCreationFields {
+  releaseYear?: number | null;
+  author?: string | null;
 }
 
 /** Find an existing entity by category+title (case/whitespace-insensitive), or create a new one. */
@@ -19,6 +26,7 @@ export function findOrCreateEntity(
   db: AppDb,
   category: Category,
   title: string,
+  fields: EntityCreationFields = {},
 ): typeof entities.$inferSelect {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) {
@@ -38,7 +46,13 @@ export function findOrCreateEntity(
 
   const inserted = db
     .insert(entities)
-    .values({ category, title: trimmedTitle, normalizedTitle })
+    .values({
+      category,
+      title: trimmedTitle,
+      normalizedTitle,
+      releaseYear: fields.releaseYear ?? null,
+      author: fields.author ?? null,
+    })
     .returning()
     .get();
 
@@ -49,8 +63,9 @@ export function createBareEntity(
   db: AppDb,
   category: Category,
   title: string,
+  fields: EntityCreationFields = {},
 ): typeof entities.$inferSelect {
-  return findOrCreateEntity(db, category, title);
+  return findOrCreateEntity(db, category, title, fields);
 }
 
 export function getEntityById(db: AppDb, id: number): typeof entities.$inferSelect {

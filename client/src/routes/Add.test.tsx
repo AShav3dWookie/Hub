@@ -11,7 +11,7 @@ describe("Add", () => {
       </MemoryRouter>,
     );
 
-    for (const label of ["Movie", "TV Show", "Restaurant", "Book", "Game", "Person"]) {
+    for (const label of ["Movie", "TV Show", "Eating Out", "Book", "Game", "Person"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
 

@@ -1,12 +1,21 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
-import type { Category, GroupBy, MatchMode, SortBy, SortOrder, VisitSortBy } from "@logger/shared";
-import { CATEGORIES, CATEGORY_META, tokenizeQuery } from "@logger/shared";
+import type {
+  Category,
+  GroupBy,
+  LoggableCategory,
+  MatchMode,
+  SortBy,
+  SortOrder,
+  VisitSortBy,
+} from "@logger/shared";
+import { CATEGORIES, CATEGORY_META, CATEGORY_FIELDS, isLoggableCategory, tokenizeQuery } from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
-import { DateFilter } from "../components/DateFilter.js";
+import { DateFilter, type DateMode } from "../components/DateFilter.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
+
 
 function SkeletonCard() {
   return (
@@ -48,6 +57,9 @@ export function Search() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [ratingMin, setRatingMin] = useState("");
+  const [authorContains, setAuthorContains] = useState("");
+  const [releaseYearMin, setReleaseYearMin] = useState("");
+  const [releaseYearMax, setReleaseYearMax] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("entity");
   const [sortBy, setSortBy] = useState<SortBy>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -55,13 +67,30 @@ export function Search() {
   const [visitSortOrder, setVisitSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
 
+  const isPerson = category === "person";
+  const categoryFields =
+    category && isLoggableCategory(category) ? CATEGORY_FIELDS[category as LoggableCategory] : null;
+
+  function handleCategoryChange(next: Category | "") {
+    setCategory(next);
+    // Category dictates which filters apply; clear ones that don't carry over.
+    setDateFrom("");
+    setDateTo("");
+    setAuthorContains("");
+    setReleaseYearMin("");
+    setReleaseYearMax("");
+  }
+
   const { data, isLoading, isFetching } = useSearch({
     q: debouncedQ || undefined,
     qMode,
     category: (category as Category) || undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    ratingMin: ratingMin ? Number(ratingMin) : undefined,
+    dateFrom: !isPerson ? dateFrom || undefined : undefined,
+    dateTo: !isPerson ? dateTo || undefined : undefined,
+    ratingMin: !isPerson && ratingMin ? Number(ratingMin) : undefined,
+    authorContains: categoryFields?.hasAuthor && authorContains ? authorContains : undefined,
+    releaseYearMin: categoryFields?.hasReleaseYear && releaseYearMin ? Number(releaseYearMin) : undefined,
+    releaseYearMax: categoryFields?.hasReleaseYear && releaseYearMax ? Number(releaseYearMax) : undefined,
     groupBy,
     sortBy,
     sortOrder,
@@ -71,9 +100,13 @@ export function Search() {
 
   const queryTokens = tokenizeQuery(q);
   const activeFilterCount = useMemo(
-    () => [category, ratingMin, dateFrom, dateTo].filter((v) => v !== "").length,
-    [category, ratingMin, dateFrom, dateTo],
+    () =>
+      [category, ratingMin, dateFrom, dateTo, authorContains, releaseYearMin, releaseYearMax].filter(
+        (v) => v !== "",
+      ).length,
+    [category, ratingMin, dateFrom, dateTo, authorContains, releaseYearMin, releaseYearMax],
   );
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -112,101 +145,162 @@ export function Search() {
 
         {showFilters && (
           <>
-            <div className="flex flex-wrap gap-3">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as Category | "")}
-                className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Category">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={category === ""}
+                onClick={() => handleCategoryChange("")}
+                className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
+                  category === ""
+                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                }`}
               >
-                <option value="">All categories</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_META[c].label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={ratingMin}
-                onChange={(e) => setRatingMin(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-              >
-                <option value="">Any rating</option>
-                {[1, 2, 3, 4, 5].map((r) => (
-                  <option key={r} value={r}>
-                    {r}+ stars
-                  </option>
-                ))}
-              </select>
+                All
+              </button>
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="tab"
+                  aria-selected={category === c}
+                  onClick={() => handleCategoryChange(c)}
+                  className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
+                    category === c
+                      ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
+                      : c === "person"
+                        ? "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500 dark:hover:bg-slate-800"
+                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {CATEGORY_META[c].label}
+                </button>
+              ))}
             </div>
 
-            <DateFilter
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              onChange={(from, to) => {
-                setDateFrom(from);
-                setDateTo(to);
-              }}
-            />
-
-            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-              <label className="flex items-center gap-2 text-sm">
-                Group:
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as GroupBy)}
-                  className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="entity">By item</option>
-                  <option value="log">Flat list</option>
-                </select>
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                Sort:
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortBy)}
-                  className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="date">Date</option>
-                  <option value="title">Title</option>
-                  <option value="rating">Rating</option>
-                  {groupBy === "log" && <option value="person">Person</option>}
-                </select>
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                  className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="desc">Desc</option>
-                  <option value="asc">Asc</option>
-                </select>
-              </label>
-
-              {groupBy === "entity" && (
-                <label className="flex items-center gap-2 text-sm">
-                  Sort visits by:
+            {isPerson ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Searching people by name only — ratings, dates, and other filters don't apply.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3">
                   <select
-                    value={visitSortBy}
-                    onChange={(e) => setVisitSortBy(e.target.value as VisitSortBy)}
+                    value={ratingMin}
+                    onChange={(e) => setRatingMin(e.target.value)}
+                    className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">Any rating</option>
+                    {[1, 2, 3, 4, 5].map((r) => (
+                      <option key={r} value={r}>
+                        {r}+ stars
+                      </option>
+                    ))}
+                  </select>
+
+                  {categoryFields?.hasAuthor && (
+                    <input
+                      type="text"
+                      placeholder="Author contains…"
+                      value={authorContains}
+                      onChange={(e) => setAuthorContains(e.target.value)}
+                      className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    />
+                  )}
+
+                  {categoryFields?.hasReleaseYear && (
+                    <>
+                      <input
+                        type="number"
+                        placeholder="Release year from"
+                        value={releaseYearMin}
+                        onChange={(e) => setReleaseYearMin(e.target.value)}
+                        className="w-40 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Release year to"
+                        value={releaseYearMax}
+                        onChange={(e) => setReleaseYearMax(e.target.value)}
+                        className="w-40 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      />
+                    </>
+                  )}
+                </div>
+
+                <DateFilter
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  forceMode={categoryFields ? ((categoryFields.dateGranularity === "year" ? "year" : "specific") as DateMode) : undefined}
+                  onChange={(from, to) => {
+                    setDateFrom(from);
+                    setDateTo(to);
+                  }}
+                />
+              </>
+            )}
+
+            {!isPerson && (
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <label className="flex items-center gap-2 text-sm">
+                  Group:
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+                    className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="entity">By item</option>
+                    <option value="log">Flat list</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-2 text-sm">
+                  Sort:
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortBy)}
                     className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     <option value="date">Date</option>
+                    <option value="title">Title</option>
                     <option value="rating">Rating</option>
-                    <option value="person">Person</option>
+                    {groupBy === "log" && <option value="person">Person</option>}
                   </select>
                   <select
-                    value={visitSortOrder}
-                    onChange={(e) => setVisitSortOrder(e.target.value as SortOrder)}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as SortOrder)}
                     className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     <option value="desc">Desc</option>
                     <option value="asc">Asc</option>
                   </select>
                 </label>
-              )}
-            </div>
+
+                {groupBy === "entity" && (
+                  <label className="flex items-center gap-2 text-sm">
+                    Sort visits by:
+                    <select
+                      value={visitSortBy}
+                      onChange={(e) => setVisitSortBy(e.target.value as VisitSortBy)}
+                      className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="date">Date</option>
+                      <option value="rating">Rating</option>
+                      <option value="person">Person</option>
+                    </select>
+                    <select
+                      value={visitSortOrder}
+                      onChange={(e) => setVisitSortOrder(e.target.value as SortOrder)}
+                      className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="desc">Desc</option>
+                      <option value="asc">Asc</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
