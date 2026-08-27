@@ -1,6 +1,6 @@
 /**
- * Hardcoded category list for v1. Movie/TV/EatingOut/Book/Game are "loggable"
- * categories (they support repeated Log entries). Person is special: it has no
+ * Hardcoded category list for v1. Movie/TV/EatingOut/Book/Game/HangOut/Appointment are
+ * "loggable" categories (they support repeated Log entries). Person is special: it has no
  * logs of its own, just an entity record, and is tagged onto other logs.
  */
 export const CATEGORIES = [
@@ -9,6 +9,8 @@ export const CATEGORIES = [
   "eating_out",
   "book",
   "game",
+  "hang_out",
+  "appointment",
   "person",
 ] as const;
 
@@ -20,6 +22,8 @@ export const LOGGABLE_CATEGORIES = [
   "eating_out",
   "book",
   "game",
+  "hang_out",
+  "appointment",
 ] as const;
 
 export type LoggableCategory = (typeof LOGGABLE_CATEGORIES)[number];
@@ -41,6 +45,8 @@ export const CATEGORY_META: Record<Category, CategoryMeta> = {
   eating_out: { category: "eating_out", label: "Eating Out", icon: "UtensilsCrossed" },
   book: { category: "book", label: "Book", icon: "BookOpen" },
   game: { category: "game", label: "Game", icon: "Gamepad2" },
+  hang_out: { category: "hang_out", label: "Hang Out", icon: "PartyPopper" },
+  appointment: { category: "appointment", label: "Appointment", icon: "CalendarClock" },
   person: { category: "person", label: "Person", icon: "User" },
 };
 
@@ -53,6 +59,13 @@ export interface CategoryFieldsConfig {
   hasAuthor: boolean;
   /** Whether logs for this category can be tagged with people. */
   hasPeople: boolean;
+  /** Whether logs for this category carry a star rating. */
+  hasRating: boolean;
+  /**
+   * Whether the add form offers an "auto-delete once it's passed" toggle (appointments:
+   * throwaway future reminders that shouldn't accumulate as history).
+   */
+  hasAutoDelete: boolean;
   /** Whether the log date field is a full date picker or a year-only input. */
   dateGranularity: DateGranularity;
   /** Label to show for the log date field (e.g. "Date Watched", "Year Read"). */
@@ -68,6 +81,8 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasReleaseYear: true,
     hasAuthor: false,
     hasPeople: true,
+    hasRating: true,
+    hasAutoDelete: false,
     dateGranularity: "day",
     dateLabel: "Date Watched",
   },
@@ -75,6 +90,8 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasReleaseYear: false,
     hasAuthor: false,
     hasPeople: false,
+    hasRating: true,
+    hasAutoDelete: false,
     dateGranularity: "year",
     dateLabel: "Year Watched",
   },
@@ -82,6 +99,8 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasReleaseYear: false,
     hasAuthor: true,
     hasPeople: false,
+    hasRating: true,
+    hasAutoDelete: false,
     dateGranularity: "year",
     dateLabel: "Year Read",
   },
@@ -89,6 +108,8 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasReleaseYear: false,
     hasAuthor: false,
     hasPeople: true,
+    hasRating: true,
+    hasAutoDelete: false,
     dateGranularity: "day",
     dateLabel: "Date Went",
   },
@@ -96,14 +117,34 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasReleaseYear: true,
     hasAuthor: false,
     hasPeople: false,
+    hasRating: true,
+    hasAutoDelete: false,
     dateGranularity: "year",
     dateLabel: "Year Played",
+  },
+  hang_out: {
+    hasReleaseYear: false,
+    hasAuthor: false,
+    hasPeople: true,
+    hasRating: false,
+    hasAutoDelete: false,
+    dateGranularity: "day",
+    dateLabel: "Date",
+  },
+  appointment: {
+    hasReleaseYear: false,
+    hasAuthor: false,
+    hasPeople: false,
+    hasRating: false,
+    hasAutoDelete: true,
+    dateGranularity: "day",
+    dateLabel: "Date",
   },
 };
 
 /**
  * Whether logs for a category can have photo attachments. Currently tied to
- * people-tagging support (Movie, Eating Out) — the "event"-shaped categories.
+ * people-tagging support (Movie, Eating Out, Hang Out) — the "event"-shaped categories.
  * A non-loggable category (e.g. "person") never supports photos.
  */
 export function categorySupportsPhotos(category: Category): boolean {

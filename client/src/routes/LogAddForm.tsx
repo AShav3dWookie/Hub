@@ -21,6 +21,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   const [releaseYear, setReleaseYear] = useState("");
   const [author, setAuthor] = useState("");
   const [people, setPeople] = useState<PersonTagInput[]>([]);
+  const [autoDelete, setAutoDelete] = useState(true);
   const [notes, setNotes] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,20 +49,22 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
         selectedEntityId
           ? {
               entityId: selectedEntityId,
-              rating,
+              rating: fields.hasRating ? rating : null,
               date: logDate,
               notes: notes || null,
               people: fields.hasPeople ? people : [],
+              autoDelete: fields.hasAutoDelete ? autoDelete : false,
             }
           : {
               category,
               title: title.trim(),
               releaseYear: fields.hasReleaseYear && releaseYear.trim() ? Number(releaseYear) : null,
               author: fields.hasAuthor && author.trim() ? author.trim() : null,
-              rating,
+              rating: fields.hasRating ? rating : null,
               date: logDate,
               notes: notes || null,
               people: fields.hasPeople ? people : [],
+              autoDelete: fields.hasAutoDelete ? autoDelete : false,
             },
       );
       createdLogId = created.id;
@@ -147,10 +150,12 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
         </label>
       )}
 
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Rating</span>
-        <StarRating value={rating} onChange={setRating} />
-      </div>
+      {fields.hasRating && (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Rating</span>
+          <StarRating value={rating} onChange={setRating} />
+        </div>
+      )}
 
       {fields.dateGranularity === "year" ? (
         <label className="flex flex-col gap-1">
@@ -171,6 +176,23 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             onChange={(e) => setDate(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
           />
+        </label>
+      )}
+
+      {fields.hasAutoDelete && (
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={autoDelete}
+            onChange={(e) => setAutoDelete(e.target.checked)}
+            className="mt-1"
+          />
+          <span className="text-sm">
+            Auto-delete once it's passed
+            <span className="block text-xs text-slate-500 dark:text-slate-400">
+              Removed the day after — keep off to log it permanently.
+            </span>
+          </span>
         </label>
       )}
 

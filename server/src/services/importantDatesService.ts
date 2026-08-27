@@ -2,14 +2,7 @@ import { eq } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entityNotes, entities } from "../db/schema.js";
 import type { ImportantDateEntry, UpcomingImportantDatesResponse } from "@logger/shared";
-
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function atMidnightUTC(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
+import { toISODate, atMidnightUTC } from "../lib/dates.js";
 
 /** Compute the next annual occurrence (by month+day) of `eventDate` on or after `today`. */
 function nextOccurrence(eventDate: string, today: Date): Date {

@@ -48,6 +48,15 @@ describe("migrations", () => {
     }>;
     expect(fks[0]).toMatchObject({ table: "logs", on_delete: "SET NULL" });
 
+    const logCols = client.prepare("PRAGMA table_info(logs)").all() as Array<{
+      name: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>;
+    const autoDelete = logCols.find((c) => c.name === "auto_delete")!;
+    expect(autoDelete).toMatchObject({ notnull: 1 });
+    expect(autoDelete.dflt_value).toBe("false");
+
     client.close();
   });
 

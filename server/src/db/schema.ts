@@ -33,6 +33,8 @@ export const logs = sqliteTable(
     rating: integer("rating"),
     date: text("date").notNull(),
     notes: text("notes"),
+    // Appointments only: when true, a startup/on-read sweep deletes this log once its date has passed.
+    autoDelete: integer("auto_delete", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),

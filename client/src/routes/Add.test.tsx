@@ -11,11 +11,22 @@ describe("Add", () => {
       </MemoryRouter>,
     );
 
-    for (const label of ["Movie", "TV Show", "Eating Out", "Book", "Game", "Person"]) {
+    for (const label of [
+      "Movie",
+      "TV Show",
+      "Eating Out",
+      "Book",
+      "Game",
+      "Hang Out",
+      "Appointment",
+      "Person",
+    ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
 
     const personLink = screen.getByText("Person").closest("a");
     expect(personLink).toHaveAttribute("href", "/add/person");
+    expect(screen.getByText("Hang Out").closest("a")).toHaveAttribute("href", "/add/hang_out");
+    expect(screen.getByText("Appointment").closest("a")).toHaveAttribute("href", "/add/appointment");
   });
 });

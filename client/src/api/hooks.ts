@@ -21,6 +21,7 @@ import type {
   CreateEntityNoteRequest,
   UpdateEntityNoteRequest,
   UpcomingImportantDatesResponse,
+  UpcomingEventsResponse,
 } from "@logger/shared";
 import { api } from "./client.js";
 
@@ -86,6 +87,7 @@ export function useCreateLog() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
     },
   });
 }
@@ -97,6 +99,7 @@ export function useUpdateLog(logId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
       // editing a log's people changes who its photos are linked to
       queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
@@ -112,6 +115,7 @@ export function useDeleteLog() {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
       queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
@@ -224,6 +228,13 @@ export function useUpcomingImportantDates() {
   return useQuery({
     queryKey: ["important-dates", "upcoming"],
     queryFn: () => api.get<UpcomingImportantDatesResponse>("/important-dates/upcoming"),
+  });
+}
+
+export function useUpcomingEvents() {
+  return useQuery({
+    queryKey: ["events", "upcoming"],
+    queryFn: () => api.get<UpcomingEventsResponse>("/events/upcoming"),
   });
 }
 

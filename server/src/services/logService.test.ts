@@ -91,6 +91,29 @@ describe("logService", () => {
     expect(updated.people.map((p) => p.name)).toEqual(["Jamie"]);
   });
 
+  it("defaults autoDelete to false and round-trips it through create and update", () => {
+    ctx = createTestDb();
+    const created = createLog(ctx.db, {
+      category: "appointment",
+      title: "Dentist",
+      rating: null,
+      date: "2024-06-20",
+      notes: null,
+      people: [],
+    });
+    expect(created.autoDelete).toBe(false);
+
+    const flagged = updateLog(ctx.db, created.id, {
+      rating: null,
+      date: "2024-06-20",
+      notes: null,
+      people: [],
+      autoDelete: true,
+    });
+    expect(flagged.autoDelete).toBe(true);
+    expect(getLogById(ctx.db, created.id).autoDelete).toBe(true);
+  });
+
   it("deletes a log", () => {
     ctx = createTestDb();
     const created = createLog(ctx.db, {

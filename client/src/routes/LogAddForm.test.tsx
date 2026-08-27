@@ -58,3 +58,60 @@ describe("LogAddForm photos", () => {
     expect(calls[uploadIdx].body).toBeInstanceOf(FormData);
   });
 });
+
+describe("LogAddForm event categories", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse([]));
+  });
+
+  it("appointment: Title/Date/Notes + auto-delete, no rating/people/photos", () => {
+    renderWithProviders(<LogAddForm category="appointment" />);
+
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+    expect(screen.getByText("Date")).toBeInTheDocument();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.getByText("Auto-delete once it's passed")).toBeInTheDocument();
+
+    expect(screen.queryByText("Rating")).not.toBeInTheDocument();
+    expect(screen.queryByText("People")).not.toBeInTheDocument();
+    expect(screen.queryByText("Photos")).not.toBeInTheDocument();
+
+    // Defaults to checked.
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+
+  it("sends autoDelete when creating an appointment", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body });
+      if (url === "/api/logs" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ id: 7, entityId: 1, photos: [] }, 201));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+
+    renderWithProviders(<LogAddForm category="appointment" />);
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.url === "/api/logs")).toBe(true);
+    });
+    const create = calls.find((c) => c.url === "/api/logs")!;
+    expect(JSON.parse(create.body as string)).toMatchObject({
+      category: "appointment",
+      title: "Dentist",
+      autoDelete: true,
+      rating: null,
+    });
+  });
+
+  it("hang out: people + photos, no rating", () => {
+    renderWithProviders(<LogAddForm category="hang_out" />);
+    expect(screen.getByText("People")).toBeInTheDocument();
+    expect(screen.getByText("Photos")).toBeInTheDocument();
+    expect(screen.queryByText("Rating")).not.toBeInTheDocument();
+    expect(screen.queryByText("Auto-delete once it's passed")).not.toBeInTheDocument();
+  });
+});
