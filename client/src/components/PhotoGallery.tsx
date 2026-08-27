@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
+import { Lightbox } from "./Lightbox.js";
 import { useToast } from "./ToastProvider.js";
 
 const MAX_PHOTOS = 10;
@@ -17,15 +18,6 @@ export function PhotoGallery({ logId, photos }: { logId: number; photos: LogPhot
   const { showToast } = useToast();
 
   const atLimit = photos.length >= MAX_PHOTOS;
-
-  useEffect(() => {
-    if (!lightbox) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setLightbox(null);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lightbox]);
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -124,28 +116,11 @@ export function PhotoGallery({ logId, photos }: { logId: number; photos: LogPhot
       )}
 
       {lightbox && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={lightbox.originalName}
-          onClick={() => setLightbox(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-        >
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => setLightbox(null)}
-            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-          >
-            <X size={20} />
-          </button>
-          <img
-            src={lightbox.url}
-            alt={lightbox.originalName}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full rounded-md object-contain"
-          />
-        </div>
+        <Lightbox
+          src={lightbox.url}
+          alt={lightbox.originalName}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </div>
   );

@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { Home, PlusCircle, Search } from "lucide-react";
+import { Home, PlusCircle, Search, Images } from "lucide-react";
 
 const ITEMS = [
   { to: "/", label: "Home", Icon: Home, end: true },
   { to: "/add", label: "Add", Icon: PlusCircle, end: false },
   { to: "/search", label: "Search", Icon: Search, end: false },
+  { to: "/gallery", label: "Gallery", Icon: Images, end: false },
 ];
 
 export function BottomNav() {

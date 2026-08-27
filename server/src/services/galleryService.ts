@@ -19,6 +19,7 @@ export interface GalleryQuery {
 export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryResponse {
   const limit = query.limit ?? DEFAULT_GALLERY_LIMIT;
 
+  // Fetch one extra row to know whether a next page exists (avoids a trailing empty page).
   const rows = db
     .select({
       photo: logPhotos,
@@ -33,10 +34,13 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
     .leftJoin(entities, eq(entities.id, logs.entityId))
     .where(query.cursor != null ? lt(logPhotos.id, query.cursor) : undefined)
     .orderBy(desc(logPhotos.id))
-    .limit(limit)
+    .limit(limit + 1)
     .all();
 
-  const photos: GalleryPhotoDTO[] = rows.map((row) => ({
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  const photos: GalleryPhotoDTO[] = pageRows.map((row) => ({
     ...toLogPhotoDTO(row.photo),
     log:
       row.logId != null
@@ -50,7 +54,7 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
         : null,
   }));
 
-  const nextCursor = rows.length === limit ? rows[rows.length - 1].photo.id : null;
+  const nextCursor = hasMore ? photos[photos.length - 1].id : null;
 
   return { photos, nextCursor };
 }
