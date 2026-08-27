@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { EntityDetail } from "./EntityDetail.js";
-import type { Category, LogDTO } from "@logger/shared";
+import type { Category, LogDTO, LogPhotoDTO } from "@logger/shared";
 
 const NOW = "2024-05-01T00:00:00.000Z";
 
@@ -106,5 +107,52 @@ describe("EntityDetail photo gallery", () => {
       expect(screen.queryByRole("button", { name: /add photos/i })).not.toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe("EntityDetail log deletion with photos", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  const photo: LogPhotoDTO = {
+    id: 8,
+    logId: 1,
+    url: "/api/photos/full-8.jpg",
+    thumbnailUrl: "/api/photos/thumb-8.webp",
+    originalName: "dinner.jpg",
+    createdAt: NOW,
+  };
+
+  function mockDelete() {
+    const calls: string[] = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        calls.push(url);
+        return Promise.resolve(jsonResponse(undefined, 204));
+      }
+      return Promise.resolve(jsonResponse(entityPayload("movie", [log({ photos: [photo] })])));
+    });
+    return calls;
+  }
+
+  it("offers keep-vs-delete when the log has photos; 'keep' sends no query", async () => {
+    const calls = mockDelete();
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: /keep photos/i }));
+
+    expect(calls).toEqual(["/api/logs/1"]);
+  });
+
+  it("'delete log & photos' sends ?deletePhotos=true", async () => {
+    const calls = mockDelete();
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: /Delete log & 1 photo/ }));
+
+    expect(calls).toEqual(["/api/logs/1?deletePhotos=true"]);
   });
 });

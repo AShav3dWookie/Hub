@@ -69,9 +69,9 @@ export const logPhotos = sqliteTable(
   "log_photos",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    logId: integer("log_id")
-      .notNull()
-      .references(() => logs.id, { onDelete: "cascade" }),
+    // Nullable + set null (not cascade): deleting a log can keep its photos as
+    // gallery-only orphans. See logService.deleteLog / routes/logs DELETE.
+    logId: integer("log_id").references(() => logs.id, { onDelete: "set null" }),
     filename: text("filename").notNull(),
     thumbnailFilename: text("thumbnail_filename").notNull(),
     originalName: text("original_name").notNull(),

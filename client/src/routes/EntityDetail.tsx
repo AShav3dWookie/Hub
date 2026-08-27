@@ -76,9 +76,14 @@ function LogRow({
     showToast("Log updated");
   }
 
-  async function handleDelete() {
-    await deleteLog.mutateAsync(log.id);
-    showToast("Log deleted");
+  async function handleDelete(deletePhotos: boolean) {
+    try {
+      await deleteLog.mutateAsync({ logId: log.id, deletePhotos });
+      showToast("Log deleted");
+    } catch {
+      setConfirmingDelete(false);
+      showToast("Could not delete log");
+    }
   }
 
   if (editing) {
@@ -155,15 +160,34 @@ function LogRow({
       {log.notes && <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{log.notes}</p>}
       {fields.hasPeople && <PhotoGallery logId={log.id} photos={log.photos} />}
       {confirmingDelete ? (
-        <div className="mt-2 flex items-center gap-3 text-sm">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this log?</span>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
-          >
-            Delete
-          </button>
+          {log.photos.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleDelete(true)}
+                className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Delete log &amp; {log.photos.length} photo{log.photos.length === 1 ? "" : "s"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(false)}
+                className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+              >
+                Delete log, keep photos
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleDelete(false)}
+              className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Delete
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setConfirmingDelete(false)}

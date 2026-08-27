@@ -1,4 +1,10 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import type {
   Category,
   CreateLogRequest,
@@ -10,6 +16,7 @@ import type {
   PersonProfileDTO,
   LogDTO,
   LogPhotoDTO,
+  GalleryResponse,
   EntityNoteDTO,
   CreateEntityNoteRequest,
   UpdateEntityNoteRequest,
@@ -97,10 +104,12 @@ export function useUpdateLog(logId: number) {
 export function useDeleteLog() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (logId: number) => api.delete(`/logs/${logId}`),
+    mutationFn: ({ logId, deletePhotos }: { logId: number; deletePhotos: boolean }) =>
+      api.delete(`/logs/${logId}${deletePhotos ? "?deletePhotos=true" : ""}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
     },
   });
 }
@@ -115,6 +124,7 @@ export function useUploadLogPhotos(logId: number) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
     },
   });
 }
@@ -124,6 +134,28 @@ export function useDeleteLogPhoto(logId: number) {
   return useMutation({
     mutationFn: (photoId: number) => api.delete(`/logs/${logId}/photos/${photoId}`),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
+    },
+  });
+}
+
+export function useGallery() {
+  return useInfiniteQuery({
+    queryKey: ["gallery"],
+    queryFn: ({ pageParam }: { pageParam: number | undefined }) =>
+      api.get<GalleryResponse>(`/gallery?limit=50${pageParam ? `&cursor=${pageParam}` : ""}`),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+}
+
+export function useDeleteGalleryPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (photoId: number) => api.delete(`/gallery/${photoId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
     },
   });

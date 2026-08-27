@@ -20,13 +20,32 @@ export interface EntitySummary {
 /** A photo attached to a log. Only logs whose category has hasPeople can have photos (see CATEGORY_FIELDS). */
 export interface LogPhotoDTO {
   id: number;
-  logId: number;
+  /** The log this photo belongs to, or null if that log was deleted but the photo was kept (gallery orphan). */
+  logId: number | null;
   /** Path to the full-size image, served under /api/photos. */
   url: string;
   /** Path to the server-generated thumbnail, served under /api/photos. */
   thumbnailUrl: string;
   originalName: string;
   createdAt: string;
+}
+
+/** A gallery photo: a LogPhotoDTO plus the event it's attached to (null once that log is deleted). */
+export interface GalleryPhotoDTO extends LogPhotoDTO {
+  log: {
+    id: number;
+    entityId: number;
+    entityTitle: string;
+    category: LoggableCategory;
+    date: string;
+  } | null;
+}
+
+/** Response for GET /api/gallery. */
+export interface GalleryResponse {
+  photos: GalleryPhotoDTO[];
+  /** Pass as ?cursor= to fetch the next page; null when there are no more photos. */
+  nextCursor: number | null;
 }
 
 export interface LogDTO {

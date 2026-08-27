@@ -55,6 +55,7 @@ export function getPhotosForLogs(db: AppDb, logIds: number[]): Map<number, LogPh
     .all();
 
   for (const row of rows) {
+    if (row.logId == null) continue; // filtered out by the query, but narrows the type
     const list = result.get(row.logId) ?? [];
     list.push(toLogPhotoDTO(row));
     result.set(row.logId, list);
@@ -165,7 +166,27 @@ export async function createLogPhotos(
   return created;
 }
 
-/** Delete one photo of a log: DB row first, then best-effort file removal. */
+function removePhotoFiles(photosDir: string, filenames: string[]): void {
+  for (const name of new Set(filenames)) {
+    try {
+      fs.rmSync(path.join(photosDir, name), { force: true });
+    } catch {
+      // best-effort — a missing file shouldn't fail the delete
+    }
+  }
+}
+
+/** Delete one photo by id (any log, or an orphan): DB row first, then best-effort file removal. */
+export function deletePhotoById(db: AppDb, photosDir: string, photoId: number): void {
+  const row = db.select().from(logPhotos).where(eq(logPhotos.id, photoId)).get();
+  if (!row) {
+    throw new NotFoundError(`Photo ${photoId} not found`);
+  }
+  db.delete(logPhotos).where(eq(logPhotos.id, photoId)).run();
+  removePhotoFiles(photosDir, [row.filename, row.thumbnailFilename]);
+}
+
+/** Delete one photo of a specific log (guards that the photo actually belongs to that log). */
 export function deleteLogPhoto(
   db: AppDb,
   photosDir: string,
@@ -176,14 +197,16 @@ export function deleteLogPhoto(
   if (!row || row.logId !== logId) {
     throw new NotFoundError(`Photo ${photoId} not found`);
   }
+  deletePhotoById(db, photosDir, photoId);
+}
 
-  db.delete(logPhotos).where(eq(logPhotos.id, photoId)).run();
-
-  for (const name of new Set([row.filename, row.thumbnailFilename])) {
-    try {
-      fs.rmSync(path.join(photosDir, name), { force: true });
-    } catch {
-      // best-effort — a missing file shouldn't fail the delete
-    }
-  }
+/** Delete every photo belonging to a log (rows + files). Used when a log is deleted "with photos". */
+export function deletePhotosForLog(db: AppDb, photosDir: string, logId: number): void {
+  const rows = db.select().from(logPhotos).where(eq(logPhotos.logId, logId)).all();
+  if (rows.length === 0) return;
+  db.delete(logPhotos).where(eq(logPhotos.logId, logId)).run();
+  removePhotoFiles(
+    photosDir,
+    rows.flatMap((r) => [r.filename, r.thumbnailFilename]),
+  );
 }
