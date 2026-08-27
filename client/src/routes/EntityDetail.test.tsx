@@ -156,3 +156,51 @@ describe("EntityDetail log deletion with photos", () => {
     expect(calls).toEqual(["/api/logs/1?deletePhotos=true"]);
   });
 });
+
+describe("EntityDetail log edit mode", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("edits a log's notes and PUTs the update", async () => {
+    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, body: init?.body });
+      if (init?.method === "PUT") {
+        return Promise.resolve(jsonResponse(log({ notes: "second viewing" })));
+      }
+      return Promise.resolve(
+        jsonResponse(entityPayload("movie", [log({ notes: "first viewing" })])),
+      );
+    });
+
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const notes = screen
+      .getAllByRole("textbox")
+      .find((el) => el.tagName === "TEXTAREA") as HTMLTextAreaElement;
+    await userEvent.clear(notes);
+    await userEvent.type(notes, "second viewing");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const put = calls.find((c) => c.method === "PUT");
+    expect(put?.url).toBe("/api/logs/1");
+    expect(JSON.parse(put!.body as string)).toMatchObject({ notes: "second viewing", people: [] });
+  });
+
+  it("cancels an edit without calling the API", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") throw new Error("should not PUT on cancel");
+      return Promise.resolve(jsonResponse(entityPayload("movie", [log({ notes: "keep me" })])));
+    });
+
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByText("keep me")).toBeInTheDocument();
+  });
+});
