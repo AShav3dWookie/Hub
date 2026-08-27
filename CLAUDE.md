@@ -132,6 +132,13 @@ DB mocks; migrations run for real. Route tests use `supertest` against `createAp
 QueryClient + MemoryRouter + ToastProvider; the global `fetch` is stubbed with `vi.fn()` (no MSW).
 Test files are colocated as `*.test.ts(x)`.
 
+### Visual verification
+
+`.mcp.json` registers the **Playwright MCP** server (`@playwright/mcp`, headless + isolated). Use it to
+drive the real running app for UI changes — start `npm run dev:server` + `npm run dev:client`, then
+navigate to `http://localhost:5173`, screenshot, and check layout/responsive/dark-mode. jsdom tests
+don't render CSS, so this is the only way to actually *see* a change.
+
 ## Repo notes
 
 - `test-env/` and `data/` are gitignored scratch dirs (seeded DBs, local Docker mounts).
