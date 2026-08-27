@@ -52,6 +52,7 @@ describe("updateLogSchema", () => {
       rating: null,
       notes: null,
       people: [],
+      autoDelete: false,
     });
     expect(() => updateLogSchema.parse({})).toThrow();
   });

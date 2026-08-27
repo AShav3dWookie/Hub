@@ -59,6 +59,7 @@ function LogRow({
   const [people, setPeople] = useState<PersonTagInput[]>(
     log.people.map((p) => ({ id: p.id, name: p.name })),
   );
+  const [autoDelete, setAutoDelete] = useState(log.autoDelete);
 
   const updateLog = useUpdateLog(log.id);
   const deleteLog = useDeleteLog();
@@ -67,10 +68,11 @@ function LogRow({
   async function handleSave() {
     const nextDate = fields.dateGranularity === "year" ? `${year}-01-01` : date;
     await updateLog.mutateAsync({
-      rating,
+      rating: fields.hasRating ? rating : null,
       date: nextDate,
       notes: notes || null,
       people: fields.hasPeople ? people : [],
+      autoDelete: fields.hasAutoDelete ? autoDelete : false,
     });
     setEditing(false);
     showToast("Log updated");
@@ -89,7 +91,7 @@ function LogRow({
   if (editing) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <StarRating value={rating} onChange={setRating} />
+        {fields.hasRating && <StarRating value={rating} onChange={setRating} />}
         {fields.dateGranularity === "year" ? (
           <input
             type="number"
@@ -112,6 +114,16 @@ function LogRow({
         )}
         {fields.hasPeople && (
           <PhotoGallery logId={log.id} photos={log.photos} allowDelete />
+        )}
+        {fields.hasAutoDelete && (
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={autoDelete}
+              onChange={(e) => setAutoDelete(e.target.checked)}
+            />
+            Auto-delete once it's passed
+          </label>
         )}
         <textarea
           value={notes}
@@ -145,7 +157,7 @@ function LogRow({
         <span className="font-medium">
           {fields.dateGranularity === "year" ? log.date.slice(0, 4) : log.date}
         </span>
-        <StarRating value={log.rating} readOnly />
+        {fields.hasRating && <StarRating value={log.rating} readOnly />}
       </div>
       {fields.hasPeople && log.people.length > 0 && (
         <p className="text-sm text-slate-500 dark:text-slate-400">

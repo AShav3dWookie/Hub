@@ -32,7 +32,7 @@ function resolvePersonIds(db: AppDb, people: PersonTagInput[]): number[] {
   return [...ids];
 }
 
-function getPeopleForLogs(db: AppDb, logIds: number[]): Map<number, PersonRef[]> {
+export function getPeopleForLogs(db: AppDb, logIds: number[]): Map<number, PersonRef[]> {
   const result = new Map<number, PersonRef[]>();
   if (logIds.length === 0) return result;
 
@@ -68,6 +68,7 @@ export function toLogDTO(
     notes: row.notes,
     people,
     photos,
+    autoDelete: row.autoDelete,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -131,6 +132,7 @@ export function createLog(db: AppDb, input: CreateLogRequest): LogDTO {
       rating: input.rating,
       date: input.date,
       notes: input.notes,
+      autoDelete: input.autoDelete ?? false,
     })
     .returning()
     .get();
@@ -165,6 +167,7 @@ export function updateLog(db: AppDb, id: number, input: UpdateLogRequest): LogDT
       rating: input.rating,
       date: input.date,
       notes: input.notes,
+      autoDelete: input.autoDelete ?? false,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(logs.id, id))

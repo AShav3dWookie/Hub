@@ -186,18 +186,20 @@ export function Search() {
             ) : (
               <>
                 <div className="flex flex-wrap gap-3">
-                  <select
-                    value={ratingMin}
-                    onChange={(e) => setRatingMin(e.target.value)}
-                    className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                  >
-                    <option value="">Any rating</option>
-                    {[1, 2, 3, 4, 5].map((r) => (
-                      <option key={r} value={r}>
-                        {r}+ stars
-                      </option>
-                    ))}
-                  </select>
+                  {(!categoryFields || categoryFields.hasRating) && (
+                    <select
+                      value={ratingMin}
+                      onChange={(e) => setRatingMin(e.target.value)}
+                      className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="">Any rating</option>
+                      {[1, 2, 3, 4, 5].map((r) => (
+                        <option key={r} value={r}>
+                          {r}+ stars
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
                   {categoryFields?.hasAuthor && (
                     <input

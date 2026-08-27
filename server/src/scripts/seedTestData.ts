@@ -132,6 +132,51 @@ createEntityNote(db, carol.id, {
   eventDate: "2019-11-03",
 });
 
+// --- Hang outs & appointments (day-precision, can be future, feed the home "upcoming" widget) ---
+function isoInDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// A past hang-out (history) and two future ones (show up under "upcoming").
+createLog(db, {
+  category: "hang_out",
+  title: "Bowling night",
+  date: "2026-07-04",
+  rating: null,
+  notes: "Bob won by one pin.",
+  people: [{ name: "Bob" }, { name: "Carol" }],
+});
+createLog(db, {
+  category: "hang_out",
+  title: "Mini golf",
+  date: isoInDays(3),
+  rating: null,
+  notes: null,
+  people: [{ name: "Alice" }],
+});
+
+// A kept appointment and an auto-delete one that has already expired (swept on next server start).
+createLog(db, {
+  category: "appointment",
+  title: "Dentist checkup",
+  date: isoInDays(5),
+  rating: null,
+  notes: "Ask about the night guard.",
+  people: [],
+  autoDelete: true,
+});
+createLog(db, {
+  category: "appointment",
+  title: "Passport renewal",
+  date: isoInDays(20),
+  rating: null,
+  notes: "Bring old passport + photos.",
+  people: [],
+  autoDelete: false,
+});
+
 // eslint-disable-next-line no-console
 console.log(`Seeded test data into ${dbPath}`);
 

@@ -28,6 +28,7 @@ export const createLogSchema = z
     date: z.string().min(1),
     notes: z.string().nullable().optional().default(null),
     people: z.array(personTagSchema).default([]),
+    autoDelete: z.boolean().optional().default(false),
   })
   .refine((data) => data.entityId != null || (data.category && data.title), {
     message: "Either entityId or category+title is required",
@@ -38,6 +39,7 @@ export const updateLogSchema = z.object({
   date: z.string().min(1),
   notes: z.string().nullable().optional().default(null),
   people: z.array(personTagSchema).default([]),
+  autoDelete: z.boolean().optional().default(false),
 });
 
 export const searchQuerySchema = z.object({

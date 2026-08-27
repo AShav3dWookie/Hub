@@ -21,6 +21,7 @@ function log(overrides: Partial<LogDTO> = {}): LogDTO {
     notes: null,
     people: [],
     photos: [],
+    autoDelete: false,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,

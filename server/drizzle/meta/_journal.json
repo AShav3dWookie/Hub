@@ -36,6 +36,13 @@
       "when": 1787863031239,
       "tag": "0004_volatile_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1787870843826,
+      "tag": "0005_curvy_meltdown",
+      "breakpoints": true
     }
   ]
 }

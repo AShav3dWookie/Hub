@@ -10,6 +10,7 @@ import { createEntitiesRouter } from "./routes/entities.js";
 import { createLogsRouter } from "./routes/logs.js";
 import { createSearchRouter } from "./routes/search.js";
 import { createImportantDatesRouter } from "./routes/importantDates.js";
+import { createEventsRouter } from "./routes/events.js";
 import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { authRouter } from "./routes/auth.js";
@@ -42,6 +43,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/logs", requireAuth, createLogPhotosRouter(db, photosDir));
   app.use("/api/search", requireAuth, createSearchRouter(db));
   app.use("/api/important-dates", requireAuth, createImportantDatesRouter(db));
+  app.use("/api/events", requireAuth, createEventsRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 

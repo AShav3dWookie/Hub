@@ -1,0 +1,1 @@
+ALTER TABLE `logs` ADD `auto_delete` integer DEFAULT false NOT NULL;

@@ -4,6 +4,8 @@ import {
   UtensilsCrossed,
   BookOpen,
   Gamepad2,
+  PartyPopper,
+  CalendarClock,
   User,
   type LucideIcon,
 } from "lucide-react";
@@ -14,5 +16,7 @@ export const ICONS: Record<string, LucideIcon> = {
   UtensilsCrossed,
   BookOpen,
   Gamepad2,
+  PartyPopper,
+  CalendarClock,
   User,
 };

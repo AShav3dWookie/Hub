@@ -57,6 +57,11 @@ export interface LogDTO {
   people: PersonRef[];
   /** Attached photos. Always [] for categories without hasPeople, and for summary/search views. */
   photos: LogPhotoDTO[];
+  /**
+   * For categories with hasAutoDelete (appointments): delete this log the day after its date
+   * has passed. Always false for other categories.
+   */
+  autoDelete: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,6 +156,8 @@ export interface CreateLogRequest {
   date: string;
   notes: string | null;
   people: PersonTagInput[];
+  /** Only meaningful for hasAutoDelete categories (appointments); defaults to false. */
+  autoDelete?: boolean;
 }
 
 export interface UpdateLogRequest {
@@ -158,6 +165,8 @@ export interface UpdateLogRequest {
   date: string;
   notes: string | null;
   people: PersonTagInput[];
+  /** Only meaningful for hasAutoDelete categories (appointments); defaults to false. */
+  autoDelete?: boolean;
 }
 
 /** A free-form note attached to any entity (currently only surfaced in the UI for people). */
@@ -205,4 +214,26 @@ export interface ImportantDateEntry {
 export interface UpcomingImportantDatesResponse {
   today: ImportantDateEntry[];
   next7Days: ImportantDateEntry[];
+}
+
+/**
+ * A future-dated hang-out or appointment surfaced on the home screen, with its parent
+ * entity inlined. Unlike ImportantDateEntry these are one-off (no annual recurrence).
+ */
+export interface UpcomingEventEntry {
+  logId: number;
+  entityId: number;
+  entityTitle: string;
+  category: "hang_out" | "appointment";
+  /** ISO date (YYYY-MM-DD). */
+  date: string;
+  notes: string | null;
+  /** Tagged people (hang-outs only; always [] for appointments). */
+  people: PersonRef[];
+}
+
+/** Response for GET /api/events/upcoming. Buckets mirror UpcomingImportantDatesResponse. */
+export interface UpcomingEventsResponse {
+  today: UpcomingEventEntry[];
+  next7Days: UpcomingEventEntry[];
 }

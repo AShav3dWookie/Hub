@@ -84,6 +84,7 @@ export function getPersonProfile(db: AppDb, id: number): PersonProfileDTO {
           // Person-profile appearances are a summary list (like search results),
           // not a detail view — photos are only surfaced on the entity page.
           photos: [] as LogPhotoDTO[],
+          autoDelete: row.autoDelete,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           entity: toEntitySummary(parentEntity),
