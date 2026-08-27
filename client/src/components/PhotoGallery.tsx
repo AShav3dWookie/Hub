@@ -8,7 +8,16 @@ import { useToast } from "./ToastProvider.js";
 const MAX_PHOTOS = 10;
 const ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif";
 
-export function PhotoGallery({ logId, photos }: { logId: number; photos: LogPhotoDTO[] }) {
+export function PhotoGallery({
+  logId,
+  photos,
+  allowDelete = false,
+}: {
+  logId: number;
+  photos: LogPhotoDTO[];
+  /** Show the per-photo delete control. Off in the read-only strip, on in the event editor. */
+  allowDelete?: boolean;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightbox, setLightbox] = useState<LogPhotoDTO | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<number | null>(null);
@@ -62,14 +71,16 @@ export function PhotoGallery({ logId, photos }: { logId: number; photos: LogPhot
                 className="h-full w-full object-cover"
               />
             </button>
-            <button
-              type="button"
-              aria-label={`Delete ${photo.originalName}`}
-              onClick={() => setConfirmingDelete(photo.id)}
-              className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900/80 p-1 text-white hover:bg-red-600"
-            >
-              <X size={12} />
-            </button>
+            {allowDelete && (
+              <button
+                type="button"
+                aria-label={`Delete ${photo.originalName}`}
+                onClick={() => setConfirmingDelete(photo.id)}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900/80 p-1 text-white hover:bg-red-600"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         ))}
 
@@ -95,7 +106,7 @@ export function PhotoGallery({ logId, photos }: { logId: number; photos: LogPhot
         data-testid="photo-file-input"
       />
 
-      {confirmingDelete != null && (
+      {allowDelete && confirmingDelete != null && (
         <div className="mt-2 flex items-center gap-3 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this photo?</span>
           <button

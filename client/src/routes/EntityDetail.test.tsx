@@ -108,6 +108,47 @@ describe("EntityDetail photo gallery", () => {
       unmount();
     }
   });
+
+  const withPhoto = () =>
+    log({
+      photos: [
+        {
+          id: 8,
+          logId: 1,
+          url: "/api/photos/full-8.jpg",
+          thumbnailUrl: "/api/photos/thumb-8.webp",
+          originalName: "dinner.jpg",
+          createdAt: NOW,
+        },
+      ],
+    });
+
+  it("view mode shows the thumbnail + Add photos but no per-photo delete", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("movie", [withPhoto()])),
+    );
+
+    renderDetail();
+
+    expect(await screen.findByRole("img", { name: "dinner.jpg" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete dinner.jpg" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("the event editor exposes the per-photo delete (and keeps Add photos)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("movie", [withPhoto()])),
+    );
+
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+
+    expect(screen.getByRole("button", { name: "Delete dinner.jpg" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
+  });
 });
 
 describe("EntityDetail log deletion with photos", () => {
