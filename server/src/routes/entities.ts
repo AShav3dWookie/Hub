@@ -13,7 +13,14 @@ import {
   updateEntityNote,
   deleteEntityNote,
 } from "../services/entityNotesService.js";
-import { createEntitySchema, categorySchema, createEntityNoteSchema, updateEntityNoteSchema } from "../lib/validation.js";
+import { listGalleryPhotos } from "../services/galleryService.js";
+import {
+  createEntitySchema,
+  categorySchema,
+  createEntityNoteSchema,
+  updateEntityNoteSchema,
+  galleryQuerySchema,
+} from "../lib/validation.js";
 import { BadRequestError } from "../lib/errors.js";
 
 export function createEntitiesRouter(db: AppDb): Router {
@@ -54,6 +61,20 @@ export function createEntitiesRouter(db: AppDb): Router {
       throw new BadRequestError("Invalid entity id");
     }
     res.json(listEntityNotes(db, id));
+  });
+
+  // Every photo from an event this person is tagged in (see galleryService personId filter).
+  router.get("/:id/photos", (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      throw new BadRequestError("Invalid entity id");
+    }
+    const entity = getEntityById(db, id);
+    if (entity.category !== "person") {
+      throw new BadRequestError("Entity is not a person");
+    }
+    const { cursor, limit } = galleryQuerySchema.parse(req.query);
+    res.json(listGalleryPhotos(db, { personId: id, cursor, limit }));
   });
 
   router.post("/:id/notes", (req, res) => {

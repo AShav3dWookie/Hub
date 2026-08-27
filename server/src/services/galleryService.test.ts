@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { createTestDb } from "../testUtils/testDb.js";
-import { createLog, deleteLog } from "./logService.js";
+import { createLog, updateLog, deleteLog } from "./logService.js";
+import { findOrCreateEntity } from "./entityService.js";
 import { createLogPhotos, type UploadedPhoto } from "./logPhotosService.js";
 import { listGalleryPhotos } from "./galleryService.js";
 
@@ -90,5 +91,77 @@ describe("galleryService", () => {
     expect(photos).toHaveLength(1);
     expect(photos[0].log).toBeNull();
     expect(photos[0].logId).toBeNull();
+  });
+
+  describe("personId filter", () => {
+    function movieLogWith(title: string, people: { name: string }[]) {
+      return createLog(ctx.db, {
+        category: "movie",
+        title,
+        rating: 4,
+        date: "2024-03-03",
+        notes: null,
+        people,
+      });
+    }
+
+    it("returns only photos from logs that tag the person, newest-first", async () => {
+      setup();
+      const withAlice = movieLogWith("Heat", [{ name: "Alice" }, { name: "Bob" }]);
+      const withoutAlice = movieLogWith("Sicario", [{ name: "Bob" }]);
+      const alice = withAlice.people.find((p) => p.name === "Alice")!;
+
+      await createLogPhotos(ctx.db, photosDir, withAlice.id, [await file("a1.png"), await file("a2.png")]);
+      await createLogPhotos(ctx.db, photosDir, withoutAlice.id, [await file("b1.png")]);
+
+      const { photos } = listGalleryPhotos(ctx.db, { personId: alice.id });
+      expect(photos.map((p) => p.originalName)).toEqual(["a2.png", "a1.png"]);
+      expect(photos[0].log).toMatchObject({ entityTitle: "Heat" });
+    });
+
+    it("paginates the filtered set with a cursor", async () => {
+      setup();
+      const log = movieLogWith("Heat", [{ name: "Alice" }]);
+      const alice = log.people[0];
+      await createLogPhotos(
+        ctx.db,
+        photosDir,
+        log.id,
+        await Promise.all(Array.from({ length: 3 }, (_, i) => file(`p${i}.png`))),
+      );
+
+      const p1 = listGalleryPhotos(ctx.db, { personId: alice.id, limit: 2 });
+      const p2 = listGalleryPhotos(ctx.db, { personId: alice.id, limit: 2, cursor: p1.nextCursor! });
+      expect(p1.photos).toHaveLength(2);
+      expect(p2.photos).toHaveLength(1);
+      expect(p2.nextCursor).toBeNull();
+      expect(new Set([...p1.photos, ...p2.photos].map((p) => p.id)).size).toBe(3);
+    });
+
+    it("stops returning a photo once the person is removed from its log", async () => {
+      setup();
+      const log = movieLogWith("Heat", [{ name: "Alice" }]);
+      const alice = log.people[0];
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+
+      expect(listGalleryPhotos(ctx.db, { personId: alice.id }).photos).toHaveLength(1);
+
+      updateLog(ctx.db, log.id, { rating: 4, date: "2024-03-03", notes: null, people: [{ name: "Bob" }] });
+
+      expect(listGalleryPhotos(ctx.db, { personId: alice.id }).photos).toHaveLength(0);
+    });
+
+    it("excludes orphaned photos (person's log deleted, photo kept)", async () => {
+      setup();
+      const log = movieLogWith("Heat", [{ name: "Alice" }]);
+      const alice = findOrCreateEntity(ctx.db, "person", "Alice");
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+
+      deleteLog(ctx.db, log.id); // keeps the photo but drops log_people
+
+      expect(listGalleryPhotos(ctx.db, { personId: alice.id }).photos).toHaveLength(0);
+      // still visible in the unfiltered gallery
+      expect(listGalleryPhotos(ctx.db).photos).toHaveLength(1);
+    });
   });
 });

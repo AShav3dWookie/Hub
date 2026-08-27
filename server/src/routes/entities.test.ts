@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
+import sharp from "sharp";
 import { createTestDb } from "../testUtils/testDb.js";
 import { createApp } from "../app.js";
 import { findOrCreateEntity } from "../services/entityService.js";
@@ -130,5 +131,52 @@ describe("entity routes", () => {
     const res = await request(app).get("/api/entities/search?category=movie&q=inter");
     expect(res.status).toBe(200);
     expect(res.body[0].title).toBe("Interstellar");
+  });
+
+  it("GET /api/entities/:id/photos returns a person's linked photos, paginated", async () => {
+    const app = setup();
+    const png = await sharp({
+      create: { width: 16, height: 16, channels: 3, background: { r: 9, g: 9, b: 9 } },
+    })
+      .png()
+      .toBuffer();
+
+    const log = await request(app)
+      .post("/api/logs")
+      .send({ category: "movie", title: "Heat", date: "2024-01-01", people: [{ name: "Alice" }] });
+    const aliceId = log.body.people[0].id;
+    await request(app)
+      .post(`/api/logs/${log.body.id}/photos`)
+      .attach("photos", png, { filename: "a.png", contentType: "image/png" })
+      .attach("photos", png, { filename: "b.png", contentType: "image/png" });
+
+    const p1 = await request(app).get(`/api/entities/${aliceId}/photos?limit=1`);
+    expect(p1.status).toBe(200);
+    expect(p1.body.photos).toHaveLength(1);
+    expect(p1.body.nextCursor).toBeGreaterThan(0);
+    expect(p1.body.photos[0].log).toMatchObject({ entityTitle: "Heat" });
+
+    const p2 = await request(app).get(
+      `/api/entities/${aliceId}/photos?limit=1&cursor=${p1.body.nextCursor}`,
+    );
+    expect(p2.body.photos).toHaveLength(1);
+    expect(p2.body.nextCursor).toBeNull();
+  });
+
+  it("GET /api/entities/:id/photos is empty for a person not tagged in any photo'd log", async () => {
+    const app = setup();
+    const bob = findOrCreateEntity(ctx.db, "person", "Bob");
+    const res = await request(app).get(`/api/entities/${bob.id}/photos`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ photos: [], nextCursor: null });
+  });
+
+  it("GET /api/entities/:id/photos 400s for a non-person entity and 404s for an unknown id", async () => {
+    const app = setup();
+    const movie = await request(app)
+      .post("/api/entities")
+      .send({ category: "movie", title: "Dune" });
+    expect((await request(app).get(`/api/entities/${movie.body.id}/photos`)).status).toBe(400);
+    expect((await request(app).get("/api/entities/999999/photos")).status).toBe(404);
   });
 });
