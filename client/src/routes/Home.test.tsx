@@ -61,6 +61,15 @@ describe("Home", () => {
     ).toBeTruthy();
   });
 
+  it("shows Add, Search, and Gallery action tiles", async () => {
+    renderWithProviders(<Home />);
+    await screen.findByText("What would you like to do?");
+
+    expect(screen.getByRole("link", { name: /add/i })).toHaveAttribute("href", "/add");
+    expect(screen.getByRole("link", { name: /search/i })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: /gallery/i })).toHaveAttribute("href", "/gallery");
+  });
+
   it("does not render important date widgets when there are none", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url.includes("/important-dates/upcoming")) {

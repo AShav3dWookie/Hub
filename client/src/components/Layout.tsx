@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useLogout, useAuthStatus } from "../api/auth.js";
 import { BottomNav } from "./BottomNav.js";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { data } = useAuthStatus();
   const logout = useLogout();
+  // BottomNav is hidden on the home screen, so it doesn't need the bottom clearance there.
+  const onHome = useLocation().pathname === "/";
 
   return (
     <div className="min-h-full dark:bg-slate-950">
@@ -28,7 +30,11 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-8 pb-24 dark:text-slate-100">{children}</main>
+      <main
+        className={`mx-auto max-w-3xl px-4 py-8 dark:text-slate-100 ${onHome ? "pb-8" : "pb-24"}`}
+      >
+        {children}
+      </main>
       <BottomNav />
     </div>
   );
