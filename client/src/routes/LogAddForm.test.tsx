@@ -4,8 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { LogAddForm } from "./LogAddForm.js";
 
-const NOW = "2024-05-01T00:00:00.000Z";
-
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }

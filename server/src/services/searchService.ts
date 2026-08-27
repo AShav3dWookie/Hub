@@ -118,7 +118,7 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
   }
 
   // 3. Apply log-level filters: date range, rating range, keyword (title + notes + tagged people).
-  let filteredLogs = logRows.filter((row) => {
+  const filteredLogs = logRows.filter((row) => {
     if (query.dateFrom && row.date < query.dateFrom) return false;
     if (query.dateTo && row.date > query.dateTo) return false;
     if (query.ratingMin != null && (row.rating == null || row.rating < query.ratingMin))
