@@ -1,6 +1,14 @@
+import path from "node:path";
+
+const dbPath = process.env.DB_PATH ?? "./data/logger.db";
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
-  dbPath: process.env.DB_PATH ?? "./data/logger.db",
+  dbPath,
+  // Uploaded log photos live alongside the SQLite file so they share the same
+  // persistent Docker volume (logger-data mounted at /app/data) with no extra
+  // mount. Overridable for tests / non-standard layouts.
+  photosDir: process.env.PHOTOS_DIR ?? path.join(path.dirname(dbPath), "photos"),
   authEnabled: process.env.AUTH_ENABLED === "true",
   authPasswordHash: process.env.AUTH_PASSWORD_HASH ?? "",
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me",

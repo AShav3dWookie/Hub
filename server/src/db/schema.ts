@@ -65,6 +65,27 @@ export const logPeople = sqliteTable(
   }),
 );
 
+export const logPhotos = sqliteTable(
+  "log_photos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    logId: integer("log_id")
+      .notNull()
+      .references(() => logs.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    thumbnailFilename: text("thumbnail_filename").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    size: integer("size").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => ({
+    logIdIdx: index("log_photos_log_id_idx").on(table.logId),
+  }),
+);
+
 export const entityNotes = sqliteTable(
   "entity_notes",
   {

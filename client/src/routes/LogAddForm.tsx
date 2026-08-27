@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
+import { api } from "../api/client.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
@@ -21,6 +22,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   const [author, setAuthor] = useState("");
   const [people, setPeople] = useState<PersonTagInput[]>([]);
   const [notes, setNotes] = useState("");
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const { data: suggestions } = useEntityAutocomplete(category, debouncedTitle);
@@ -40,8 +42,9 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       return;
     }
     const logDate = fields.dateGranularity === "year" ? `${year.trim()}-01-01` : date;
+    let createdLogId: number;
     try {
-      await createLog.mutateAsync(
+      const created = await createLog.mutateAsync(
         selectedEntityId
           ? {
               entityId: selectedEntityId,
@@ -61,11 +64,27 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
               people: fields.hasPeople ? people : [],
             },
       );
-      navigate("/");
-      showToast("Saved!");
+      createdLogId = created.id;
     } catch {
       setError("Failed to save entry");
+      return;
     }
+
+    // Two-step flow: the log now exists, upload any picked photos against its id.
+    if (fields.hasPeople && photoFiles.length > 0) {
+      try {
+        const formData = new FormData();
+        for (const file of photoFiles) formData.append("photos", file);
+        await api.postForm(`/logs/${createdLogId}/photos`, formData);
+      } catch {
+        navigate("/");
+        showToast("Saved, but photos failed to upload — add them from the entry.");
+        return;
+      }
+    }
+
+    navigate("/");
+    showToast("Saved!");
   }
 
   return (
@@ -159,6 +178,24 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium">People</span>
           <PeopleTagInput value={people} onChange={setPeople} />
+        </div>
+      )}
+
+      {fields.hasPeople && (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Photos</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            multiple
+            onChange={(e) => setPhotoFiles(Array.from(e.target.files ?? []).slice(0, 10))}
+            className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
+          />
+          {photoFiles.length > 0 && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {photoFiles.length} photo{photoFiles.length === 1 ? "" : "s"} selected
+            </p>
+          )}
         </div>
       )}
 

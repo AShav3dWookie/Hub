@@ -100,3 +100,12 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     dateLabel: "Year Played",
   },
 };
+
+/**
+ * Whether logs for a category can have photo attachments. Currently tied to
+ * people-tagging support (Movie, Eating Out) — the "event"-shaped categories.
+ * A non-loggable category (e.g. "person") never supports photos.
+ */
+export function categorySupportsPhotos(category: Category): boolean {
+  return isLoggableCategory(category) && CATEGORY_FIELDS[category].hasPeople;
+}

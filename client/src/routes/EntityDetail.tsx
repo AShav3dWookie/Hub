@@ -5,6 +5,7 @@ import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityDetail, useUpdateLog, useDeleteLog } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
+import { PhotoGallery } from "../components/PhotoGallery.js";
 import { useToast } from "../components/ToastProvider.js";
 
 export function EntityDetail() {
@@ -152,6 +153,7 @@ function LogRow({
         </p>
       )}
       {log.notes && <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{log.notes}</p>}
+      {fields.hasPeople && <PhotoGallery logId={log.id} photos={log.photos} />}
       {confirmingDelete ? (
         <div className="mt-2 flex items-center gap-3 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this log?</span>

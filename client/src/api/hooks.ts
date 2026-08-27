@@ -9,6 +9,7 @@ import type {
   EntityWithLogsDTO,
   PersonProfileDTO,
   LogDTO,
+  LogPhotoDTO,
   EntityNoteDTO,
   CreateEntityNoteRequest,
   UpdateEntityNoteRequest,
@@ -99,6 +100,30 @@ export function useDeleteLog() {
     mutationFn: (logId: number) => api.delete(`/logs/${logId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+    },
+  });
+}
+
+export function useUploadLogPhotos(logId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) => {
+      const formData = new FormData();
+      for (const file of files) formData.append("photos", file);
+      return api.postForm<LogPhotoDTO[]>(`/logs/${logId}/photos`, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+    },
+  });
+}
+
+export function useDeleteLogPhoto(logId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (photoId: number) => api.delete(`/logs/${logId}/photos/${photoId}`),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
     },
   });

@@ -8,6 +8,7 @@ import type {
   EntityWithLogsDTO,
   PersonProfileDTO,
   LogWithEntityDTO,
+  LogPhotoDTO,
   PersonStats,
   PersonRef,
   LoggableCategory,
@@ -80,6 +81,9 @@ export function getPersonProfile(db: AppDb, id: number): PersonProfileDTO {
           date: row.date,
           notes: row.notes,
           people: peopleByLog.get(row.id) ?? [],
+          // Person-profile appearances are a summary list (like search results),
+          // not a detail view — photos are only surfaced on the entity page.
+          photos: [] as LogPhotoDTO[],
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           entity: toEntitySummary(parentEntity),
