@@ -97,6 +97,8 @@ export function useUpdateLog(logId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      // editing a log's people changes who its photos are linked to
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
 }
@@ -110,6 +112,7 @@ export function useDeleteLog() {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
 }
@@ -125,6 +128,7 @@ export function useUploadLogPhotos(logId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
 }
@@ -136,6 +140,7 @@ export function useDeleteLogPhoto(logId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
 }
@@ -150,6 +155,19 @@ export function useGallery() {
   });
 }
 
+export function usePersonPhotos(personId: number | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["person-photos", personId],
+    queryFn: ({ pageParam }: { pageParam: number | undefined }) =>
+      api.get<GalleryResponse>(
+        `/entities/${personId}/photos?limit=50${pageParam ? `&cursor=${pageParam}` : ""}`,
+      ),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: personId != null,
+  });
+}
+
 export function useDeleteGalleryPhoto() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -157,6 +175,7 @@ export function useDeleteGalleryPhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
 }

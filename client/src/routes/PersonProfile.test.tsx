@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { PersonProfile } from "./PersonProfile.js";
+import type { GalleryPhotoDTO } from "@logger/shared";
 
 const NOW = "2024-05-01T00:00:00.000Z";
 
@@ -10,12 +12,25 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
 
-/** Serve /entities/:id (the person profile) and /entities/:id/notes (empty). */
-function mockApi(profile: unknown) {
+/** Serve /entities/:id (profile), /entities/:id/notes (empty), /entities/:id/photos (given photos). */
+function mockApi(profile: unknown, photos: GalleryPhotoDTO[] = []) {
   (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-    if (url.endsWith("/notes")) return Promise.resolve(jsonResponse([]));
+    if (url.includes("/photos")) return Promise.resolve(jsonResponse({ photos, nextCursor: null }));
+    if (url.includes("/notes")) return Promise.resolve(jsonResponse([]));
     return Promise.resolve(jsonResponse(profile));
   });
+}
+
+function photo(id: number): GalleryPhotoDTO {
+  return {
+    id,
+    logId: 3,
+    url: `/api/photos/full-${id}.jpg`,
+    thumbnailUrl: `/api/photos/thumb-${id}.webp`,
+    originalName: `photo-${id}.jpg`,
+    createdAt: NOW,
+    log: { id: 3, entityId: 3, entityTitle: "Inception", category: "movie", date: "2024-01-01" },
+  };
 }
 
 function renderProfile() {
@@ -91,5 +106,31 @@ describe("PersonProfile", () => {
 
     renderProfile();
     expect(await screen.findByText("entity page")).toBeInTheDocument();
+  });
+
+  const personProfile = {
+    type: "person",
+    entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
+    appearances: [],
+    stats: { totalLogs: 0, favoriteCategory: null, mostFrequentCoPerson: null },
+  };
+
+  it("renders the person's linked photos as a grid with no delete control", async () => {
+    mockApi(personProfile, [photo(2), photo(1)]);
+    renderProfile();
+
+    const thumbs = await screen.findAllByRole("img");
+    expect(thumbs).toHaveLength(2);
+    expect(thumbs[0]).toHaveAttribute("src", "/api/photos/thumb-2.webp");
+
+    await userEvent.click(thumbs[0]);
+    await screen.findByRole("dialog");
+    expect(screen.queryByRole("button", { name: "Delete photo" })).not.toBeInTheDocument();
+  });
+
+  it("shows a per-person empty state when there are no linked photos", async () => {
+    mockApi(personProfile, []);
+    renderProfile();
+    expect(await screen.findByText("No photos of Sarah yet.")).toBeInTheDocument();
   });
 });

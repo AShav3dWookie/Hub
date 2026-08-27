@@ -1,19 +1,22 @@
 import { useParams, Navigate, Link } from "react-router-dom";
 import { CATEGORY_META } from "@logger/shared";
-import { useEntityDetail } from "../api/hooks.js";
+import { useEntityDetail, usePersonPhotos } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { EntityNotes } from "../components/EntityNotes.js";
+import { PhotoStream } from "../components/PhotoStream.js";
 
 export function PersonProfile() {
   const { id } = useParams<{ id: string }>();
   const personId = Number(id);
   const { data, isLoading } = useEntityDetail(personId);
+  const photos = usePersonPhotos(personId);
 
   if (isLoading) return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   if (!data) return <p className="text-slate-500 dark:text-slate-400">Not found.</p>;
   if (data.type === "entity") return <Navigate to={`/entity/${personId}`} replace />;
 
   const { entity, appearances, stats } = data;
+  const photoPages = photos.data?.pages.flatMap((page) => page.photos) ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,6 +35,20 @@ export function PersonProfile() {
             </>
           )}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Photos
+        </h2>
+        <PhotoStream
+          photos={photoPages}
+          isLoading={photos.isLoading}
+          hasNextPage={Boolean(photos.hasNextPage)}
+          isFetchingNextPage={photos.isFetchingNextPage}
+          fetchNextPage={photos.fetchNextPage}
+          emptyText={`No photos of ${entity.title} yet.`}
+        />
       </div>
 
       <EntityNotes entityId={personId} />

@@ -1,6 +1,6 @@
-import { eq, lt, desc } from "drizzle-orm";
+import { and, eq, lt, desc } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
-import { logs, logPhotos, entities } from "../db/schema.js";
+import { logs, logPhotos, logPeople, entities } from "../db/schema.js";
 import { toLogPhotoDTO } from "./logPhotosService.js";
 import type { GalleryPhotoDTO, GalleryResponse, LoggableCategory } from "@logger/shared";
 
@@ -9,18 +9,21 @@ export const DEFAULT_GALLERY_LIMIT = 50;
 export interface GalleryQuery {
   cursor?: number;
   limit?: number;
+  /** When set, restrict to photos whose parent log tags this person (via log_people). */
+  personId?: number;
 }
 
 /**
- * All uploaded photos, newest first. Ordered by log_photos.id DESC (monotonic with
- * upload time) so the cursor is a plain integer. Photos whose log was deleted come
- * back with `log: null`.
+ * Uploaded photos, newest first. Ordered by log_photos.id DESC (monotonic with upload
+ * time) so the cursor is a plain integer. Photos whose log was deleted come back with
+ * `log: null`. With `personId`, restricted to photos from logs that tag that person
+ * (an inner join, so orphaned photos are excluded).
  */
 export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryResponse {
   const limit = query.limit ?? DEFAULT_GALLERY_LIMIT;
 
   // Fetch one extra row to know whether a next page exists (avoids a trailing empty page).
-  const rows = db
+  const base = db
     .select({
       photo: logPhotos,
       logId: logs.id,
@@ -32,6 +35,20 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
     .from(logPhotos)
     .leftJoin(logs, eq(logs.id, logPhotos.logId))
     .leftJoin(entities, eq(entities.id, logs.entityId))
+    .$dynamic();
+
+  const filtered =
+    query.personId != null
+      ? base.innerJoin(
+          logPeople,
+          and(
+            eq(logPeople.logId, logPhotos.logId),
+            eq(logPeople.personEntityId, query.personId),
+          ),
+        )
+      : base;
+
+  const rows = filtered
     .where(query.cursor != null ? lt(logPhotos.id, query.cursor) : undefined)
     .orderBy(desc(logPhotos.id))
     .limit(limit + 1)
