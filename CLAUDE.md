@@ -141,7 +141,10 @@ don't render CSS, so this is the only way to actually *see* a change.
 
 - `.mcp.json` is read only at Claude Code startup — a session started before it existed won't have the
   `browser_*` tools until it's restarted (and the project MCP server is approved on first load).
-- First browser use downloads Chromium (~130 MB) into the OS Playwright cache, not the repo.
+- First use needs the browser: `npx @playwright/mcp@latest install-browser chrome-for-testing`
+  (~115 MB into the OS Playwright cache, not the repo). The config pins `--browser chromium` so it
+  doesn't require a system Chrome install.
+- Screenshots/snapshots land in `.playwright-mcp/` (gitignored).
 - If the server won't start on Windows, change `"command"` to `"cmd"` and prepend `"/c", "npx"` to
   `args` (npx-launched MCP servers can need the `cmd /c` shim on Windows).
 

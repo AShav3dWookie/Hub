@@ -10,3 +10,4 @@ test-env/
 coverage/
 *.tsbuildinfo
 .claude/
+.playwright-mcp/
