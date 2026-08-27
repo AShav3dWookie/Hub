@@ -139,6 +139,12 @@ drive the real running app for UI changes — start `npm run dev:server` + `npm 
 navigate to `http://localhost:5173`, screenshot, and check layout/responsive/dark-mode. jsdom tests
 don't render CSS, so this is the only way to actually *see* a change.
 
+- `.mcp.json` is read only at Claude Code startup — a session started before it existed won't have the
+  `browser_*` tools until it's restarted (and the project MCP server is approved on first load).
+- First browser use downloads Chromium (~130 MB) into the OS Playwright cache, not the repo.
+- If the server won't start on Windows, change `"command"` to `"cmd"` and prepend `"/c", "npx"` to
+  `args` (npx-launched MCP servers can need the `cmd /c` shim on Windows).
+
 ## Repo notes
 
 - `test-env/` and `data/` are gitignored scratch dirs (seeded DBs, local Docker mounts).
