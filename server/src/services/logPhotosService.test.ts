@@ -11,6 +11,8 @@ import { logPhotos } from "../db/schema.js";
 import {
   createLogPhotos,
   deleteLogPhoto,
+  deletePhotoById,
+  deletePhotosForLog,
   listLogPhotos,
   assertLogSupportsPhotos,
   type UploadedPhoto,
@@ -162,15 +164,46 @@ describe("logPhotosService", () => {
     expect(() => deleteLogPhoto(ctx.db, photosDir, other.id, photo.id)).toThrow(/not found/i);
   });
 
-  it("cascade-deletes photo rows when the parent log is deleted", async () => {
+  it("orphans photo rows (logId -> null) when the parent log is deleted", async () => {
     setup();
     const log = movieLog();
-    await createLogPhotos(ctx.db, photosDir, log.id, [await file(), await file()]);
+    const created = await createLogPhotos(ctx.db, photosDir, log.id, [await file(), await file()]);
 
     deleteLog(ctx.db, log.id);
 
-    const remaining = ctx.db.select().from(logPhotos).where(eq(logPhotos.logId, log.id)).all();
-    expect(remaining).toHaveLength(0);
+    const stillLinked = ctx.db.select().from(logPhotos).where(eq(logPhotos.logId, log.id)).all();
+    expect(stillLinked).toHaveLength(0);
+
+    const all = ctx.db.select().from(logPhotos).all();
+    expect(all).toHaveLength(2);
+    expect(all.every((r) => r.logId === null)).toBe(true);
+    // files are left on disk — the gallery still serves them
+    expect(fs.readdirSync(photosDir).length).toBeGreaterThanOrEqual(created.length);
+  });
+
+  it("deletePhotosForLog removes every row + file for a log", async () => {
+    setup();
+    const log = movieLog();
+    await createLogPhotos(ctx.db, photosDir, log.id, [await file(), await file(), await file()]);
+    expect(fs.readdirSync(photosDir).length).toBeGreaterThan(0);
+
+    deletePhotosForLog(ctx.db, photosDir, log.id);
+
+    expect(ctx.db.select().from(logPhotos).all()).toHaveLength(0);
+    expect(fs.readdirSync(photosDir)).toHaveLength(0);
+  });
+
+  it("deletePhotoById removes an orphaned photo (row + files)", async () => {
+    setup();
+    const log = movieLog();
+    const [photo] = await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+    deleteLog(ctx.db, log.id); // orphan it
+
+    deletePhotoById(ctx.db, photosDir, photo.id);
+
+    expect(ctx.db.select().from(logPhotos).all()).toHaveLength(0);
+    expect(fs.readdirSync(photosDir)).toHaveLength(0);
+    expect(() => deletePhotoById(ctx.db, photosDir, photo.id)).toThrow(/not found/i);
   });
 
   it("assertLogSupportsPhotos throws for a missing log", () => {
