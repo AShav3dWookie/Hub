@@ -9,3 +9,4 @@ test-env/
 .DS_Store
 coverage/
 *.tsbuildinfo
+.claude/
