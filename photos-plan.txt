@@ -1,0 +1,67 @@
+Task: Add "Event photos" feature to logger app
+
+Repo: npm workspaces monorepo (shared, server, client) at repo root. Backend: Express 4 + Zod + Drizzle ORM (better-sqlite3). Frontend: React 18 + Vite + TS + Tailwind + React Router v7 + TanStack Query v5. Node 22 required.
+
+Feature: Allow photo attachments on log entries ("logs" = entries about an event/activity tied to an entity, e.g. a movie watched or restaurant visited). Only categories that support "People" tagging should support photos.
+
+LOCKED-IN DECISIONS
+- Scope: Only logs whose category has hasPeople: true in CATEGORY_FIELDS (shared/src/categories.ts) -- currently Movie and Eating Out (not TV, Book, Game) -- can have photos. Enforce this server-side, not just hidden in UI.
+- Storage: Local disk under the existing Docker persistent volume (docker-compose.yml mounts a logger-data volume at /app/data; DB_PATH=/app/data/logger.db). New photosDir should derive from path.dirname(config.dbPath) + "/photos" -- reuses the same volume, no Dockerfile/compose changes needed.
+- Multiplicity: Multiple photos per log (gallery). Limits: max 10 photos/log, max 10MB/file, allowed types jpeg/png/webp/heic -- validated server-side.
+- Upload timing: Supported both at log creation (LogAddForm) and afterward (EntityDetail log view). Implementation: two-step flow -- create the log via existing JSON endpoint first, then upload photos via multipart to the returned logId (no combined JSON+multipart endpoint).
+- Deletion: Individual photo deletion supported (delete-confirm UI pattern, matching existing inline-confirm patterns used for notes/logs).
+- Thumbnails: Server generates a resized thumbnail on upload using sharp (new dependency), in addition to storing the original file.
+- Search: Search results do NOT include real photos -- avoid N+1 queries. Only the EntityDetail log list gets real photos.
+
+KEY EXISTING ARCHITECTURE TO REUSE/RESPECT
+- server/src/db/schema.ts: logs table has cascade-delete FK pattern (e.g. entityId -> entities.id with onDelete: "cascade"), and a logPeople join table with a getPeopleForLogs-style batch lookup -- mirror this for a new log_photos table (logId FK -> logs.id onDelete: cascade, plus filename, thumbnailFilename, originalName, mimeType, size, createdAt).
+- server/src/services/logService.ts: toLogDTO(row, people) is the single real construction point for LogDTO, used by getLogsForEntity/getLogById/createLog/updateLog. This is where real photos must be joined in (add new getPhotosForLogs(db, logIds) helper mirroring the existing getPeopleForLogs).
+- server/src/services/searchService.ts: Does NOT call toLogDTO -- it has two separate manual DTO constructions (an inline LogDTO literal for entity-grouped results, and a toLogWithEntity() function for flat/log-grouped results). Add photos: [] to both -- this cleanly satisfies "search doesn't need photos" without extra suppression logic.
+- server/src/services/entityDetailService.ts: getEntityWithLogs() calls getLogsForEntity() so it gets real photos "for free" once logService is updated. getPersonProfile()'s appearances are built manually (like search, not via toLogDTO) -- open question: should these show real photos or photos: []? Recommendation: photos: [] (treat as a summary list, not a detail view) unless told otherwise.
+- server/src/config.ts: env-var-driven config object (dbPath, port, authEnabled, etc.) -- add photosDir here.
+- server/src/app.ts: Express app with router mounts under /api/* (all except /api/auth and health use requireAuth middleware), then static file serving for the built client SPA, then error handler. Add: (a) ensure photosDir exists at startup via fs.mkdirSync(photosDir, { recursive: true }), (b) app.use("/api/photos", requireAuth, express.static(photosDir)) for serving photo files, (c) mount a new photos router.
+- server/package.json: currently has no multer/sharp -- need to add multer, @types/multer, sharp.
+- client/src/api/client.ts: the shared request() helper always sets Content-Type: application/json -- need a new helper (e.g. postForm()) that omits that header so the browser sets its own multipart boundary for FormData uploads, while keeping credentials: "include".
+- client/src/routes/LogAddForm.tsx and client/src/routes/EntityDetail.tsx (specifically its LogRow component) already conditionally render People-tagging fields based on CATEGORY_FIELDS[category].hasPeople -- gate the new photo UI the same way.
+
+IMPLEMENTATION STEPS
+
+Phase A -- Shared types
+1. In shared/src/types.ts: add LogPhotoDTO { id, logId, url, thumbnailUrl, originalName, createdAt }; add photos: LogPhotoDTO[] field to LogDTO.
+
+Phase B -- Backend (depends on A)
+2. Add multer, @types/multer, sharp to server/package.json.
+3. Add log_photos table to server/src/db/schema.ts (id PK, logId FK cascade, filename, thumbnailFilename, originalName, mimeType, size, createdAt, index on logId). Generate migration (npm run db:generate at root, uses server/drizzle.config.ts).
+4. Add photosDir to server/src/config.ts (derived from path.dirname(config.dbPath) + "/photos").
+5. New server/src/services/logPhotosService.ts:
+   - assertLogSupportsPhotos(db, logId) -- loads the log's parent entity, throws BadRequestError unless category hasPeople.
+   - createLogPhotos(db, photosDir, logId, files) -- enforces <=10 total photos/log, writes original with a crypto.randomUUID()-based filename (avoid path traversal/collisions), generates thumbnail via sharp, inserts DB rows, returns LogPhotoDTO[].
+   - listLogPhotos, deleteLogPhoto(db, photosDir, logId, photoId) (best-effort file removal + DB row delete), toLogPhotoDTO.
+   - Pass photosDir explicitly as a param (like db: AppDb elsewhere) for testability -- don't import config directly into the service.
+6. Update server/src/services/logService.ts: new getPhotosForLogs(db, logIds) helper; toLogDTO gains a photos param; update all call sites (getLogsForEntity, getLogById, createLog, updateLog).
+7. Update server/src/services/searchService.ts: add photos: [] to both manual DTO construction sites.
+8. New server/src/routes/logPhotos.ts: multer config (memoryStorage, 10MB/file limit, 10 files max, mimetype filter for jpeg/png/webp/heic/heif). POST /api/logs/:logId/photos (upload.array("photos", 10) -> createLogPhotos, returns 201). DELETE /api/logs/:logId/photos/:photoId (204). Mount with requireAuth in app.ts.
+
+Phase C -- Backend tests (depends on B)
+9. New logPhotosService.test.ts using a temp directory per test for photosDir (mirror existing createTestDb temp-file pattern). Cover: upload creates DB row + files + thumbnail; rejects non-hasPeople categories; rejects >10 photos; delete removes row + files; cascade-delete when parent log deleted.
+10. Update existing logService.test.ts/searchService.test.ts/entityDetailService.test.ts for the new photos field (should be additive).
+11. New route tests for upload/delete endpoints using supertest .attach(), auth-gated like existing routes.
+
+Phase D -- Client (depends on A/B)
+12. client/src/api/client.ts: add postForm<T>(path, formData) multipart helper.
+13. client/src/api/hooks.ts: useUploadLogPhotos(logId) and useDeleteLogPhoto(logId) mutations, invalidating the entity-detail query.
+14. New client/src/components/PhotoGallery.tsx: thumbnail grid (uses thumbnailUrl), click-to-lightbox (full url), delete-confirm per photo (mirror existing inline-confirm pattern e.g. in EntityNotes.tsx's NoteRow), file-input to trigger upload. Props: logId, photos.
+15. client/src/routes/EntityDetail.tsx: LogRow renders <PhotoGallery> when CATEGORY_FIELDS[category].hasPeople (always visible, not edit-mode-only).
+16. client/src/routes/LogAddForm.tsx: when hasPeople, show a multi-file picker; on submit, create the log first (existing JSON flow), then if files selected, upload them against the new log's id before navigating away.
+
+Phase E -- Client tests
+17. PhotoGallery.test.tsx (thumbnails render, lightbox open/close, delete-confirm flow, upload posts correct FormData).
+18. New EntityDetail.test.tsx (gallery shown for Movie/EatingOut logs, absent for TV/Book/Game).
+19. LogAddForm.tsx tests covering photo picker category-gating + two-step create-then-upload.
+
+Phase F -- Final verification
+20. npm run build (all 3 workspaces) + npm test (all workspaces) fully green.
+21. Re-run npm run seed:test-data --workspace server to confirm the new migration/schema doesn't break seeding (no photo seeding required unless desired).
+
+OPEN QUESTION TO RESOLVE DURING IMPLEMENTATION
+Should entityDetailService.ts's getPersonProfile() "appearances" list also show real photos, or stay photos: [] like search? Leaning toward [] for consistency with other summary/list views, but not firmly decided -- use judgment or ask the user.
