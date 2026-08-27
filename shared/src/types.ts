@@ -17,6 +17,18 @@ export interface EntitySummary {
   author: string | null;
 }
 
+/** A photo attached to a log. Only logs whose category has hasPeople can have photos (see CATEGORY_FIELDS). */
+export interface LogPhotoDTO {
+  id: number;
+  logId: number;
+  /** Path to the full-size image, served under /api/photos. */
+  url: string;
+  /** Path to the server-generated thumbnail, served under /api/photos. */
+  thumbnailUrl: string;
+  originalName: string;
+  createdAt: string;
+}
+
 export interface LogDTO {
   id: number;
   entityId: number;
@@ -24,6 +36,8 @@ export interface LogDTO {
   date: string;
   notes: string | null;
   people: PersonRef[];
+  /** Attached photos. Always [] for categories without hasPeople, and for summary/search views. */
+  photos: LogPhotoDTO[];
   createdAt: string;
   updatedAt: string;
 }

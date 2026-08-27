@@ -2,11 +2,13 @@ import { eq, inArray } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs, logPeople } from "../db/schema.js";
 import { findOrCreateEntity, getEntityById } from "./entityService.js";
+import { getPhotosForLogs } from "./logPhotosService.js";
 import { NotFoundError, BadRequestError } from "../lib/errors.js";
 import type {
   CreateLogRequest,
   UpdateLogRequest,
   LogDTO,
+  LogPhotoDTO,
   PersonRef,
   PersonTagInput,
 } from "@logger/shared";
@@ -53,7 +55,11 @@ function getPeopleForLogs(db: AppDb, logIds: number[]): Map<number, PersonRef[]>
   return result;
 }
 
-export function toLogDTO(row: typeof logs.$inferSelect, people: PersonRef[]): LogDTO {
+export function toLogDTO(
+  row: typeof logs.$inferSelect,
+  people: PersonRef[],
+  photos: LogPhotoDTO[] = [],
+): LogDTO {
   return {
     id: row.id,
     entityId: row.entityId,
@@ -61,6 +67,7 @@ export function toLogDTO(row: typeof logs.$inferSelect, people: PersonRef[]): Lo
     date: row.date,
     notes: row.notes,
     people,
+    photos,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -68,11 +75,12 @@ export function toLogDTO(row: typeof logs.$inferSelect, people: PersonRef[]): Lo
 
 export function getLogsForEntity(db: AppDb, entityId: number): LogDTO[] {
   const rows = db.select().from(logs).where(eq(logs.entityId, entityId)).all();
-  const peopleByLog = getPeopleForLogs(
-    db,
-    rows.map((r) => r.id),
+  const logIds = rows.map((r) => r.id);
+  const peopleByLog = getPeopleForLogs(db, logIds);
+  const photosByLog = getPhotosForLogs(db, logIds);
+  return rows.map((row) =>
+    toLogDTO(row, peopleByLog.get(row.id) ?? [], photosByLog.get(row.id) ?? []),
   );
-  return rows.map((row) => toLogDTO(row, peopleByLog.get(row.id) ?? []));
 }
 
 export function getLogById(db: AppDb, id: number): LogDTO {
@@ -81,7 +89,8 @@ export function getLogById(db: AppDb, id: number): LogDTO {
     throw new NotFoundError(`Log ${id} not found`);
   }
   const peopleByLog = getPeopleForLogs(db, [id]);
-  return toLogDTO(row, peopleByLog.get(id) ?? []);
+  const photosByLog = getPhotosForLogs(db, [id]);
+  return toLogDTO(row, peopleByLog.get(id) ?? [], photosByLog.get(id) ?? []);
 }
 
 function validateRating(rating: number | null) {

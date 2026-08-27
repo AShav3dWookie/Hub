@@ -172,6 +172,9 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
       date: row.date,
       notes: row.notes,
       people: peopleByLog.get(row.id) ?? [],
+      // Search results deliberately omit real photos to avoid an N+1 lookup;
+      // photos are only loaded for the entity-detail log list.
+      photos: [],
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -256,6 +259,8 @@ function toLogWithEntity(
     date: row.date,
     notes: row.notes,
     people,
+    // Search results deliberately omit real photos (see the entity-grouped branch above).
+    photos: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     entity: entitySummary,

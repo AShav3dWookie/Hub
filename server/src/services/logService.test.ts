@@ -24,6 +24,7 @@ describe("logService", () => {
     expect(log.rating).toBe(5);
     expect(log.people).toHaveLength(1);
     expect(log.people[0].name).toBe("Sarah");
+    expect(log.photos).toEqual([]);
   });
 
   it("attaches a new log to an existing entity via entityId", () => {

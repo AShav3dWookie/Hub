@@ -10,12 +10,16 @@ import { createEntitiesRouter } from "./routes/entities.js";
 import { createLogsRouter } from "./routes/logs.js";
 import { createSearchRouter } from "./routes/search.js";
 import { createImportantDatesRouter } from "./routes/importantDates.js";
+import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
-export function createApp(db: AppDb): Express {
+export function createApp(db: AppDb, photosDir: string = config.photosDir): Express {
   const app = express();
+
+  // Ensure the uploaded-photos directory exists (shares the DB's persistent volume).
+  fs.mkdirSync(photosDir, { recursive: true });
 
   app.use(cors());
   app.use(express.json());
@@ -34,8 +38,10 @@ export function createApp(db: AppDb): Express {
   app.use("/api/auth", authRouter);
   app.use("/api/entities", requireAuth, createEntitiesRouter(db));
   app.use("/api/logs", requireAuth, createLogsRouter(db));
+  app.use("/api/logs", requireAuth, createLogPhotosRouter(db, photosDir));
   app.use("/api/search", requireAuth, createSearchRouter(db));
   app.use("/api/important-dates", requireAuth, createImportantDatesRouter(db));
+  app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");
   if (fs.existsSync(clientDist)) {
