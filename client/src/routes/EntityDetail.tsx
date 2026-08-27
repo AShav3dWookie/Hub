@@ -110,6 +110,9 @@ function LogRow({
             <PeopleTagInput value={people} onChange={setPeople} />
           </div>
         )}
+        {fields.hasPeople && (
+          <PhotoGallery logId={log.id} photos={log.photos} allowDelete />
+        )}
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

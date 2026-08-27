@@ -46,11 +46,11 @@ describe("PhotoGallery", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("confirms before deleting and calls the delete endpoint", async () => {
+  it("confirms before deleting and calls the delete endpoint (allowDelete)", async () => {
     const fetchMock = fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
 
-    renderWithProviders(<PhotoGallery logId={7} photos={[photo(3)]} />);
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(3)]} allowDelete />);
 
     await userEvent.click(screen.getByRole("button", { name: "Delete photo-3.jpg" }));
     expect(screen.getByText("Delete this photo?")).toBeInTheDocument();
@@ -61,6 +61,16 @@ describe("PhotoGallery", () => {
       "/api/logs/7/photos/3",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("has no delete affordance by default", async () => {
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} />);
+
+    expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByText("Delete this photo?")).not.toBeInTheDocument();
   });
 
   it("uploads picked files as multipart form data without a JSON content-type", async () => {
