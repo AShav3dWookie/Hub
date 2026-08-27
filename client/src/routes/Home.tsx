@@ -1,9 +1,21 @@
 import { Link } from "react-router-dom";
-import { PlusCircle, Search, CalendarHeart } from "lucide-react";
+import { PlusCircle, Search, Images, CalendarHeart, type LucideIcon } from "lucide-react";
 import { CATEGORY_META } from "@logger/shared";
 import type { ImportantDateEntry } from "@logger/shared";
 import { useSearch, useUpcomingImportantDates } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+
+function ActionTile({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500"
+    >
+      <Icon size={40} strokeWidth={1.5} />
+      <span className="font-medium">{label}</span>
+    </Link>
+  );
+}
 
 function ImportantDatesWidget({ title, entries }: { title: string; entries: ImportantDateEntry[] }) {
   return (
@@ -41,21 +53,10 @@ export function Home() {
   return (
     <div className="flex flex-col items-center gap-10 pt-10">
       <h1 className="text-2xl font-semibold">What would you like to do?</h1>
-      <div className="flex gap-6">
-        <Link
-          to="/add"
-          className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white px-10 py-8 shadow-sm hover:border-slate-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500"
-        >
-          <PlusCircle size={40} strokeWidth={1.5} />
-          <span className="font-medium">Add</span>
-        </Link>
-        <Link
-          to="/search"
-          className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white px-10 py-8 shadow-sm hover:border-slate-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500"
-        >
-          <Search size={40} strokeWidth={1.5} />
-          <span className="font-medium">Search</span>
-        </Link>
+      <div className="grid w-full max-w-md grid-cols-2 gap-4 sm:grid-cols-3">
+        <ActionTile to="/add" icon={PlusCircle} label="Add" />
+        <ActionTile to="/search" icon={Search} label="Search" />
+        <ActionTile to="/gallery" icon={Images} label="Gallery" />
       </div>
 
       {importantDates && importantDates.today.length > 0 && (
