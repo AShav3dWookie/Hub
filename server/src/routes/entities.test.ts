@@ -60,3 +60,75 @@ describe("entities notes routes", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("entity routes", () => {
+  let ctx: ReturnType<typeof createTestDb>;
+
+  afterEach(() => {
+    ctx?.cleanup();
+  });
+
+  function setup() {
+    ctx = createTestDb();
+    return createApp(ctx.db);
+  }
+
+  it("creates a bare entity and dedupes on a case/whitespace-insensitive title", async () => {
+    const app = setup();
+    const a = await request(app)
+      .post("/api/entities")
+      .send({ category: "movie", title: "The Matrix", releaseYear: 1999 });
+    expect(a.status).toBe(201);
+
+    const b = await request(app)
+      .post("/api/entities")
+      .send({ category: "movie", title: "  the matrix " });
+    expect(b.body.id).toBe(a.body.id);
+  });
+
+  it("400s on an invalid create body", async () => {
+    const res = await request(setup()).post("/api/entities").send({ category: "movie", title: "" });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/entities/:id returns the entity with its logs", async () => {
+    const app = setup();
+    const created = await request(app)
+      .post("/api/logs")
+      .send({ category: "eating_out", title: "Chipotle", rating: 4, date: "2024-01-01" });
+
+    const res = await request(app).get(`/api/entities/${created.body.entityId}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ type: "entity", title: "Chipotle", visitCount: 1 });
+    expect(res.body.logs).toHaveLength(1);
+  });
+
+  it("GET /api/entities/:id returns a person profile for a person entity", async () => {
+    const app = setup();
+    await request(app)
+      .post("/api/logs")
+      .send({ category: "movie", title: "Heat", date: "2024-01-01", people: [{ name: "Sam" }] });
+    const sarah = findOrCreateEntity(ctx.db, "person", "Sam");
+
+    const res = await request(app).get(`/api/entities/${sarah.id}`);
+    expect(res.body).toMatchObject({ type: "person" });
+    expect(res.body.appearances).toHaveLength(1);
+  });
+
+  it("400s on a non-integer id and 404s on an unknown id", async () => {
+    const app = setup();
+    expect((await request(app).get("/api/entities/abc")).status).toBe(400);
+    expect((await request(app).get("/api/entities/999999")).status).toBe(404);
+  });
+
+  it("GET /api/entities/search autocompletes by title within a category", async () => {
+    const app = setup();
+    await request(app)
+      .post("/api/logs")
+      .send({ category: "movie", title: "Interstellar", date: "2024-01-01" });
+
+    const res = await request(app).get("/api/entities/search?category=movie&q=inter");
+    expect(res.status).toBe(200);
+    expect(res.body[0].title).toBe("Interstellar");
+  });
+});
