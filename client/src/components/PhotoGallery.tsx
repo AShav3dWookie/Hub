@@ -19,8 +19,10 @@ export function PhotoGallery({
   allowDelete?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [lightbox, setLightbox] = useState<LogPhotoDTO | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<number | null>(null);
+
+  const lightbox = lightboxIndex == null ? null : photos[lightboxIndex] ?? null;
 
   const upload = useUploadLogPhotos(logId);
   const deletePhoto = useDeleteLogPhoto(logId);
@@ -57,11 +59,11 @@ export function PhotoGallery({
   return (
     <div className="mt-2">
       <div className="flex flex-wrap gap-2">
-        {photos.map((photo) => (
+        {photos.map((photo, i) => (
           <div key={photo.id} className="relative">
             <button
               type="button"
-              onClick={() => setLightbox(photo)}
+              onClick={() => setLightboxIndex(i)}
               className="block h-20 w-20 overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
               <img
@@ -126,11 +128,19 @@ export function PhotoGallery({
         </div>
       )}
 
-      {lightbox && (
+      {lightbox && lightboxIndex != null && (
         <Lightbox
           src={lightbox.url}
           alt={lightbox.originalName}
-          onClose={() => setLightbox(null)}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={
+            lightboxIndex > 0 ? () => setLightboxIndex(lightboxIndex - 1) : undefined
+          }
+          onNext={
+            lightboxIndex < photos.length - 1
+              ? () => setLightboxIndex(lightboxIndex + 1)
+              : undefined
+          }
         />
       )}
     </div>

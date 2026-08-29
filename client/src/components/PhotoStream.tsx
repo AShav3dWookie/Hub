@@ -25,9 +25,12 @@ export function PhotoStream({
   emptyText: string;
   onDelete?: (photoId: number) => Promise<void>;
 }) {
-  const [active, setActive] = useState<GalleryPhotoDTO | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [advancing, setAdvancing] = useState(false); // waiting on fetchNextPage for the next photo
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const active = activeIndex == null ? null : photos[activeIndex] ?? null;
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -41,9 +44,43 @@ export function PhotoStream({
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  function close() {
-    setActive(null);
+  useEffect(() => {
     setConfirmingDelete(false);
+  }, [activeIndex]);
+
+  // Once a freshly fetched page has landed, step onto the photo we were headed for.
+  useEffect(() => {
+    if (!advancing) return;
+    if (activeIndex != null && activeIndex < photos.length - 1) {
+      setActiveIndex(activeIndex + 1);
+      setAdvancing(false);
+    } else if (!hasNextPage && !isFetchingNextPage) {
+      setAdvancing(false); // no more pages are coming
+    }
+  }, [advancing, activeIndex, photos.length, hasNextPage, isFetchingNextPage]);
+
+  const canPrev = activeIndex != null && activeIndex > 0;
+  const canNext =
+    activeIndex != null && (activeIndex < photos.length - 1 || hasNextPage);
+
+  function goPrev() {
+    if (activeIndex != null && activeIndex > 0) setActiveIndex(activeIndex - 1);
+  }
+
+  function goNext() {
+    if (activeIndex == null) return;
+    if (activeIndex < photos.length - 1) {
+      setActiveIndex(activeIndex + 1);
+    } else if (hasNextPage && !isFetchingNextPage) {
+      setAdvancing(true);
+      fetchNextPage();
+    }
+  }
+
+  function close() {
+    setActiveIndex(null);
+    setConfirmingDelete(false);
+    setAdvancing(false);
   }
 
   async function handleDelete(photoId: number) {
@@ -62,14 +99,11 @@ export function PhotoStream({
 
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-          {photos.map((photo) => (
+          {photos.map((photo, i) => (
             <button
               key={photo.id}
               type="button"
-              onClick={() => {
-                setActive(photo);
-                setConfirmingDelete(false);
-              }}
+              onClick={() => setActiveIndex(i)}
               className="aspect-square overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
               <img
@@ -89,7 +123,13 @@ export function PhotoStream({
       )}
 
       {active && (
-        <Lightbox src={active.url} alt={active.originalName} onClose={close}>
+        <Lightbox
+          src={active.url}
+          alt={active.originalName}
+          onClose={close}
+          onPrev={canPrev ? goPrev : undefined}
+          onNext={canNext && !advancing ? goNext : undefined}
+        >
           <div className="flex flex-col items-center gap-2">
             {active.log ? (
               <span>

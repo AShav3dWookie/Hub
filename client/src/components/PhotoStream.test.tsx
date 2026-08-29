@@ -108,6 +108,109 @@ describe("PhotoStream", () => {
     expect(onDelete).toHaveBeenCalledWith(6);
   });
 
+  it("navigates loaded photos and moves the caption with them", async () => {
+    renderStream(
+      <PhotoStream
+        {...base}
+        photos={[
+          photo(1),
+          photo(2, {
+            log: { id: 2, entityId: 5, entityTitle: "Ronin", category: "movie", date: "2024-02-02" },
+          }),
+        ]}
+        emptyText=""
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
+    expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "/entity/9");
+    expect(screen.queryByRole("button", { name: "Previous photo" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+    expect(screen.getByRole("link", { name: "Ronin" })).toHaveAttribute("href", "/entity/5");
+    expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
+  });
+
+  it("shows no arrows for a lone photo with no further pages", async () => {
+    renderStream(<PhotoStream {...base} photos={[photo(1)]} emptyText="" />);
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByRole("button", { name: "Previous photo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
+  });
+
+  it("fetches the next page from the end and then advances onto the new photo", async () => {
+    const fetchNextPage = vi.fn();
+    const { rerender } = renderStream(
+      <PhotoStream
+        {...base}
+        photos={[photo(1)]}
+        hasNextPage
+        fetchNextPage={fetchNextPage}
+        emptyText=""
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next photo" }));
+    expect(fetchNextPage).toHaveBeenCalled();
+
+    // the query starts fetching...
+    rerender(
+      <MemoryRouter>
+        <PhotoStream
+          {...base}
+          photos={[photo(1)]}
+          hasNextPage
+          isFetchingNextPage
+          fetchNextPage={fetchNextPage}
+          emptyText=""
+        />
+      </MemoryRouter>,
+    );
+
+    // ...then the next page lands
+    rerender(
+      <MemoryRouter>
+        <PhotoStream
+          {...base}
+          photos={[photo(1), photo(2)]}
+          hasNextPage={false}
+          fetchNextPage={fetchNextPage}
+          emptyText=""
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/photos/full-2.jpg",
+    );
+  });
+
+  it("resets the delete confirmation when navigating to another photo", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    renderStream(
+      <PhotoStream
+        {...base}
+        photos={[photo(1), photo(2)]}
+        emptyText=""
+        onDelete={onDelete}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Delete photo" }));
+    expect(screen.getByText("Delete this photo?")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(screen.queryByText("Delete this photo?")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete photo" })).toBeInTheDocument();
+  });
+
   it("loads the next page when the sentinel scrolls into view", async () => {
     const fetchNextPage = vi.fn();
     renderStream(
