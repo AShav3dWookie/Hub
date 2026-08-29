@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Search } from "./Search.js";
@@ -87,5 +87,70 @@ describe("Search", () => {
       expect.stringContaining("category=person"),
       expect.anything(),
     );
+  });
+
+  const NOW = "2024-05-01T00:00:00.000Z";
+  const summary = (id: number, category: string, title: string) => ({
+    id,
+    category,
+    title,
+    createdAt: NOW,
+    releaseYear: null,
+    author: null,
+  });
+  const logRow = (id: number, over: Record<string, unknown> = {}) => ({
+    id,
+    entityId: 1,
+    rating: null,
+    date: "2024-06-10",
+    notes: null,
+    people: [],
+    photos: [],
+    autoDelete: false,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...over,
+  });
+
+  it("shows the rating bar only for rated categories (groupBy=entity)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        groupBy: "entity",
+        entities: [
+          { ...summary(1, "movie", "Dune"), logs: [logRow(1, { rating: 4 })], visitCount: 1, averageRating: 4, latestDate: "2024-06-10" },
+          { ...summary(2, "hang_out", "Bowling"), logs: [logRow(2)], visitCount: 1, averageRating: null, latestDate: "2024-06-10" },
+        ],
+      }),
+    });
+
+    renderWithProviders(<Search />);
+
+    const movieCard = (await screen.findByRole("link", { name: "Dune" })).closest("div")!.parentElement!;
+    const hangOutCard = screen.getByRole("link", { name: "Bowling" }).closest("div")!.parentElement!;
+    expect(within(movieCard).getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
+    expect(within(hangOutCard).queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
+  });
+
+  it("shows the rating bar only for rated categories (groupBy=log)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        groupBy: "log",
+        logs: [
+          logRow(1, { rating: 4, entity: summary(1, "movie", "Dune") }),
+          logRow(2, { entity: summary(2, "hang_out", "Bowling") }),
+        ],
+      }),
+    });
+
+    renderWithProviders(<Search />);
+
+    const movieCard = (await screen.findByRole("link", { name: "Dune" })).closest("div")!.parentElement!;
+    const hangOutCard = screen.getByRole("link", { name: "Bowling" }).closest("div")!.parentElement!;
+    expect(within(movieCard).getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
+    expect(within(hangOutCard).queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
   });
 });

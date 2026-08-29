@@ -10,7 +10,14 @@ import type {
   SortOrder,
   VisitSortBy,
 } from "@logger/shared";
-import { CATEGORIES, CATEGORY_META, CATEGORY_FIELDS, isLoggableCategory, tokenizeQuery } from "@logger/shared";
+import {
+  CATEGORIES,
+  CATEGORY_META,
+  CATEGORY_FIELDS,
+  categoryHasRating,
+  isLoggableCategory,
+  tokenizeQuery,
+} from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { DateFilter, type DateMode } from "../components/DateFilter.js";
@@ -371,7 +378,9 @@ export function Search() {
                   <li key={log.id} className="border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
                     <div className="flex items-center justify-between">
                       <span className="dark:text-slate-200">{log.date}</span>
-                      <StarRating value={log.rating} readOnly />
+                      {categoryHasRating(entity.category) && (
+                        <StarRating value={log.rating} readOnly />
+                      )}
                     </div>
                     {log.people.length > 0 && (
                       <p className="text-slate-500 dark:text-slate-400">
@@ -414,7 +423,9 @@ export function Search() {
                   {CATEGORY_META[log.entity.category].label} · {log.date}
                 </span>
               </div>
-              <StarRating value={log.rating} readOnly />
+              {categoryHasRating(log.entity.category) && (
+                <StarRating value={log.rating} readOnly />
+              )}
               {log.people.length > 0 && (
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   with{" "}
