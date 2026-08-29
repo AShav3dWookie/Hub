@@ -10,6 +10,10 @@ const EVENT_CATEGORIES = ["hang_out", "appointment"] as const;
 /**
  * Future-dated hang-outs and appointments, bucketed into ones landing today and ones landing
  * within the next 7 days (tomorrow..+7 days inclusive). One-off — no annual recurrence.
+ *
+ * Only events *planned ahead* are surfaced: a log whose `createdAt` date is on or after its event
+ * date is treated as an after-the-fact record (you logged the bowling night when you got home), not
+ * an upcoming plan, and is excluded.
  */
 export function getUpcomingEvents(
   db: AppDb,
@@ -23,6 +27,7 @@ export function getUpcomingEvents(
       category: entities.category,
       date: logs.date,
       notes: logs.notes,
+      createdAt: logs.createdAt,
     })
     .from(logs)
     .innerJoin(entities, eq(logs.entityId, entities.id))
@@ -47,6 +52,9 @@ export function getUpcomingEvents(
   const next7Entries: UpcomingEventEntry[] = [];
 
   for (const row of rows) {
+    // Logged on or after the day it happened → history, not an upcoming plan.
+    if (row.createdAt.slice(0, 10) >= row.date) continue;
+
     const entry: UpcomingEventEntry = {
       logId: row.logId,
       entityId: row.entityId,
