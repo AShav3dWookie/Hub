@@ -1,11 +1,17 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../testUtils/testDb.js";
+import type { AppDb } from "../db/client.js";
 import { logs } from "../db/schema.js";
 import { createLog } from "./logService.js";
 import { getUpcomingEvents, sweepExpiredAppointments } from "./upcomingEventsService.js";
 
 const NOW = new Date("2024-06-15T12:00:00Z");
+
+/** createLog stamps createdAt with the real clock; override it so tests can control "logged before". */
+function backdateCreatedAt(db: AppDb, logId: number, iso: string) {
+  db.update(logs).set({ createdAt: iso }).where(eq(logs.id, logId)).run();
+}
 
 describe("upcomingEventsService", () => {
   let ctx: ReturnType<typeof createTestDb>;
@@ -17,7 +23,7 @@ describe("upcomingEventsService", () => {
   describe("getUpcomingEvents", () => {
     it("buckets hang-outs and appointments by date, with people on hang-outs", () => {
       ctx = createTestDb();
-      createLog(ctx.db, {
+      const bowling = createLog(ctx.db, {
         category: "hang_out",
         title: "Bowling",
         rating: null,
@@ -25,7 +31,7 @@ describe("upcomingEventsService", () => {
         notes: null,
         people: [{ name: "Sam" }],
       });
-      createLog(ctx.db, {
+      const dentist = createLog(ctx.db, {
         category: "appointment",
         title: "Dentist",
         rating: null,
@@ -34,6 +40,8 @@ describe("upcomingEventsService", () => {
         people: [],
         autoDelete: true,
       });
+      backdateCreatedAt(ctx.db, bowling.id, "2024-06-01");
+      backdateCreatedAt(ctx.db, dentist.id, "2024-06-01");
 
       const result = getUpcomingEvents(ctx.db, NOW);
 
@@ -54,7 +62,7 @@ describe("upcomingEventsService", () => {
         ["Edge out", "2024-06-23"],
         ["Past", "2024-06-14"],
       ] as const) {
-        createLog(ctx.db, {
+        const created = createLog(ctx.db, {
           category: "hang_out",
           title,
           rating: null,
@@ -62,12 +70,56 @@ describe("upcomingEventsService", () => {
           notes: null,
           people: [],
         });
+        backdateCreatedAt(ctx.db, created.id, "2024-06-01");
       }
 
       const result = getUpcomingEvents(ctx.db, NOW);
 
       expect(result.today).toHaveLength(0);
       expect(result.next7Days.map((e) => e.entityTitle)).toEqual(["Edge in"]);
+    });
+
+    it("includes an event that was logged before its date", () => {
+      ctx = createTestDb();
+      const planned = createLog(ctx.db, {
+        category: "hang_out",
+        title: "Planned bowling",
+        rating: null,
+        date: "2024-06-15",
+        notes: null,
+        people: [],
+      });
+      backdateCreatedAt(ctx.db, planned.id, "2024-06-10");
+
+      expect(getUpcomingEvents(ctx.db, NOW).today.map((e) => e.entityTitle)).toEqual([
+        "Planned bowling",
+      ]);
+    });
+
+    it("excludes an event logged on or after the day it happened", () => {
+      ctx = createTestDb();
+      const sameDay = createLog(ctx.db, {
+        category: "hang_out",
+        title: "Retro bowling",
+        rating: null,
+        date: "2024-06-15",
+        notes: null,
+        people: [],
+      });
+      const afterwards = createLog(ctx.db, {
+        category: "appointment",
+        title: "Backfilled dentist",
+        rating: null,
+        date: "2024-06-18",
+        notes: null,
+        people: [],
+      });
+      backdateCreatedAt(ctx.db, sameDay.id, "2024-06-15"); // logged the day of
+      backdateCreatedAt(ctx.db, afterwards.id, "2024-06-20"); // logged after the fact
+
+      const result = getUpcomingEvents(ctx.db, NOW);
+      expect(result.today).toHaveLength(0);
+      expect(result.next7Days).toHaveLength(0);
     });
 
     it("ignores non-event categories", () => {
