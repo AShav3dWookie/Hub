@@ -46,6 +46,27 @@ describe("PhotoGallery", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("steps through photos with the arrow buttons and keys, hiding arrows at the ends", async () => {
+    renderWithProviders(
+      <PhotoGallery logId={7} photos={[photo(1), photo(2), photo(3)]} />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
+    expect(screen.queryByRole("button", { name: "Previous photo" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+
+    await userEvent.keyboard("{ArrowRight}");
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
+    expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
+
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+  });
+
   it("confirms before deleting and calls the delete endpoint (allowDelete)", async () => {
     const fetchMock = fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
