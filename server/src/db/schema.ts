@@ -74,6 +74,9 @@ export const logPhotos = sqliteTable(
     // Nullable + set null (not cascade): deleting a log can keep its photos as
     // gallery-only orphans. See logService.deleteLog / routes/logs DELETE.
     logId: integer("log_id").references(() => logs.id, { onDelete: "set null" }),
+    // A photo belongs to a log (logId set) OR directly to an album ("loose", albumId set)
+    // OR neither (gallery orphan) — never both. Enforced in the service layer, not the DB.
+    albumId: integer("album_id").references(() => albums.id, { onDelete: "set null" }),
     filename: text("filename").notNull(),
     thumbnailFilename: text("thumbnail_filename").notNull(),
     originalName: text("original_name").notNull(),
@@ -85,6 +88,56 @@ export const logPhotos = sqliteTable(
   },
   (table) => ({
     logIdIdx: index("log_photos_log_id_idx").on(table.logId),
+    albumIdIdx: index("log_photos_album_id_idx").on(table.albumId),
+  }),
+);
+
+export const albums = sqliteTable("albums", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  notes: text("notes"),
+  dateStart: text("date_start"),
+  dateEnd: text("date_end"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(current_timestamp)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(current_timestamp)`),
+});
+
+export const albumEvents = sqliteTable(
+  "album_events",
+  {
+    albumId: integer("album_id")
+      .notNull()
+      .references(() => albums.id, { onDelete: "cascade" }),
+    logId: integer("log_id")
+      .notNull()
+      .references(() => logs.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    uniquePair: uniqueIndex("album_events_album_id_log_id_idx").on(table.albumId, table.logId),
+    logIdIdx: index("album_events_log_id_idx").on(table.logId),
+  }),
+);
+
+export const albumPeople = sqliteTable(
+  "album_people",
+  {
+    albumId: integer("album_id")
+      .notNull()
+      .references(() => albums.id, { onDelete: "cascade" }),
+    personEntityId: integer("person_entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    uniquePair: uniqueIndex("album_people_album_id_person_entity_id_idx").on(
+      table.albumId,
+      table.personEntityId,
+    ),
+    personEntityIdIdx: index("album_people_person_entity_id_idx").on(table.personEntityId),
   }),
 );
 

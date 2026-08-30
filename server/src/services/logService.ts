@@ -1,21 +1,23 @@
 import { eq, inArray } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
-import { entities, logs, logPeople } from "../db/schema.js";
-import { findOrCreateEntity, getEntityById } from "./entityService.js";
+import { entities, logs, logPeople, albums, albumEvents } from "../db/schema.js";
+import { findOrCreateEntity, getEntityById, toEntitySummary } from "./entityService.js";
 import { getPhotosForLogs } from "./logPhotosService.js";
 import { NotFoundError, BadRequestError } from "../lib/errors.js";
 import type {
   CreateLogRequest,
   UpdateLogRequest,
   LogDTO,
+  LogWithEntityDTO,
   LogPhotoDTO,
+  AlbumRef,
   PersonRef,
   PersonTagInput,
 } from "@logger/shared";
 import { isLoggableCategory } from "@logger/shared";
 
 /** Resolve a list of person tag inputs (existing id or new name) into person entity ids, auto-creating as needed. */
-function resolvePersonIds(db: AppDb, people: PersonTagInput[]): number[] {
+export function resolvePersonIds(db: AppDb, people: PersonTagInput[]): number[] {
   const ids = new Set<number>();
   for (const person of people) {
     if (person.id != null) {
@@ -55,10 +57,31 @@ export function getPeopleForLogs(db: AppDb, logIds: number[]): Map<number, Perso
   return result;
 }
 
+/** Batch lookup mirroring getPeopleForLogs — albums a log is part of, grouped by logId. */
+export function getAlbumsForLogs(db: AppDb, logIds: number[]): Map<number, AlbumRef[]> {
+  const result = new Map<number, AlbumRef[]>();
+  if (logIds.length === 0) return result;
+
+  const rows = db
+    .select({ logId: albumEvents.logId, id: albums.id, title: albums.title })
+    .from(albumEvents)
+    .innerJoin(albums, eq(albumEvents.albumId, albums.id))
+    .where(inArray(albumEvents.logId, logIds))
+    .all();
+
+  for (const row of rows) {
+    const list = result.get(row.logId) ?? [];
+    list.push({ id: row.id, title: row.title });
+    result.set(row.logId, list);
+  }
+  return result;
+}
+
 export function toLogDTO(
   row: typeof logs.$inferSelect,
   people: PersonRef[],
   photos: LogPhotoDTO[] = [],
+  albumRefs: AlbumRef[] = [],
 ): LogDTO {
   return {
     id: row.id,
@@ -68,9 +91,24 @@ export function toLogDTO(
     notes: row.notes,
     people,
     photos,
+    albums: albumRefs,
     autoDelete: row.autoDelete,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+/** A LogDTO with its parent entity inlined. Used by search results, person appearances, album events. */
+export function toLogWithEntity(
+  row: typeof logs.$inferSelect,
+  people: PersonRef[],
+  entity: typeof entities.$inferSelect,
+  photos: LogPhotoDTO[] = [],
+  albumRefs: AlbumRef[] = [],
+): LogWithEntityDTO {
+  return {
+    ...toLogDTO(row, people, photos, albumRefs),
+    entity: toEntitySummary(entity),
   };
 }
 
@@ -79,8 +117,14 @@ export function getLogsForEntity(db: AppDb, entityId: number): LogDTO[] {
   const logIds = rows.map((r) => r.id);
   const peopleByLog = getPeopleForLogs(db, logIds);
   const photosByLog = getPhotosForLogs(db, logIds);
+  const albumsByLog = getAlbumsForLogs(db, logIds);
   return rows.map((row) =>
-    toLogDTO(row, peopleByLog.get(row.id) ?? [], photosByLog.get(row.id) ?? []),
+    toLogDTO(
+      row,
+      peopleByLog.get(row.id) ?? [],
+      photosByLog.get(row.id) ?? [],
+      albumsByLog.get(row.id) ?? [],
+    ),
   );
 }
 
@@ -91,7 +135,8 @@ export function getLogById(db: AppDb, id: number): LogDTO {
   }
   const peopleByLog = getPeopleForLogs(db, [id]);
   const photosByLog = getPhotosForLogs(db, [id]);
-  return toLogDTO(row, peopleByLog.get(id) ?? [], photosByLog.get(id) ?? []);
+  const albumsByLog = getAlbumsForLogs(db, [id]);
+  return toLogDTO(row, peopleByLog.get(id) ?? [], photosByLog.get(id) ?? [], albumsByLog.get(id) ?? []);
 }
 
 function validateRating(rating: number | null) {

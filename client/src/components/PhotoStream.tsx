@@ -16,6 +16,7 @@ export function PhotoStream({
   fetchNextPage,
   emptyText,
   onDelete,
+  canDelete,
 }: {
   photos: GalleryPhotoDTO[];
   isLoading: boolean;
@@ -24,6 +25,8 @@ export function PhotoStream({
   fetchNextPage: () => void;
   emptyText: string;
   onDelete?: (photoId: number) => Promise<void>;
+  /** When given, the lightbox delete control only shows for photos this returns true for. */
+  canDelete?: (photo: GalleryPhotoDTO) => boolean;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [advancing, setAdvancing] = useState(false); // waiting on fetchNextPage for the next photo
@@ -143,6 +146,7 @@ export function PhotoStream({
             )}
 
             {onDelete &&
+              (!canDelete || canDelete(active)) &&
               (confirmingDelete ? (
                 <span className="flex items-center gap-3">
                   <span>Delete this photo?</span>

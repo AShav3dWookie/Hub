@@ -7,6 +7,11 @@ export interface PersonRef {
   name: string;
 }
 
+export interface AlbumRef {
+  id: number;
+  title: string;
+}
+
 export interface EntitySummary {
   id: number;
   category: Category;
@@ -58,6 +63,11 @@ export interface LogDTO {
   /** Attached photos. Always [] for categories without hasPeople, and for summary/search views. */
   photos: LogPhotoDTO[];
   /**
+   * Albums this log is part of. Populated only on the entity-detail path (getLogsForEntity /
+   * getLogById); always [] in summary/search/person-profile views, mirroring `photos`.
+   */
+  albums: AlbumRef[];
+  /**
    * For categories with hasAutoDelete (appointments): delete this log the day after its date
    * has passed. Always false for other categories.
    */
@@ -97,10 +107,13 @@ export type SortOrder = "asc" | "desc";
 export type VisitSortBy = "date" | "rating" | "person";
 export type GroupBy = "entity" | "log";
 
+/** A real category, or the pseudo-value "album" that the Search filter selects albums with. */
+export type SearchCategory = Category | "album";
+
 export interface SearchQuery {
   q?: string;
   qMode?: MatchMode;
-  category?: Category;
+  category?: SearchCategory;
   dateFrom?: string;
   dateTo?: string;
   ratingMin?: number;
@@ -120,6 +133,7 @@ export interface SearchResponse {
   entities?: EntityWithLogsDTO[];
   logs?: LogWithEntityDTO[];
   people?: PersonSearchResult[];
+  albums?: AlbumSearchResult[];
 }
 
 /** A person entity matched directly by name in a keyword search (or listed via a "person" category filter). */
@@ -127,6 +141,13 @@ export interface PersonSearchResult {
   id: number;
   name: string;
   appearanceCount: number;
+}
+
+/** An album matched by title in a keyword search (or listed via the "album" filter tab). */
+export interface AlbumSearchResult {
+  id: number;
+  title: string;
+  eventCount: number;
 }
 
 export interface CreateEntityRequest {

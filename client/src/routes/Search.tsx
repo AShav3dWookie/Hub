@@ -2,10 +2,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 import type {
-  Category,
   GroupBy,
   LoggableCategory,
   MatchMode,
+  SearchCategory,
   SortBy,
   SortOrder,
   VisitSortBy,
@@ -60,7 +60,7 @@ export function Search() {
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, 300);
   const [qMode, setQMode] = useState<MatchMode>("all");
-  const [category, setCategory] = useState<Category | "">("");
+  const [category, setCategory] = useState<SearchCategory | "">("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [ratingMin, setRatingMin] = useState("");
@@ -75,10 +75,14 @@ export function Search() {
   const [showFilters, setShowFilters] = useState(false);
 
   const isPerson = category === "person";
+  const isAlbum = category === "album";
+  const nameOnly = isPerson || isAlbum;
   const categoryFields =
-    category && isLoggableCategory(category) ? CATEGORY_FIELDS[category as LoggableCategory] : null;
+    category && category !== "album" && isLoggableCategory(category)
+      ? CATEGORY_FIELDS[category as LoggableCategory]
+      : null;
 
-  function handleCategoryChange(next: Category | "") {
+  function handleCategoryChange(next: SearchCategory | "") {
     setCategory(next);
     // Category dictates which filters apply; clear ones that don't carry over.
     setDateFrom("");
@@ -91,10 +95,10 @@ export function Search() {
   const { data, isLoading, isFetching } = useSearch({
     q: debouncedQ || undefined,
     qMode,
-    category: (category as Category) || undefined,
-    dateFrom: !isPerson ? dateFrom || undefined : undefined,
-    dateTo: !isPerson ? dateTo || undefined : undefined,
-    ratingMin: !isPerson && ratingMin ? Number(ratingMin) : undefined,
+    category: category || undefined,
+    dateFrom: !nameOnly ? dateFrom || undefined : undefined,
+    dateTo: !nameOnly ? dateTo || undefined : undefined,
+    ratingMin: !nameOnly && ratingMin ? Number(ratingMin) : undefined,
     authorContains: categoryFields?.hasAuthor && authorContains ? authorContains : undefined,
     releaseYearMin: categoryFields?.hasReleaseYear && releaseYearMin ? Number(releaseYearMin) : undefined,
     releaseYearMax: categoryFields?.hasReleaseYear && releaseYearMax ? Number(releaseYearMax) : undefined,
@@ -184,11 +188,25 @@ export function Search() {
                   {CATEGORY_META[c].label}
                 </button>
               ))}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isAlbum}
+                onClick={() => handleCategoryChange("album")}
+                className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
+                  isAlbum
+                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
+                    : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500 dark:hover:bg-slate-800"
+                }`}
+              >
+                Album
+              </button>
             </div>
 
-            {isPerson ? (
+            {nameOnly ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Searching people by name only — ratings, dates, and other filters don't apply.
+                Searching {isAlbum ? "albums" : "people"} by {isAlbum ? "title" : "name"} only —
+                ratings, dates, and other filters don't apply.
               </p>
             ) : (
               <>
@@ -250,7 +268,7 @@ export function Search() {
               </>
             )}
 
-            {!isPerson && (
+            {!nameOnly && (
               <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
                 <label className="flex items-center gap-2 text-sm">
                   Group:
@@ -325,9 +343,34 @@ export function Search() {
 
       {!isLoading &&
         data &&
+        (data.albums?.length ?? 0) === 0 &&
         (data.people?.length ?? 0) === 0 &&
         (data.entities?.length ?? 0) === 0 &&
         (data.logs?.length ?? 0) === 0 && <p className="text-slate-500 dark:text-slate-400">No results.</p>}
+
+      {!isLoading && data?.albums && data.albums.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Albums
+          </h2>
+          <div className="flex flex-col gap-2">
+            {data.albums.map((album) => (
+              <Link
+                key={album.id}
+                to={`/album/${album.id}`}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+              >
+                <span className="text-lg font-medium dark:text-white">
+                  {highlightMatches(album.title, queryTokens)}
+                </span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {album.eventCount} event{album.eventCount === 1 ? "" : "s"}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!isLoading && data?.people && data.people.length > 0 && (
         <div className="flex flex-col gap-3">

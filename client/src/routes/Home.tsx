@@ -1,5 +1,12 @@
 import { Link } from "react-router-dom";
-import { PlusCircle, Search, Images, CalendarHeart, type LucideIcon } from "lucide-react";
+import {
+  PlusCircle,
+  Search,
+  Images,
+  GalleryVerticalEnd,
+  CalendarHeart,
+  type LucideIcon,
+} from "lucide-react";
 import { CATEGORY_META, categoryHasRating } from "@logger/shared";
 import type { ImportantDateEntry, UpcomingEventEntry } from "@logger/shared";
 import { useSearch, useUpcomingImportantDates, useUpcomingEvents } from "../api/hooks.js";
@@ -103,6 +110,7 @@ export function Home() {
         <ActionTile to="/add" icon={PlusCircle} label="Add" />
         <ActionTile to="/search" icon={Search} label="Search" />
         <ActionTile to="/gallery" icon={Images} label="Gallery" />
+        <ActionTile to="/albums" icon={GalleryVerticalEnd} label="Albums" />
       </div>
 
       {todayRows.length > 0 && <UpcomingWidget title="Today" rows={todayRows} />}

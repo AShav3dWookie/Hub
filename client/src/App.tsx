@@ -8,6 +8,8 @@ import { Search } from "./routes/Search.js";
 import { EntityDetail } from "./routes/EntityDetail.js";
 import { PersonProfile } from "./routes/PersonProfile.js";
 import { Gallery } from "./routes/Gallery.js";
+import { Albums } from "./routes/Albums.js";
+import { AlbumDetail } from "./routes/AlbumDetail.js";
 import { Login } from "./routes/Login.js";
 
 export function App() {
@@ -25,6 +27,8 @@ export function App() {
                 <Route path="/add/:category" element={<AddCategory />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/gallery" element={<Gallery />} />
+                <Route path="/albums" element={<Albums />} />
+                <Route path="/album/:id" element={<AlbumDetail />} />
                 <Route path="/entity/:id" element={<EntityDetail />} />
                 <Route path="/person/:id" element={<PersonProfile />} />
               </Routes>

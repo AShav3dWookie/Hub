@@ -89,6 +89,39 @@ describe("Search", () => {
     );
   });
 
+  it("renders an Albums section above the other results", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        groupBy: "entity",
+        entities: [],
+        albums: [{ id: 3, title: "Italy Trip", eventCount: 5 }],
+      }),
+    });
+
+    renderWithProviders(<Search />);
+    await userEvent.type(screen.getByPlaceholderText(/Keyword/), "Italy");
+
+    const link = await screen.findByRole("link", { name: /Italy Trip/ });
+    expect(link).toHaveAttribute("href", "/album/3");
+    expect(screen.getByText("5 events")).toBeInTheDocument();
+  });
+
+  it("re-fetches with category=album and hides the rating/date filters for the Album tab", async () => {
+    renderWithProviders(<Search />);
+    await screen.findByText("No results.");
+    await userEvent.click(screen.getByRole("button", { name: /Filters/ }));
+
+    await userEvent.click(screen.getByRole("tab", { name: "Album" }));
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("category=album"),
+      expect.anything(),
+    );
+    expect(screen.getByText(/Searching albums by title only/i)).toBeInTheDocument();
+  });
+
   const NOW = "2024-05-01T00:00:00.000Z";
   const summary = (id: number, category: string, title: string) => ({
     id,

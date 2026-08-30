@@ -1,43 +1,9 @@
 import { Router } from "express";
-import multer from "multer";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
-import {
-  createLogPhotos,
-  deleteLogPhoto,
-  MAX_PHOTOS_PER_LOG,
-  MAX_PHOTO_BYTES,
-  ALLOWED_PHOTO_MIME_TYPES,
-} from "../services/logPhotosService.js";
-import { AppError, BadRequestError } from "../lib/errors.js";
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_PHOTO_BYTES, files: MAX_PHOTOS_PER_LOG },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_PHOTO_MIME_TYPES[file.mimetype]) {
-      cb(null, true);
-    } else {
-      cb(new BadRequestError(`Unsupported image type: ${file.mimetype}`));
-    }
-  },
-});
-
-/** Translate multer / fileFilter errors into 400s the shared errorHandler understands. */
-function toClientError(err: unknown): Error {
-  if (err instanceof AppError) return err;
-  if (err instanceof multer.MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return new BadRequestError("Each photo must be 10MB or smaller");
-    }
-    if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
-      return new BadRequestError(`A log can have at most ${MAX_PHOTOS_PER_LOG} photos`);
-    }
-    return new BadRequestError(err.message);
-  }
-  if (err instanceof Error) return new BadRequestError(err.message);
-  return new BadRequestError("Upload failed");
-}
+import { createLogPhotos, deleteLogPhoto, MAX_PHOTOS_PER_LOG } from "../services/logPhotosService.js";
+import { upload, toClientError } from "../lib/photoUpload.js";
+import { BadRequestError } from "../lib/errors.js";
 
 function parseLogId(raw: string): number {
   const id = Number(raw);

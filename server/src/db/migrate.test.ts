@@ -46,7 +46,9 @@ describe("migrations", () => {
       table: string;
       on_delete: string;
     }>;
-    expect(fks[0]).toMatchObject({ table: "logs", on_delete: "SET NULL" });
+    // Two FKs now (logs + albums), order not guaranteed — look each up by target table.
+    expect(fks.find((f) => f.table === "logs")).toMatchObject({ on_delete: "SET NULL" });
+    expect(fks.find((f) => f.table === "albums")).toMatchObject({ on_delete: "SET NULL" });
 
     const logCols = client.prepare("PRAGMA table_info(logs)").all() as Array<{
       name: string;
@@ -106,6 +108,57 @@ describe("migrations", () => {
     const after = db.prepare("SELECT log_id FROM log_photos").all() as Array<{ log_id: number | null }>;
     expect(after).toHaveLength(1);
     expect(after[0].log_id).toBeNull();
+
+    db.close();
+  });
+
+  it("0006 adds the album tables and a SET NULL log_photos.album_id, preserving rows", () => {
+    const dbPath = tmpDb();
+    const db = new Database(dbPath);
+    db.pragma("foreign_keys = ON");
+
+    for (const tag of [
+      "0000_many_rhodey",
+      "0001_overjoyed_hardball",
+      "0002_blue_weapon_omega",
+      "0003_graceful_umar",
+      "0004_volatile_killraven",
+      "0005_curvy_meltdown",
+    ]) {
+      applyMigrationFile(db, tag);
+    }
+
+    db.prepare(
+      "INSERT INTO entities (category, title, normalized_title) VALUES ('movie', 'Heat', 'heat')",
+    ).run();
+    db.prepare("INSERT INTO logs (entity_id, date) VALUES (1, '2024-01-01')").run();
+    db.prepare(
+      `INSERT INTO log_photos (log_id, filename, thumbnail_filename, original_name, mime_type, size)
+       VALUES (1, 'a.jpg', 'a_thumb.webp', 'orig.jpg', 'image/jpeg', 1234)`,
+    ).run();
+
+    applyMigrationFile(db, "0006_awesome_catseye");
+
+    // Existing photo row untouched, new column defaults to NULL.
+    const photo = db.prepare("SELECT * FROM log_photos").get() as Record<string, unknown>;
+    expect(photo).toMatchObject({ log_id: 1, filename: "a.jpg", album_id: null });
+
+    // New tables exist.
+    for (const table of ["albums", "album_events", "album_people"]) {
+      expect(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()).toMatchObject({ n: 0 });
+    }
+
+    // Deleting an album SET NULLs a loose photo's album_id (keeps it as an orphan).
+    db.prepare("INSERT INTO albums (title) VALUES ('Trip')").run();
+    db.prepare(
+      `INSERT INTO log_photos (album_id, filename, thumbnail_filename, original_name, mime_type, size)
+       VALUES (1, 'b.jpg', 'b_thumb.webp', 'orig2.jpg', 'image/jpeg', 5678)`,
+    ).run();
+    db.prepare("DELETE FROM albums WHERE id = 1").run();
+    const loose = db.prepare("SELECT album_id FROM log_photos WHERE filename = 'b.jpg'").get() as {
+      album_id: number | null;
+    };
+    expect(loose.album_id).toBeNull();
 
     db.close();
   });

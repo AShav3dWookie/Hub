@@ -7,6 +7,7 @@ import {
   PartyPopper,
   CalendarClock,
   User,
+  GalleryVerticalEnd,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,4 +20,5 @@ export const ICONS: Record<string, LucideIcon> = {
   PartyPopper,
   CalendarClock,
   User,
+  GalleryVerticalEnd,
 };

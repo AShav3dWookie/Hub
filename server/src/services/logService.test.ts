@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
-import { createLog, updateLog, deleteLog, getLogById } from "./logService.js";
+import { createLog, updateLog, deleteLog, getLogById, getAlbumsForLogs } from "./logService.js";
 import { findOrCreateEntity } from "./entityService.js";
+import { createAlbum, addAlbumEvent, removeAlbumEvent } from "./albumService.js";
 
 describe("logService", () => {
   let ctx: ReturnType<typeof createTestDb>;
@@ -126,5 +127,38 @@ describe("logService", () => {
     });
     deleteLog(ctx.db, created.id);
     expect(() => getLogById(ctx.db, created.id)).toThrow();
+  });
+
+  it("reports album membership on the entity-detail path and clears it on unlink", () => {
+    ctx = createTestDb();
+    const log = createLog(ctx.db, {
+      category: "movie",
+      title: "Heat",
+      rating: 4,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    expect(getLogById(ctx.db, log.id).albums).toEqual([]);
+
+    const a1 = createAlbum(ctx.db, { title: "One", eventLogIds: [log.id] });
+    const a2 = addAlbumEvent(ctx.db, createAlbum(ctx.db, { title: "Two" }).id, log.id);
+    const refs = getLogById(ctx.db, log.id).albums.map((a) => a.title).sort();
+    expect(refs).toEqual(["One", "Two"]);
+
+    removeAlbumEvent(ctx.db, a1.id, log.id);
+    expect(getLogById(ctx.db, log.id).albums).toEqual([{ id: a2.id, title: "Two" }]);
+  });
+
+  it("getAlbumsForLogs batches by logId and guards empty input", () => {
+    ctx = createTestDb();
+    const l1 = createLog(ctx.db, { category: "movie", title: "A", rating: null, date: "2024-01-01", notes: null, people: [] });
+    const l2 = createLog(ctx.db, { category: "movie", title: "B", rating: null, date: "2024-01-01", notes: null, people: [] });
+    const album = createAlbum(ctx.db, { title: "Grp", eventLogIds: [l1.id] });
+
+    expect(getAlbumsForLogs(ctx.db, [])).toEqual(new Map());
+    const map = getAlbumsForLogs(ctx.db, [l1.id, l2.id]);
+    expect(map.get(l1.id)).toEqual([{ id: album.id, title: "Grp" }]);
+    expect(map.has(l2.id)).toBe(false);
   });
 });

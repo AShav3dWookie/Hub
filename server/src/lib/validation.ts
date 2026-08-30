@@ -42,10 +42,31 @@ export const updateLogSchema = z.object({
   autoDelete: z.boolean().optional().default(false),
 });
 
+export const createAlbumSchema = z.object({
+  title: z.string().trim().min(1),
+  notes: z.string().trim().nullable().optional().default(null),
+  dateStart: z.string().trim().min(1).nullable().optional().default(null),
+  dateEnd: z.string().trim().min(1).nullable().optional().default(null),
+  people: z.array(personTagSchema).default([]),
+  eventLogIds: z.array(z.number().int().positive()).default([]),
+});
+
+export const updateAlbumSchema = z.object({
+  title: z.string().trim().min(1),
+  notes: z.string().trim().nullable().optional().default(null),
+  dateStart: z.string().trim().min(1).nullable().optional().default(null),
+  dateEnd: z.string().trim().min(1).nullable().optional().default(null),
+});
+
+export const albumEventSchema = z.object({
+  logId: z.number().int().positive(),
+});
+
 export const searchQuerySchema = z.object({
   q: z.string().trim().min(1).optional(),
   qMode: z.enum(["all", "any"]).optional(),
-  category: categorySchema.optional(),
+  // "album" is not a real Category — the Search filter tab sends it to select searchAlbums().
+  category: z.union([categorySchema, z.literal("album")]).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   ratingMin: z.coerce.number().int().min(1).max(5).optional(),

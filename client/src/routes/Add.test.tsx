@@ -29,4 +29,13 @@ describe("Add", () => {
     expect(screen.getByText("Hang Out").closest("a")).toHaveAttribute("href", "/add/hang_out");
     expect(screen.getByText("Appointment").closest("a")).toHaveAttribute("href", "/add/appointment");
   });
+
+  it("renders an Album tile linking to /add/album", () => {
+    render(
+      <MemoryRouter>
+        <Add />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Album").closest("a")).toHaveAttribute("href", "/add/album");
+  });
 });

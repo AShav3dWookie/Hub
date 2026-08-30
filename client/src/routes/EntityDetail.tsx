@@ -173,6 +173,20 @@ function LogRow({
         </p>
       )}
       {log.notes && <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{log.notes}</p>}
+      {log.albums.length > 0 && (
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          part of{" "}
+          {log.albums.map((a, i) => (
+            <span key={a.id}>
+              <Link to={`/album/${a.id}`} className="hover:underline">
+                {a.title}
+              </Link>
+              {i < log.albums.length - 1 ? ", " : ""}
+            </span>
+          ))}{" "}
+          album{log.albums.length > 1 ? "s" : ""}
+        </p>
+      )}
       {fields.hasPeople && <PhotoGallery logId={log.id} photos={log.photos} />}
       {confirmingDelete ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
