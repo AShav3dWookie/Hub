@@ -110,6 +110,28 @@ describe("EntityDetail photo gallery", () => {
     }
   });
 
+  it("shows the read-mode rating bar for rated categories but not for hang-out / appointment", async () => {
+    for (const category of ["movie", "book"] as const) {
+      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jsonResponse(entityPayload(category, [log({ rating: 3 })])),
+      );
+      const { unmount } = renderDetail();
+      await screen.findByText(`A ${category}`);
+      expect(screen.getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
+      unmount();
+    }
+
+    for (const category of ["hang_out", "appointment"] as const) {
+      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jsonResponse(entityPayload(category, [log({ rating: null })])),
+      );
+      const { unmount } = renderDetail();
+      await screen.findByText(`A ${category}`);
+      expect(screen.queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   const withPhoto = () =>
     log({
       photos: [

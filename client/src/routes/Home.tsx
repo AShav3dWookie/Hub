@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { PlusCircle, Search, Images, CalendarHeart, type LucideIcon } from "lucide-react";
-import { CATEGORY_META } from "@logger/shared";
+import { CATEGORY_META, categoryHasRating } from "@logger/shared";
 import type { ImportantDateEntry, UpcomingEventEntry } from "@logger/shared";
 import { useSearch, useUpcomingImportantDates, useUpcomingEvents } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
@@ -127,7 +127,9 @@ export function Home() {
                       {CATEGORY_META[log.entity.category].label} · {log.date}
                     </span>
                   </span>
-                  <StarRating value={log.rating} readOnly />
+                  {categoryHasRating(log.entity.category) && (
+                    <StarRating value={log.rating} readOnly />
+                  )}
                 </Link>
               </li>
             ))}

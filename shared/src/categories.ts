@@ -150,3 +150,11 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
 export function categorySupportsPhotos(category: Category): boolean {
   return isLoggableCategory(category) && CATEGORY_FIELDS[category].hasPeople;
 }
+
+/**
+ * Whether a category's logs carry a star rating — Movie / TV / Book / Eating Out / Game.
+ * Hang Out and Appointment don't; a non-loggable category never does.
+ */
+export function categoryHasRating(category: Category): boolean {
+  return isLoggableCategory(category) && CATEGORY_FIELDS[category].hasRating;
+}

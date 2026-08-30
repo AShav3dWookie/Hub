@@ -75,6 +75,34 @@ describe("PersonProfile", () => {
     expect(screen.getByText(/favorite: Movie/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Inception" })).toHaveAttribute("href", "/entity/3");
     expect(screen.getByText("loved it")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
+  });
+
+  it("does not show a rating bar for a non-rated appearance (hang-out)", async () => {
+    mockApi({
+      type: "person",
+      entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
+      appearances: [
+        {
+          id: 1,
+          entityId: 4,
+          rating: null,
+          date: "2024-02-02",
+          notes: null,
+          people: [],
+          photos: [],
+          createdAt: NOW,
+          updatedAt: NOW,
+          entity: { id: 4, category: "hang_out", title: "Bowling night", createdAt: NOW, releaseYear: null, author: null },
+        },
+      ],
+      stats: { totalLogs: 1, favoriteCategory: "hang_out", mostFrequentCoPerson: null },
+    });
+
+    renderProfile();
+
+    expect(await screen.findByRole("link", { name: "Bowling night" })).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no appearances", async () => {
