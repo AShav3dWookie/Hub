@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { updateDateRange } from "../lib/updateDateRange.js";
 
 export type DateMode = "specific" | "year";
 
@@ -30,6 +31,11 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
     onChange("", "");
     setYear("");
     setYearTo("");
+  }
+
+  function handleSpecificChange(edited: "start" | "end", value: string) {
+    const next = updateDateRange(edited, value, { start: dateFrom, end: dateTo });
+    onChange(next.start, next.end);
   }
 
   function handleYearChange(nextYear: string, nextYearTo: string) {
@@ -82,7 +88,7 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => onChange(e.target.value, dateTo)}
+              onChange={(e) => handleSpecificChange("start", e.target.value)}
               className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             />
           </label>
@@ -91,7 +97,7 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => onChange(dateFrom, e.target.value)}
+              onChange={(e) => handleSpecificChange("end", e.target.value)}
               className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             />
           </label>

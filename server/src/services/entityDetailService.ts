@@ -9,6 +9,7 @@ import type {
   PersonProfileDTO,
   LogWithEntityDTO,
   LogPhotoDTO,
+  AlbumRef,
   PersonStats,
   PersonRef,
   LoggableCategory,
@@ -82,8 +83,9 @@ export function getPersonProfile(db: AppDb, id: number): PersonProfileDTO {
           notes: row.notes,
           people: peopleByLog.get(row.id) ?? [],
           // Person-profile appearances are a summary list (like search results),
-          // not a detail view — photos are only surfaced on the entity page.
+          // not a detail view — photos + album refs are only surfaced on the entity page.
           photos: [] as LogPhotoDTO[],
+          albums: [] as AlbumRef[],
           autoDelete: row.autoDelete,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,

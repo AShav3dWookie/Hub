@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
 import { createLog } from "./logService.js";
+import { createAlbum } from "./albumService.js";
 import { search } from "./searchService.js";
 
 describe("searchService", () => {
@@ -147,6 +148,54 @@ describe("searchService", () => {
     seed();
     const result = search(ctx.db, {});
     expect(result.people).toEqual([]);
+  });
+
+  it("matches an album by title in keyword search and reports its event count", () => {
+    seed();
+    const movieLog = createLog(ctx.db, {
+      category: "movie",
+      title: "Barbie",
+      rating: 5,
+      date: "2024-07-01",
+      notes: null,
+      people: [],
+    });
+    createAlbum(ctx.db, { title: "Summer Trip", eventLogIds: [movieLog.id] });
+
+    const result = search(ctx.db, { q: "summer" });
+    expect(result.albums).toHaveLength(1);
+    expect(result.albums![0]).toMatchObject({ title: "Summer Trip", eventCount: 1 });
+  });
+
+  it("suppresses album matches when a real category filter is active", () => {
+    seed();
+    createAlbum(ctx.db, { title: "Chipotle memories" });
+    const result = search(ctx.db, { q: "chipotle", category: "eating_out" });
+    expect(result.albums).toEqual([]);
+  });
+
+  it("lists all albums when filtering by the album tab with no keyword, and no entity/log results", () => {
+    seed();
+    createAlbum(ctx.db, { title: "Zeta" });
+    createAlbum(ctx.db, { title: "Alpha" });
+    const result = search(ctx.db, { category: "album" });
+    expect(result.albums!.map((a) => a.title)).toEqual(["Alpha", "Zeta"]);
+    expect(result.entities).toEqual([]);
+    expect(result.people).toEqual([]);
+  });
+
+  it("returns no albums when there is no keyword and no album filter", () => {
+    seed();
+    createAlbum(ctx.db, { title: "Hidden" });
+    expect(search(ctx.db, {}).albums).toEqual([]);
+  });
+
+  it("includes an albums array in every response shape", () => {
+    seed();
+    createAlbum(ctx.db, { title: "Trip" });
+    expect(search(ctx.db, { q: "trip" }).albums).toHaveLength(1);
+    expect(search(ctx.db, { q: "trip", groupBy: "log" }).albums).toHaveLength(1);
+    expect(search(ctx.db, { q: "no-such-thing-anywhere" }).albums).toEqual([]);
   });
 
   it("filters by author (case-insensitive contains)", () => {

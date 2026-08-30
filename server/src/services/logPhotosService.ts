@@ -11,6 +11,7 @@ import { categorySupportsPhotos } from "@logger/shared";
 import type { LogPhotoDTO } from "@logger/shared";
 
 export const MAX_PHOTOS_PER_LOG = 10;
+export const MAX_PHOTOS_PER_ALBUM = 100;
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const THUMBNAIL_SIZE = 400;
 
@@ -83,6 +84,59 @@ export function assertLogSupportsPhotos(db: AppDb, logId: number): void {
   }
 }
 
+/** Validate one upload against the MIME + size limits. */
+export function assertPhotoAllowed(file: UploadedPhoto): void {
+  if (!ALLOWED_PHOTO_MIME_TYPES[file.mimetype]) {
+    throw new BadRequestError(`Unsupported image type: ${file.mimetype}`);
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    throw new BadRequestError("Each photo must be 10MB or smaller");
+  }
+}
+
+/**
+ * Write one uploaded file to `photosDir`: the original under a random filename, plus a
+ * best-effort resized webp thumbnail (falls back to the original if sharp can't decode
+ * the format). Shared by the log-photo and album-photo upload paths.
+ */
+export async function storeOnePhoto(
+  photosDir: string,
+  file: UploadedPhoto,
+): Promise<{ filename: string; thumbnailFilename: string }> {
+  fs.mkdirSync(photosDir, { recursive: true });
+
+  const ext = ALLOWED_PHOTO_MIME_TYPES[file.mimetype];
+  const base = randomUUID();
+  const filename = `${base}.${ext}`;
+  fs.writeFileSync(path.join(photosDir, filename), file.buffer);
+
+  let thumbnailFilename = filename;
+  try {
+    const generated = `${base}_thumb.webp`;
+    await sharp(file.buffer)
+      .rotate()
+      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toFile(path.join(photosDir, generated));
+    thumbnailFilename = generated;
+  } catch {
+    // keep thumbnailFilename === filename
+  }
+
+  return { filename, thumbnailFilename };
+}
+
+/** Delete every photo belonging to an album (rows + files). Mirrors deletePhotosForLog. */
+export function deletePhotosForAlbum(db: AppDb, photosDir: string, albumId: number): void {
+  const rows = db.select().from(logPhotos).where(eq(logPhotos.albumId, albumId)).all();
+  if (rows.length === 0) return;
+  db.delete(logPhotos).where(eq(logPhotos.albumId, albumId)).run();
+  removePhotoFiles(
+    photosDir,
+    rows.flatMap((r) => [r.filename, r.thumbnailFilename]),
+  );
+}
+
 /**
  * Store uploaded files for a log: original on disk under a random filename, plus a
  * resized thumbnail, plus a DB row per photo. Enforces the per-log count, per-file
@@ -113,40 +167,12 @@ export async function createLogPhotos(
   }
 
   for (const file of files) {
-    if (!ALLOWED_PHOTO_MIME_TYPES[file.mimetype]) {
-      throw new BadRequestError(`Unsupported image type: ${file.mimetype}`);
-    }
-    if (file.size > MAX_PHOTO_BYTES) {
-      throw new BadRequestError("Each photo must be 10MB or smaller");
-    }
+    assertPhotoAllowed(file);
   }
-
-  fs.mkdirSync(photosDir, { recursive: true });
 
   const created: LogPhotoDTO[] = [];
   for (const file of files) {
-    const ext = ALLOWED_PHOTO_MIME_TYPES[file.mimetype];
-    const base = randomUUID();
-    const filename = `${base}.${ext}`;
-    const originalPath = path.join(photosDir, filename);
-
-    fs.writeFileSync(originalPath, file.buffer);
-
-    // Thumbnail is best-effort: if sharp can't decode this format (e.g. HEIC
-    // without libheif in the build), fall back to serving the original.
-    let thumbnailFilename = filename;
-    try {
-      const generated = `${base}_thumb.webp`;
-      await sharp(file.buffer)
-        .rotate()
-        .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toFile(path.join(photosDir, generated));
-      thumbnailFilename = generated;
-    } catch {
-      // keep thumbnailFilename === filename
-    }
-
+    const { filename, thumbnailFilename } = await storeOnePhoto(photosDir, file);
     const inserted = db
       .insert(logPhotos)
       .values({

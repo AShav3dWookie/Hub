@@ -22,6 +22,12 @@ import type {
   UpdateEntityNoteRequest,
   UpcomingImportantDatesResponse,
   UpcomingEventsResponse,
+  AlbumDTO,
+  AlbumSummary,
+  CreateAlbumRequest,
+  UpdateAlbumRequest,
+  PersonRef,
+  PersonTagInput,
 } from "@logger/shared";
 import { api } from "./client.js";
 
@@ -58,7 +64,7 @@ export function useEntityDetail(id: number | undefined) {
   });
 }
 
-export function useSearch(query: SearchQuery) {
+export function useSearch(query: SearchQuery, options: { enabled?: boolean } = {}) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value != null && value !== "") params.set(key, String(value));
@@ -67,6 +73,7 @@ export function useSearch(query: SearchQuery) {
     queryKey: ["search", query],
     queryFn: () => api.get<SearchResponse>(`/search?${params.toString()}`),
     placeholderData: keepPreviousData,
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -179,6 +186,155 @@ export function useDeleteGalleryPhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+// ---- Albums ----
+
+export function useAlbums() {
+  return useQuery({
+    queryKey: ["albums"],
+    queryFn: () => api.get<AlbumSummary[]>("/albums"),
+  });
+}
+
+export function useAlbum(id: number | undefined) {
+  return useQuery({
+    queryKey: ["album", id],
+    queryFn: () => api.get<AlbumDTO>(`/albums/${id}`),
+    enabled: id != null && Number.isInteger(id),
+  });
+}
+
+export function useAlbumPhotos(id: number | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["album-photos", id],
+    queryFn: ({ pageParam }: { pageParam: number | undefined }) =>
+      api.get<GalleryResponse>(`/albums/${id}/photos?limit=50${pageParam ? `&cursor=${pageParam}` : ""}`),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: id != null && Number.isInteger(id),
+  });
+}
+
+/** Invalidate everything an album change can ripple into. */
+function invalidateAlbum(queryClient: ReturnType<typeof useQueryClient>, id: number) {
+  queryClient.invalidateQueries({ queryKey: ["album", id] });
+  queryClient.invalidateQueries({ queryKey: ["album-photos", id] });
+  queryClient.invalidateQueries({ queryKey: ["albums"] });
+  queryClient.invalidateQueries({ queryKey: ["search"] });
+}
+
+export function useCreateAlbum() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAlbumRequest) => api.post<AlbumDTO>("/albums", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["albums"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+    },
+  });
+}
+
+export function useUpdateAlbum(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateAlbumRequest) => api.put<AlbumDTO>(`/albums/${id}`, input),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+    },
+  });
+}
+
+export function useDeleteAlbum() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deletePhotos }: { id: number; deletePhotos: boolean }) =>
+      api.delete(`/albums/${id}${deletePhotos ? "?deletePhotos=true" : ""}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["albums"] });
+      queryClient.invalidateQueries({ queryKey: ["album"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useAddAlbumEvent(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (logId: number) => api.post<AlbumDTO>(`/albums/${id}/events`, { logId }),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useRemoveAlbumEvent(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (logId: number) => api.delete(`/albums/${id}/events/${logId}`),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["entity"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useAddAlbumPerson(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (person: PersonTagInput) => api.post<PersonRef[]>(`/albums/${id}/people`, person),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useRemoveAlbumPerson(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (personId: number) => api.delete(`/albums/${id}/people/${personId}`),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useUploadAlbumPhotos(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) => {
+      const formData = new FormData();
+      for (const file of files) formData.append("photos", file);
+      return api.postForm<LogPhotoDTO[]>(`/albums/${id}/photos`, formData);
+    },
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      queryClient.invalidateQueries({ queryKey: ["person-photos"] });
+    },
+  });
+}
+
+export function useDeleteAlbumPhoto(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (photoId: number) => api.delete(`/albums/${id}/photos/${photoId}`),
+    onSuccess: () => {
+      invalidateAlbum(queryClient, id);
+      queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });

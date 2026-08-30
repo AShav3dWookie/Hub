@@ -29,6 +29,11 @@ describe("AddCategory", () => {
     expect(screen.getByRole("button", { name: /create person/i })).toBeInTheDocument();
   });
 
+  it("renders the album form for /add/album", () => {
+    render("/add/album");
+    expect(screen.getByRole("heading", { name: /create an album/i })).toBeInTheDocument();
+  });
+
   it("redirects to /add for an unknown category", () => {
     render("/add/banana");
     expect(screen.getByText("add index")).toBeInTheDocument();

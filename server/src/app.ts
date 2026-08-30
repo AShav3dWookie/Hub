@@ -13,6 +13,7 @@ import { createImportantDatesRouter } from "./routes/importantDates.js";
 import { createEventsRouter } from "./routes/events.js";
 import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
+import { createAlbumsRouter } from "./routes/albums.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -45,6 +46,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/important-dates", requireAuth, createImportantDatesRouter(db));
   app.use("/api/events", requireAuth, createEventsRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
+  app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");

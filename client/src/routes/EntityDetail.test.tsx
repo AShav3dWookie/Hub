@@ -21,6 +21,7 @@ function log(overrides: Partial<LogDTO> = {}): LogDTO {
     notes: null,
     people: [],
     photos: [],
+    albums: [],
     autoDelete: false,
     createdAt: NOW,
     updatedAt: NOW,
@@ -66,6 +67,27 @@ describe("EntityDetail photo gallery", () => {
     renderDetail();
 
     expect(await screen.findByRole("button", { name: /add photos/i })).toBeInTheDocument();
+  });
+
+  it("shows a subtle 'part of X album' link when the log belongs to an album", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("movie", [log({ albums: [{ id: 7, title: "Road Trip" }] })])),
+    );
+
+    renderDetail();
+
+    const link = await screen.findByRole("link", { name: "Road Trip" });
+    expect(link).toHaveAttribute("href", "/album/7");
+  });
+
+  it("renders no album line when the log has no albums", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("movie", [log({ albums: [] })])),
+    );
+
+    renderDetail();
+    await screen.findByRole("button", { name: /add photos/i });
+    expect(screen.queryByText(/part of/i)).not.toBeInTheDocument();
   });
 
   it("renders existing photo thumbnails for an eating_out log", async () => {

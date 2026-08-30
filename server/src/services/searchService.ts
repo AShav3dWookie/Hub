@@ -1,7 +1,8 @@
-import { ne, eq, inArray, and, like, gte, lte } from "drizzle-orm";
+import { ne, eq, inArray, and, like, gte, lte, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
-import { entities, logs, logPeople } from "../db/schema.js";
+import { entities, logs, logPeople, albums, albumEvents } from "../db/schema.js";
 import { tokenizeQuery, matchesTokens } from "@logger/shared";
+import { toLogWithEntity } from "./logService.js";
 import type {
   SearchQuery,
   SearchResponse,
@@ -9,8 +10,8 @@ import type {
   LogWithEntityDTO,
   LogDTO,
   PersonRef,
-  EntitySummary,
   PersonSearchResult,
+  AlbumSearchResult,
 } from "@logger/shared";
 
 function comparator(order: "asc" | "desc" = "desc") {
@@ -63,6 +64,41 @@ function searchPeople(db: AppDb, query: SearchQuery, queryTokens: string[]): Per
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Albums matched directly by title (or listed in full when the "album" filter tab is active with no
+ * keyword). Suppressed when a specific non-album category filter is set — mirrors searchPeople.
+ */
+function searchAlbums(db: AppDb, query: SearchQuery, queryTokens: string[]): AlbumSearchResult[] {
+  if (query.category && query.category !== "album") return [];
+  if (queryTokens.length === 0 && query.category !== "album") return [];
+
+  const qMode = query.qMode ?? "all";
+  const albumRows = db.select().from(albums).all();
+  const matches =
+    queryTokens.length > 0
+      ? albumRows.filter((row) => matchesTokens(row.title, queryTokens, qMode))
+      : albumRows;
+
+  if (matches.length === 0) return [];
+
+  const albumIds = matches.map((a) => a.id);
+  const countRows = db
+    .select({ albumId: albumEvents.albumId, count: sql<number>`count(*)` })
+    .from(albumEvents)
+    .where(inArray(albumEvents.albumId, albumIds))
+    .groupBy(albumEvents.albumId)
+    .all();
+  const eventCounts = new Map(countRows.map((r) => [r.albumId, Number(r.count)]));
+
+  return matches
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      eventCount: eventCounts.get(row.id) ?? 0,
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
 export function search(db: AppDb, query: SearchQuery): SearchResponse {
   const groupBy = query.groupBy ?? "entity";
   const sortBy = query.sortBy ?? "date";
@@ -72,6 +108,14 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
   const qMode = query.qMode ?? "all";
   const queryTokens = query.q ? tokenizeQuery(query.q) : [];
   const people = searchPeople(db, query, queryTokens);
+  const albumResults = searchAlbums(db, query, queryTokens);
+
+  // The "album" filter tab is not a real category — it selects albums only, no entity/log results.
+  if (query.category === "album") {
+    return groupBy === "log"
+      ? { groupBy, logs: [], people, albums: albumResults }
+      : { groupBy, entities: [], people, albums: albumResults };
+  }
 
   // 1. Candidate entities (loggable categories only; person entities aren't logged directly).
   const entityConditions = [
@@ -94,7 +138,9 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
   const entityById = new Map(entityRows.map((e) => [e.id, e]));
 
   if (entityById.size === 0) {
-    return groupBy === "log" ? { groupBy, logs: [], people } : { groupBy, entities: [], people };
+    return groupBy === "log"
+      ? { groupBy, logs: [], people, albums: albumResults }
+      : { groupBy, entities: [], people, albums: albumResults };
   }
 
   // 2. Load logs for those entities + their tagged people.
@@ -159,7 +205,7 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
       }
     });
 
-    return { groupBy, logs: flat, people };
+    return { groupBy, logs: flat, people, albums: albumResults };
   }
 
   // groupBy === "entity"
@@ -172,9 +218,10 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
       date: row.date,
       notes: row.notes,
       people: peopleByLog.get(row.id) ?? [],
-      // Search results deliberately omit real photos to avoid an N+1 lookup;
-      // photos are only loaded for the entity-detail log list.
+      // Search results deliberately omit real photos + album refs to avoid N+1 lookups;
+      // those are only loaded for the entity-detail log list.
       photos: [],
+      albums: [],
       autoDelete: row.autoDelete,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -237,34 +284,5 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
     }
   });
 
-  return { groupBy, entities: entityResults, people };
-}
-
-function toLogWithEntity(
-  row: typeof logs.$inferSelect,
-  people: PersonRef[],
-  entity: typeof entities.$inferSelect,
-): LogWithEntityDTO {
-  const entitySummary: EntitySummary = {
-    id: entity.id,
-    category: entity.category,
-    title: entity.title,
-    createdAt: entity.createdAt,
-    releaseYear: entity.releaseYear,
-    author: entity.author,
-  };
-  return {
-    id: row.id,
-    entityId: row.entityId,
-    rating: row.rating,
-    date: row.date,
-    notes: row.notes,
-    people,
-    // Search results deliberately omit real photos (see the entity-grouped branch above).
-    photos: [],
-    autoDelete: row.autoDelete,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    entity: entitySummary,
-  };
+  return { groupBy, entities: entityResults, people, albums: albumResults };
 }
