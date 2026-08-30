@@ -1,17 +1,31 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Lightbox } from "./Lightbox.js";
 
-const touchPoint = (x: number, y = 0) => ({
+const at = (x: number, y = 0) => ({
   touches: [{ clientX: x, clientY: y }],
   changedTouches: [{ clientX: x, clientY: y }],
 });
 
+const track = () => screen.getByTestId("lightbox-track");
+const endTransition = () =>
+  fireEvent.transitionEnd(track(), { propertyName: "transform" });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("Lightbox", () => {
-  it("renders the image and children", () => {
+  it("renders the current image, the caption, and neighbour frames when given", () => {
     render(
-      <Lightbox src="/api/photos/full.jpg" alt="beach.jpg" onClose={() => {}}>
+      <Lightbox
+        src="/api/photos/full.jpg"
+        alt="beach.jpg"
+        prevSrc="/api/photos/prev.jpg"
+        nextSrc="/api/photos/next.jpg"
+        onClose={() => {}}
+      >
         <span>a caption</span>
       </Lightbox>,
     );
@@ -20,6 +34,17 @@ describe("Lightbox", () => {
       "/api/photos/full.jpg",
     );
     expect(screen.getByText("a caption")).toBeInTheDocument();
+    const srcs = [...track().querySelectorAll("img")].map((n) => n.getAttribute("src"));
+    expect(srcs).toEqual([
+      "/api/photos/prev.jpg",
+      "/api/photos/full.jpg",
+      "/api/photos/next.jpg",
+    ]);
+  });
+
+  it("only mounts the current image when no neighbours are supplied", () => {
+    render(<Lightbox src="/x.jpg" alt="x" onClose={() => {}} />);
+    expect(track().querySelectorAll("img")).toHaveLength(1);
   });
 
   it("closes on the X button, backdrop click, and Escape", async () => {
@@ -55,33 +80,44 @@ describe("Lightbox", () => {
     expect(screen.getByRole("button", { name: "Next photo" })).toBeInTheDocument();
   });
 
-  it("calls the navigation handler (not onClose) when an arrow button is clicked", async () => {
+  it("slides on an arrow button and only navigates once the slide finishes", async () => {
     const onClose = vi.fn();
-    const onPrev = vi.fn();
     const onNext = vi.fn();
     render(
-      <Lightbox src="/x.jpg" alt="x" onClose={onClose} onPrev={onPrev} onNext={onNext} />,
+      <Lightbox
+        src="/x.jpg"
+        alt="x"
+        nextSrc="/n.jpg"
+        onClose={onClose}
+        onNext={onNext}
+      />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Previous photo" }));
     await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(track().style.transform).toBe("translateX(-200%)");
+    expect(onNext).not.toHaveBeenCalled();
 
-    expect(onPrev).toHaveBeenCalledTimes(1);
+    endTransition();
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("navigates with the arrow keys, and is inert when no handlers are given", async () => {
+  it("slides with the arrow keys, and is inert when no handlers are given", async () => {
     const onPrev = vi.fn();
     const onNext = vi.fn();
     const { rerender } = render(
       <Lightbox src="/x.jpg" alt="x" onClose={() => {}} onPrev={onPrev} onNext={onNext} />,
     );
 
-    await userEvent.keyboard("{ArrowLeft}");
     await userEvent.keyboard("{ArrowRight}");
-    expect(onPrev).toHaveBeenCalledTimes(1);
+    expect(track().style.transform).toBe("translateX(-200%)");
+    endTransition();
     expect(onNext).toHaveBeenCalledTimes(1);
+
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(track().style.transform).toBe("translateX(0%)");
+    endTransition();
+    expect(onPrev).toHaveBeenCalledTimes(1);
 
     const onClose = vi.fn();
     rerender(<Lightbox src="/x.jpg" alt="x" onClose={onClose} />);
@@ -90,43 +126,104 @@ describe("Lightbox", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("treats a horizontal swipe as prev/next and ignores short or vertical drags", () => {
+  it("navigates instantly (no slide) when the user prefers reduced motion", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
+    const onNext = vi.fn();
+    render(<Lightbox src="/x.jpg" alt="x" nextSrc="/n.jpg" onClose={() => {}} onNext={onNext} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it("tracks the finger, then completes the slide past the threshold", () => {
     const onPrev = vi.fn();
     const onNext = vi.fn();
-    const { rerender } = render(
-      <Lightbox src="/x.jpg" alt="x" onClose={() => {}} onPrev={onPrev} onNext={onNext} />,
+    render(
+      <Lightbox
+        src="/x.jpg"
+        alt="x"
+        prevSrc="/p.jpg"
+        nextSrc="/n.jpg"
+        onClose={() => {}}
+        onPrev={onPrev}
+        onNext={onNext}
+      />,
     );
     const dialog = screen.getByRole("dialog");
 
-    fireEvent.touchStart(dialog, touchPoint(200));
-    fireEvent.touchEnd(dialog, touchPoint(280));
-    expect(onPrev).toHaveBeenCalledTimes(1);
-
-    fireEvent.touchStart(dialog, touchPoint(200));
-    fireEvent.touchEnd(dialog, touchPoint(120));
+    fireEvent.touchStart(dialog, at(200));
+    fireEvent.touchMove(dialog, at(120)); // dx -80, horizontal
+    expect(track().style.transform).toContain("-80px");
+    fireEvent.touchEnd(dialog, at(120));
+    expect(track().style.transform).toBe("translateX(-200%)");
+    endTransition();
     expect(onNext).toHaveBeenCalledTimes(1);
 
-    onPrev.mockClear();
-    onNext.mockClear();
-    rerender(
-      <Lightbox src="/x.jpg" alt="x" onClose={() => {}} onPrev={onPrev} onNext={onNext} />,
-    );
+    fireEvent.touchStart(dialog, at(200));
+    fireEvent.touchMove(dialog, at(285)); // dx +85
+    fireEvent.touchEnd(dialog, at(285));
+    endTransition();
+    expect(onPrev).toHaveBeenCalledTimes(1);
+  });
 
-    fireEvent.touchStart(dialog, touchPoint(200));
-    fireEvent.touchEnd(dialog, touchPoint(170)); // dx 30 < threshold
-    fireEvent.touchStart(dialog, touchPoint(200, 0));
-    fireEvent.touchEnd(dialog, touchPoint(140, 200)); // mostly vertical
+  it("snaps back on a short drag or a mostly-vertical drag without navigating", () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    render(
+      <Lightbox
+        src="/x.jpg"
+        alt="x"
+        prevSrc="/p.jpg"
+        nextSrc="/n.jpg"
+        onClose={() => {}}
+        onPrev={onPrev}
+        onNext={onNext}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+
+    fireEvent.touchStart(dialog, at(200));
+    fireEvent.touchMove(dialog, at(230)); // dx 30 < threshold
+    fireEvent.touchEnd(dialog, at(230));
+    expect(track().style.transform).toBe("translateX(-100%)");
+    endTransition();
+
+    fireEvent.touchStart(dialog, at(200, 0));
+    fireEvent.touchMove(dialog, at(150, 90)); // mostly vertical
+    fireEvent.touchEnd(dialog, at(150, 90));
+    endTransition();
+
     expect(onPrev).not.toHaveBeenCalled();
     expect(onNext).not.toHaveBeenCalled();
   });
 
-  it("swallows the click that trails a swipe so the overlay stays open", () => {
-    const onClose = vi.fn();
-    render(<Lightbox src="/x.jpg" alt="x" onClose={onClose} onNext={() => {}} />);
+  it("rubber-bands with resistance when dragging past the last photo", () => {
+    const onNext = vi.fn();
+    render(<Lightbox src="/x.jpg" alt="x" onClose={() => {}} onNext={onNext} />);
     const dialog = screen.getByRole("dialog");
 
-    fireEvent.touchStart(dialog, touchPoint(200));
-    fireEvent.touchEnd(dialog, touchPoint(120));
+    fireEvent.touchStart(dialog, at(200));
+    fireEvent.touchMove(dialog, at(320)); // dx +120 toward a missing prev -> /3
+    expect(track().style.transform).toContain("40px");
+    fireEvent.touchEnd(dialog, at(320));
+    expect(track().style.transform).toBe("translateX(-100%)");
+  });
+
+  it("swallows the click that trails a swipe so the overlay stays open", () => {
+    const onClose = vi.fn();
+    render(<Lightbox src="/x.jpg" alt="x" nextSrc="/n.jpg" onClose={onClose} onNext={() => {}} />);
+    const dialog = screen.getByRole("dialog");
+
+    fireEvent.touchStart(dialog, at(200));
+    fireEvent.touchMove(dialog, at(120));
+    fireEvent.touchEnd(dialog, at(120));
     fireEvent.click(dialog);
     expect(onClose).not.toHaveBeenCalled();
 

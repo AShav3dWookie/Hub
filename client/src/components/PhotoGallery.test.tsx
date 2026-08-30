@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { PhotoGallery } from "./PhotoGallery.js";
@@ -25,6 +25,16 @@ function photo(id: number): LogPhotoDTO {
 describe("PhotoGallery", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    // Take the Lightbox's instant (reduced-motion) nav path so these specs don't
+    // have to pump CSS transitions — the slide itself is covered in Lightbox.test.
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
   });
 
   it("renders a thumbnail per photo", () => {
@@ -40,7 +50,7 @@ describe("PhotoGallery", () => {
     await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
 
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -53,18 +63,18 @@ describe("PhotoGallery", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
     expect(screen.queryByRole("button", { name: "Previous photo" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
 
     await userEvent.keyboard("{ArrowRight}");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
     expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
 
     await userEvent.keyboard("{ArrowLeft}");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
   });
 
   it("confirms before deleting and calls the delete endpoint (allowDelete)", async () => {

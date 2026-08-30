@@ -132,6 +132,8 @@ export function PhotoGallery({
         <Lightbox
           src={lightbox.url}
           alt={lightbox.originalName}
+          prevSrc={photos[lightboxIndex - 1]?.url}
+          nextSrc={photos[lightboxIndex + 1]?.url}
           onClose={() => setLightboxIndex(null)}
           onPrev={
             lightboxIndex > 0 ? () => setLightboxIndex(lightboxIndex - 1) : undefined
