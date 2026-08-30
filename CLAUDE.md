@@ -160,8 +160,28 @@ don't render CSS, so this is the only way to actually *see* a change.
   (~115 MB into the OS Playwright cache, not the repo). The config pins `--browser chromium` so it
   doesn't require a system Chrome install.
 - Screenshots/snapshots land in `.playwright-mcp/` (gitignored).
+- **Port 3000 is usually the user's own `docker compose` instance (`hub-app-1`, image `logger:local`) —
+  do not stop it.** For a live check, build the client, `cp client/dist/* server/public/`, and run a
+  throwaway `DB_PATH=<scratchpad>/x.db PORT=3001 node --import tsx src/index.ts` on another port
+  against a scratch DB; drive Playwright at `:3001`; kill it and remove `server/public/` + the scratch
+  DB afterward.
 - If the server won't start on Windows, change `"command"` to `"cmd"` and prepend `"/c", "npx"` to
   `args` (npx-launched MCP servers can need the `cmd /c` shim on Windows).
+
+## Git workflow
+
+**Every feature is developed on its own branch — never commit feature work directly to `main`.**
+
+1. `git checkout -b <feature-name>` off `main`.
+2. Commit the work on that branch.
+3. `git push -u origin <feature-name>` — **the branch must be pushed to `origin`** (the user wants
+   feature branches visible on GitHub, not local-only).
+4. `git checkout main && git merge --no-ff <feature-name>` — always `--no-ff` so the branch shows as
+   a "Merge branch '<feature-name>'" commit in history. Then `git push origin main`.
+5. Delete the local branch (`git branch -d`). Ask before deleting the remote branch.
+
+No pull requests — merge locally and push. Follow-up work (e.g. "add more tests for X") gets its own
+branch too.
 
 ## Repo notes
 
