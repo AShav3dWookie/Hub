@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { PhotoStream } from "./PhotoStream.js";
@@ -54,6 +54,16 @@ describe("PhotoStream", () => {
   beforeEach(() => {
     lastObserver = null;
     vi.stubGlobal("IntersectionObserver", FakeIO);
+    // Take the Lightbox's instant (reduced-motion) nav path; the slide animation
+    // itself is covered in Lightbox.test.
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -78,7 +88,7 @@ describe("PhotoStream", () => {
     await userEvent.click(screen.getByRole("button", { name: "photo-3.jpg" }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
     expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "/entity/9");
   });
 
@@ -124,12 +134,12 @@ describe("PhotoStream", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-1.jpg");
     expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "/entity/9");
     expect(screen.queryByRole("button", { name: "Previous photo" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
-    expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
     expect(screen.getByRole("link", { name: "Ronin" })).toHaveAttribute("href", "/entity/5");
     expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
   });
@@ -185,7 +195,7 @@ describe("PhotoStream", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute(
+    expect(within(screen.getByRole("dialog")).getByRole("img")).toHaveAttribute(
       "src",
       "/api/photos/full-2.jpg",
     );

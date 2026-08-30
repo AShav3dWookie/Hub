@@ -130,6 +130,8 @@ export function PhotoStream({
         <Lightbox
           src={active.url}
           alt={active.originalName}
+          prevSrc={activeIndex != null ? photos[activeIndex - 1]?.url : undefined}
+          nextSrc={activeIndex != null ? photos[activeIndex + 1]?.url : undefined}
           onClose={close}
           onPrev={canPrev ? goPrev : undefined}
           onNext={canNext && !advancing ? goNext : undefined}
