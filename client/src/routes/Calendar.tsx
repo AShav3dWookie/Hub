@@ -51,6 +51,11 @@ export function Calendar({
     setSelectedDate(todayISO.slice(0, 7) === nextMonth ? todayISO : null);
   }
 
+  function selectDay(cellDate: string, inMonth: boolean) {
+    if (!inMonth) setMonth(cellDate.slice(0, 7));
+    setSelectedDate(cellDate);
+  }
+
   const selectedItems = selectedDate ? (itemsByDate.get(selectedDate) ?? []) : [];
 
   return (
@@ -102,9 +107,8 @@ export function Calendar({
             <button
               key={cell.date}
               type="button"
-              onClick={() =>
-                cell.inMonth ? setSelectedDate(cell.date) : goToMonth(cell.date.slice(0, 7))
-              }
+              data-date={cell.date}
+              onClick={() => selectDay(cell.date, cell.inMonth)}
               aria-label={dayLabel(cell.date)}
               aria-pressed={isSelected}
               className={`flex min-h-[52px] flex-col items-center gap-1 rounded-md border p-1 text-sm ${
