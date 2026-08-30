@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Home } from "./Home.js";
 
@@ -34,7 +34,7 @@ const importantDates = {
 
 const emptyBuckets = { today: [], next7Days: [] };
 
-function mockFetch(opts: { importantDates?: unknown; events?: unknown; recentLogs?: unknown[] } = {}) {
+function mockFetch(opts: { importantDates?: unknown; events?: unknown } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -44,27 +44,9 @@ function mockFetch(opts: { importantDates?: unknown; events?: unknown; recentLog
       if (url.includes("/events/upcoming")) {
         return Promise.resolve(jsonResponse(opts.events ?? emptyBuckets));
       }
-      return Promise.resolve(jsonResponse({ groupBy: "log", logs: opts.recentLogs ?? [] }));
+      return Promise.resolve(jsonResponse(emptyBuckets));
     }),
   );
-}
-
-const NOW = "2024-05-01T00:00:00.000Z";
-function recentLog(over: Record<string, unknown> = {}) {
-  return {
-    id: 1,
-    entityId: 3,
-    rating: null,
-    date: "2024-06-10",
-    notes: null,
-    people: [],
-    photos: [],
-    autoDelete: false,
-    createdAt: NOW,
-    updatedAt: NOW,
-    entity: { id: 3, category: "movie", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
-    ...over,
-  };
 }
 
 describe("Home", () => {
@@ -72,7 +54,7 @@ describe("Home", () => {
     mockFetch({ importantDates });
   });
 
-  it("shows Today and Next 7 days upcoming widgets above Recent activity", async () => {
+  it("shows Today and Next 7 days upcoming widgets", async () => {
     renderWithProviders(<Home />);
 
     await screen.findByText("Alice");
@@ -121,52 +103,6 @@ describe("Home", () => {
     expect(screen.getByRole("link", { name: /search/i })).toHaveAttribute("href", "/search");
     expect(screen.getByRole("link", { name: /calendar/i })).toHaveAttribute("href", "/calendar");
     expect(screen.getByRole("link", { name: /gallery/i })).toHaveAttribute("href", "/gallery");
-  });
-
-  it("shows a star rating for a rated recent log but not for a hang-out", async () => {
-    mockFetch({
-      recentLogs: [
-        recentLog({ id: 1, rating: 5, entity: { id: 3, category: "movie", title: "Dune", createdAt: NOW, releaseYear: null, author: null } }),
-        recentLog({
-          id: 2,
-          entity: { id: 4, category: "hang_out", title: "Bowling night", createdAt: NOW, releaseYear: null, author: null },
-        }),
-      ],
-    });
-
-    renderWithProviders(<Home />);
-
-    const movieRow = (await screen.findByText("Dune")).closest("a")!;
-    const hangOutRow = screen.getByText("Bowling night").closest("a")!;
-
-    expect(within(movieRow).getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
-    expect(within(hangOutRow).queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
-  });
-
-  it("shows only the year for a year-granularity recent log, full dates otherwise", async () => {
-    mockFetch({
-      recentLogs: [
-        recentLog({
-          id: 1,
-          date: "2024-02-15",
-          entity: { id: 3, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
-        }),
-        recentLog({
-          id: 2,
-          date: "2024-06-10",
-          entity: { id: 4, category: "movie", title: "Arrival", createdAt: NOW, releaseYear: null, author: null },
-        }),
-      ],
-    });
-
-    renderWithProviders(<Home />);
-
-    const bookRow = (await screen.findByText("Dune")).closest("a")!;
-    expect(within(bookRow).getByText(/Book · 2024$/)).toBeInTheDocument();
-    expect(within(bookRow).queryByText(/2024-02-15/)).not.toBeInTheDocument();
-
-    const movieRow = screen.getByText("Arrival").closest("a")!;
-    expect(within(movieRow).getByText(/Movie · 2024-06-10/)).toBeInTheDocument();
   });
 
   it("does not render upcoming widgets when there is nothing upcoming", async () => {
