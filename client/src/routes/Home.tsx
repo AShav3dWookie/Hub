@@ -4,6 +4,7 @@ import {
   Search,
   Images,
   GalleryVerticalEnd,
+  CalendarDays,
   CalendarHeart,
   type LucideIcon,
 } from "lucide-react";
@@ -109,6 +110,7 @@ export function Home() {
       <div className="grid w-full max-w-md grid-cols-2 gap-4 sm:grid-cols-3">
         <ActionTile to="/add" icon={PlusCircle} label="Add" />
         <ActionTile to="/search" icon={Search} label="Search" />
+        <ActionTile to="/calendar" icon={CalendarDays} label="Calendar" />
         <ActionTile to="/gallery" icon={Images} label="Gallery" />
         <ActionTile to="/albums" icon={GalleryVerticalEnd} label="Albums" />
       </div>
