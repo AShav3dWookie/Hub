@@ -44,7 +44,7 @@ function mockFetch(opts: { importantDates?: unknown; events?: unknown } = {}) {
       if (url.includes("/events/upcoming")) {
         return Promise.resolve(jsonResponse(opts.events ?? emptyBuckets));
       }
-      return Promise.resolve(jsonResponse(emptyBuckets));
+      throw new Error(`unexpected fetch in Home test: ${url}`);
     }),
   );
 }
