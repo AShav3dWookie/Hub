@@ -12,8 +12,8 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
     volumes:
-      # The container's own data dir. Must NOT be the dir a local `npm run dev:server`
-      # uses (test-env) — sharing one SQLite file between a host process and the
-      # container over a bind mount breaks WAL (SQLITE_IOERR_SHMOPEN).
-      - ./data:/app/data
+      - ./test-env:/app/data
     restart: unless-stopped
+
+# volumes:
+#   logger-data:

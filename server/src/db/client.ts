@@ -37,9 +37,10 @@ export function createDb(dbPath: string) {
     if (!isWalUnsupported(err)) throw err;
     throw new Error(
       `Cannot open the SQLite database at ${dbPath} in WAL mode: this filesystem can't provide ` +
-        `WAL's shared-memory (-shm) file. Usually another process is using the same database over ` +
-        `a bind mount (e.g. a dev server sharing the container's data directory), or the data ` +
-        `directory is on a network filesystem. Give the container its own local data directory.`,
+        `WAL's shared-memory (-shm) file. Usually another process has the same database open over ` +
+        `a bind mount (e.g. a dev server or a stray test server sharing the container's data ` +
+        `directory), or the data directory is on a network filesystem. Close the other process, or ` +
+        `give the container a data directory nothing else touches.`,
       { cause: err },
     );
   }

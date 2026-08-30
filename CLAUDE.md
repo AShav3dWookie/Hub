@@ -111,13 +111,13 @@ can't do WAL silently uses the rollback journal instead; but if there's an exist
 `-wal`, the WAL pragma throws `SQLITE_IOERR_SHMOPEN` and `createDb` rethrows it as a plain-English
 error naming the likely cause.
 
-**Do not run `npm run dev:server` and `docker compose up` against the same database file at once.**
-If the compose bind mount points at the dir your dev server uses (`./test-env`), a Windows
-`better-sqlite3` process and the Linux container both hold the same SQLite file over the Docker
-Desktop mount, WAL's `-shm` can't cross that boundary, and the container crash-loops. Give the
-container its own data dir (`./data:/app/data`, or the committed `logger-data` named volume), or
-stop the dev server first. Stray leftover test servers cause the same lock — always kill background
-`node dist/index.js` / `docker` processes after testing.
+**Only one process may hold `test-env/logger.db` at a time.** The local `docker-compose.yml`
+bind-mounts `./test-env` into the container by design (the user's own testing DB). WAL's shared-memory
+`-shm` file can't be coordinated between a Windows `better-sqlite3` process and the Linux container
+over the Docker Desktop mount, so if anything else has that file open when `docker compose up` runs —
+a `npm run dev:server`, or a stray leftover `node dist/index.js` from an earlier test — the container
+crash-loops on `SQLITE_IOERR_SHMOPEN`. Stop every other process on that DB before starting the
+container, and always kill background `node dist/index.js` / `docker` processes after testing.
 
 ### Migrations
 
