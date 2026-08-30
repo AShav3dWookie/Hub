@@ -21,6 +21,7 @@ import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 
 function dateRange(start: string | null, end: string | null): string | null {
   if (start && end) return `${start} – ${end}`;
@@ -338,7 +339,8 @@ export function AlbumDetail() {
                   {log.entity.title}
                 </Link>
                 <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                  {CATEGORY_META[log.entity.category].label} · {log.date}
+                  {CATEGORY_META[log.entity.category].label} ·{" "}
+                  {formatLogDate(log.date, log.entity.category)}
                   <button
                     type="button"
                     aria-label={`Remove ${log.entity.title} from album`}

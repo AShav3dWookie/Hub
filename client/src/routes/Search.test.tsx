@@ -166,6 +166,53 @@ describe("Search", () => {
     expect(within(hangOutCard).queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
   });
 
+  it("shows only the year for year-granularity logs, full dates otherwise (groupBy=log)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        groupBy: "log",
+        logs: [
+          logRow(1, { date: "2023-01-01", entity: summary(1, "book", "Dune") }),
+          logRow(2, { date: "2024-06-10", entity: summary(2, "movie", "Arrival") }),
+        ],
+      }),
+    });
+
+    renderWithProviders(<Search />);
+
+    const bookCard = (await screen.findByRole("link", { name: "Dune" })).closest("div")!.parentElement!;
+    expect(within(bookCard).getByText(/Book · 2023$/)).toBeInTheDocument();
+    expect(within(bookCard).queryByText(/2023-01-01/)).not.toBeInTheDocument();
+
+    const movieCard = screen.getByRole("link", { name: "Arrival" }).closest("div")!.parentElement!;
+    expect(within(movieCard).getByText(/Movie · 2024-06-10/)).toBeInTheDocument();
+  });
+
+  it("shows only the year for year-granularity logs (groupBy=entity)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        groupBy: "entity",
+        entities: [
+          {
+            ...summary(1, "game", "Hades"),
+            logs: [logRow(1, { date: "2022-01-01" })],
+            visitCount: 1,
+            averageRating: null,
+            latestDate: "2022-01-01",
+          },
+        ],
+      }),
+    });
+
+    renderWithProviders(<Search />);
+
+    expect(await screen.findByText("2022")).toBeInTheDocument();
+    expect(screen.queryByText("2022-01-01")).not.toBeInTheDocument();
+  });
+
   it("shows the rating bar only for rated categories (groupBy=log)", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

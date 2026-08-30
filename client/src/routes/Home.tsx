@@ -12,6 +12,7 @@ import { CATEGORY_META, categoryHasRating } from "@logger/shared";
 import type { ImportantDateEntry, UpcomingEventEntry } from "@logger/shared";
 import { useSearch, useUpcomingImportantDates, useUpcomingEvents } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 
 function ActionTile({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label: string }) {
   return (
@@ -134,7 +135,8 @@ export function Home() {
                   <span className="flex flex-col">
                     <span className="font-medium">{log.entity.title}</span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {CATEGORY_META[log.entity.category].label} · {log.date}
+                      {CATEGORY_META[log.entity.category].label} ·{" "}
+                      {formatLogDate(log.date, log.entity.category)}
                     </span>
                   </span>
                   {categoryHasRating(log.entity.category) && (

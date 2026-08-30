@@ -3,6 +3,7 @@ import type { LogWithEntityDTO } from "@logger/shared";
 import { CATEGORY_META } from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 
 /**
  * Search existing logs ("events") by keyword and pick one. Reuses the keyword search in flat-log
@@ -56,7 +57,8 @@ export function LogPicker({
               >
                 <span className="font-medium dark:text-white">{log.entity.title}</span>
                 <span className="text-slate-500 dark:text-slate-400">
-                  {CATEGORY_META[log.entity.category].label} · {log.date}
+                  {CATEGORY_META[log.entity.category].label} ·{" "}
+                  {formatLogDate(log.date, log.entity.category)}
                   {log.people.length > 0 && ` · with ${log.people.map((p) => p.name).join(", ")}`}
                 </span>
               </button>
