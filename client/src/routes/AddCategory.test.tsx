@@ -38,4 +38,12 @@ describe("AddCategory", () => {
     render("/add/banana");
     expect(screen.getByText("add index")).toBeInTheDocument();
   });
+
+  it("passes a ?date= query param through to the log form", () => {
+    render("/add/hang_out?date=2024-02-20");
+    const dateInput = screen
+      .getByText("Date")
+      .parentElement!.querySelector<HTMLInputElement>('input[type="date"]')!;
+    expect(dateInput).toHaveValue("2024-02-20");
+  });
 });

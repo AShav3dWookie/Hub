@@ -44,14 +44,16 @@ function installFetch() {
 
 function render(
   props: { initialMonth?: string; today?: string } = { initialMonth: "2024-02", today: "2024-02-15" },
+  route = "/calendar",
 ) {
   const result = renderWithProviders(
     <Routes>
       <Route path="/calendar" element={<Calendar {...props} />} />
       <Route path="/entity/:id" element={<div>entity page</div>} />
       <Route path="/person/:id" element={<div>person page</div>} />
+      <Route path="/add/:category" element={<div>add form</div>} />
     </Routes>,
-    { route: "/calendar" },
+    { route },
   );
   container = result.container;
   return result;
@@ -308,5 +310,74 @@ describe("Calendar — navigation", () => {
     cell("2024-02-01").focus();
     await userEvent.keyboard("{Enter}");
     expect(cell("2024-02-01")).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("Calendar — add-event shortcut", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    installFetch();
+  });
+
+  const addLinks = () =>
+    screen.queryAllByRole("link").filter((l) => l.getAttribute("href")?.startsWith("/add/"));
+
+  it("toggles a chooser of the three calendar categories for the selected day", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-20"));
+
+    expect(addLinks()).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+
+    const links = addLinks();
+    expect(links.map((l) => l.textContent)).toEqual(["Appointment", "Hang Out", "Eating Out"]);
+    const expectedReturn = encodeURIComponent("/calendar?date=2024-02-20");
+    expect(links[0]).toHaveAttribute("href", `/add/appointment?date=2024-02-20&returnTo=${expectedReturn}`);
+    expect(links[1]).toHaveAttribute("href", `/add/hang_out?date=2024-02-20&returnTo=${expectedReturn}`);
+    expect(links[2]).toHaveAttribute("href", `/add/eating_out?date=2024-02-20&returnTo=${expectedReturn}`);
+  });
+
+  it("offers the shortcut on an empty day too", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-06"));
+    await screen.findByText("Nothing on this day.");
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+    expect(addLinks()[0]).toHaveAttribute("href", expect.stringContaining("date=2024-02-06"));
+  });
+
+  it("collapses the chooser when another day is selected", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-20"));
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+    expect(addLinks().length).toBeGreaterThan(0);
+
+    await userEvent.click(cell("2024-02-21"));
+    expect(addLinks()).toHaveLength(0);
+  });
+
+  it("navigates to the pre-filled add form when a category is picked", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-20"));
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+    await userEvent.click(screen.getByRole("link", { name: "Appointment" }));
+    await screen.findByText("add form");
+  });
+
+  it("opens on a day and month passed via ?date= in the URL", async () => {
+    render({ today: "2024-02-15" }, "/calendar?date=2024-05-20");
+    await screen.findByText("May 2024");
+    expect(cell("2024-05-20")).toHaveAttribute("aria-pressed", "true");
+    expect(selectedHeading()).toHaveTextContent("20");
+    expect(selectedHeading()).toHaveTextContent(/May/);
+  });
+
+  it("ignores a malformed ?date= and falls back to today's month", async () => {
+    render({ today: "2024-02-15" }, "/calendar?date=2024-99-99");
+    await screen.findByText("February 2024");
+    expect(cell("2024-02-15")).toHaveAttribute("aria-pressed", "true");
   });
 });

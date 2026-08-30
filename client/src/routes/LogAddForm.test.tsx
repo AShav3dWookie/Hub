@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { LogAddForm } from "./LogAddForm.js";
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
+
+const dateInput = () =>
+  screen.getByText("Date").parentElement!.querySelector<HTMLInputElement>('input[type="date"]')!;
 
 describe("LogAddForm photos", () => {
   beforeEach(() => {
@@ -113,5 +117,66 @@ describe("LogAddForm event categories", () => {
     expect(screen.getByText("Photos")).toBeInTheDocument();
     expect(screen.queryByText("Rating")).not.toBeInTheDocument();
     expect(screen.queryByText("Auto-delete once it's passed")).not.toBeInTheDocument();
+  });
+});
+
+describe("LogAddForm ?date / ?returnTo (calendar shortcut)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/logs" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ id: 5, entityId: 1, photos: [] }, 201));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+  });
+
+  it("pre-fills the date field from ?date=", () => {
+    renderWithProviders(<LogAddForm category="appointment" />, {
+      route: "/add/appointment?date=2024-02-20",
+    });
+    expect(dateInput()).toHaveValue("2024-02-20");
+  });
+
+  it("defaults the date to today when there is no ?date=", () => {
+    renderWithProviders(<LogAddForm category="appointment" />);
+    expect(dateInput()).toHaveValue(new Date().toISOString().slice(0, 10));
+  });
+
+  it("ignores ?date= for a year-granularity category", () => {
+    renderWithProviders(<LogAddForm category="book" />, { route: "/add/book?date=2024-02-20" });
+    expect(screen.queryByText("Date")).not.toBeInTheDocument();
+    expect(screen.getByRole("spinbutton")).toHaveValue(new Date().getFullYear());
+  });
+
+  it("returns to the ?returnTo path after saving", async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
+        <Route path="/calendar" element={<div>calendar screen</div>} />
+      </Routes>,
+      { route: "/add/appointment?date=2024-02-20&returnTo=%2Fcalendar%3Fdate%3D2024-02-20" },
+    );
+
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText("calendar screen");
+  });
+
+  it("ignores an off-site returnTo and goes home instead", async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
+        <Route path="/" element={<div>home screen</div>} />
+        <Route path="/calendar" element={<div>calendar screen</div>} />
+      </Routes>,
+      { route: "/add/appointment?returnTo=https://evil.example" },
+    );
+
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText("home screen");
   });
 });
