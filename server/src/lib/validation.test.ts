@@ -5,6 +5,7 @@ import {
   searchQuerySchema,
   galleryQuerySchema,
   createEntityNoteSchema,
+  calendarRangeQuerySchema,
 } from "./validation.js";
 
 describe("createLogSchema", () => {
@@ -109,5 +110,23 @@ describe("createEntityNoteSchema", () => {
         eventDate: "1990-06-01",
       }),
     ).not.toThrow();
+  });
+});
+
+describe("calendarRangeQuerySchema", () => {
+  it("accepts a valid same-month range", () => {
+    expect(calendarRangeQuerySchema.parse({ from: "2024-08-01", to: "2024-08-31" })).toEqual({
+      from: "2024-08-01",
+      to: "2024-08-31",
+    });
+  });
+
+  it("rejects a missing param, wrong format, impossible date, reversed order, or oversized range", () => {
+    expect(() => calendarRangeQuerySchema.parse({ from: "2024-08-01" })).toThrow();
+    expect(() => calendarRangeQuerySchema.parse({ from: "2024-8-1", to: "2024-08-31" })).toThrow();
+    expect(() => calendarRangeQuerySchema.parse({ from: "2024-13-01", to: "2024-13-05" })).toThrow();
+    expect(() => calendarRangeQuerySchema.parse({ from: "2023-02-29", to: "2023-03-01" })).toThrow();
+    expect(() => calendarRangeQuerySchema.parse({ from: "2024-08-31", to: "2024-08-01" })).toThrow();
+    expect(() => calendarRangeQuerySchema.parse({ from: "2024-01-01", to: "2024-06-01" })).toThrow();
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
+import { daysInMonth, daysBetween } from "./dates.js";
 
 export const categorySchema = z.enum(CATEGORIES);
 export const loggableCategorySchema = z.enum(LOGGABLE_CATEGORIES);
@@ -85,6 +86,19 @@ export const galleryQuerySchema = z.object({
   cursor: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
+
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+  .refine((s) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return y >= 1900 && y <= 2200 && m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(y, m);
+  }, "Invalid date");
+
+export const calendarRangeQuerySchema = z
+  .object({ from: isoDateSchema, to: isoDateSchema })
+  .refine((q) => q.from <= q.to, { message: "from must be on or before to", path: ["from"] })
+  .refine((q) => daysBetween(q.from, q.to) <= 45, { message: "range too large", path: ["to"] });
 
 export const loginSchema = z.object({
   password: z.string().min(1),

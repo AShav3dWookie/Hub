@@ -10,6 +10,7 @@ import { PersonProfile } from "./routes/PersonProfile.js";
 import { Gallery } from "./routes/Gallery.js";
 import { Albums } from "./routes/Albums.js";
 import { AlbumDetail } from "./routes/AlbumDetail.js";
+import { Calendar } from "./routes/Calendar.js";
 import { Login } from "./routes/Login.js";
 
 export function App() {
@@ -27,6 +28,7 @@ export function App() {
                 <Route path="/add/:category" element={<AddCategory />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/gallery" element={<Gallery />} />
+                <Route path="/calendar" element={<Calendar />} />
                 <Route path="/albums" element={<Albums />} />
                 <Route path="/album/:id" element={<AlbumDetail />} />
                 <Route path="/entity/:id" element={<EntityDetail />} />

@@ -26,10 +26,12 @@ import type {
   AlbumSummary,
   CreateAlbumRequest,
   UpdateAlbumRequest,
+  CalendarRangeResponse,
   PersonRef,
   PersonTagInput,
 } from "@logger/shared";
 import { api } from "./client.js";
+import { gridRange } from "../lib/calendar.js";
 
 interface AutocompleteResult {
   id: number;
@@ -95,6 +97,7 @@ export function useCreateLog() {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
 }
@@ -107,6 +110,7 @@ export function useUpdateLog(logId: number) {
       queryClient.invalidateQueries({ queryKey: ["search"] });
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
       // editing a log's people changes who its photos are linked to
       queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
@@ -123,6 +127,7 @@ export function useDeleteLog() {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["person-photos"] });
     },
   });
@@ -355,6 +360,9 @@ export function useCreateEntityNote(entityId: number) {
       api.post<EntityNoteDTO>(`/entities/${entityId}/notes`, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-notes", entityId] });
+      // an important_date note feeds the home "upcoming" widget and the calendar
+      queryClient.invalidateQueries({ queryKey: ["important-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
 }
@@ -366,6 +374,9 @@ export function useUpdateEntityNote(entityId: number, noteId: number) {
       api.put<EntityNoteDTO>(`/entities/${entityId}/notes/${noteId}`, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-notes", entityId] });
+      // an important_date note feeds the home "upcoming" widget and the calendar
+      queryClient.invalidateQueries({ queryKey: ["important-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
 }
@@ -376,7 +387,20 @@ export function useDeleteEntityNote(entityId: number) {
     mutationFn: (noteId: number) => api.delete(`/entities/${entityId}/notes/${noteId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-notes", entityId] });
+      // an important_date note feeds the home "upcoming" widget and the calendar
+      queryClient.invalidateQueries({ queryKey: ["important-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
     },
+  });
+}
+
+/** The read-only calendar for a `YYYY-MM` month (fetches the whole visible grid range). */
+export function useCalendarMonth(month: string) {
+  const { from, to } = gridRange(month);
+  return useQuery({
+    queryKey: ["calendar", month],
+    queryFn: () => api.get<CalendarRangeResponse>(`/calendar?from=${from}&to=${to}`),
+    placeholderData: keepPreviousData,
   });
 }
 

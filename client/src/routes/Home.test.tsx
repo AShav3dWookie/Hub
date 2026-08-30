@@ -113,12 +113,13 @@ describe("Home", () => {
     expect(screen.getByText(/Hang Out · 2024-06-19 · with Sam/)).toBeInTheDocument();
   });
 
-  it("shows Add, Search, and Gallery action tiles", async () => {
+  it("shows Add, Search, Calendar, and Gallery action tiles", async () => {
     renderWithProviders(<Home />);
     await screen.findByText("What would you like to do?");
 
     expect(screen.getByRole("link", { name: /add/i })).toHaveAttribute("href", "/add");
     expect(screen.getByRole("link", { name: /search/i })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: /calendar/i })).toHaveAttribute("href", "/calendar");
     expect(screen.getByRole("link", { name: /gallery/i })).toHaveAttribute("href", "/gallery");
   });
 
