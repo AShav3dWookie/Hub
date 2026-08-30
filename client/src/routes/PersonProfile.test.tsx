@@ -105,6 +105,33 @@ describe("PersonProfile", () => {
     expect(screen.queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
   });
 
+  it("shows only the year for a year-granularity appearance (book)", async () => {
+    mockApi({
+      type: "person",
+      entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
+      appearances: [
+        {
+          id: 1,
+          entityId: 3,
+          rating: 4,
+          date: "2023-01-01",
+          notes: null,
+          people: [],
+          photos: [],
+          createdAt: NOW,
+          updatedAt: NOW,
+          entity: { id: 3, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
+        },
+      ],
+      stats: { totalLogs: 1, favoriteCategory: "book", mostFrequentCoPerson: null },
+    });
+
+    renderProfile();
+
+    expect(await screen.findByText(/Book · 2023$/)).toBeInTheDocument();
+    expect(screen.queryByText(/2023-01-01/)).not.toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no appearances", async () => {
     mockApi({
       type: "person",

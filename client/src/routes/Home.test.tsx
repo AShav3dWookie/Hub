@@ -143,6 +143,32 @@ describe("Home", () => {
     expect(within(hangOutRow).queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
   });
 
+  it("shows only the year for a year-granularity recent log, full dates otherwise", async () => {
+    mockFetch({
+      recentLogs: [
+        recentLog({
+          id: 1,
+          date: "2024-02-15",
+          entity: { id: 3, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
+        }),
+        recentLog({
+          id: 2,
+          date: "2024-06-10",
+          entity: { id: 4, category: "movie", title: "Arrival", createdAt: NOW, releaseYear: null, author: null },
+        }),
+      ],
+    });
+
+    renderWithProviders(<Home />);
+
+    const bookRow = (await screen.findByText("Dune")).closest("a")!;
+    expect(within(bookRow).getByText(/Book · 2024$/)).toBeInTheDocument();
+    expect(within(bookRow).queryByText(/2024-02-15/)).not.toBeInTheDocument();
+
+    const movieRow = screen.getByText("Arrival").closest("a")!;
+    expect(within(movieRow).getByText(/Movie · 2024-06-10/)).toBeInTheDocument();
+  });
+
   it("does not render upcoming widgets when there is nothing upcoming", async () => {
     mockFetch();
 

@@ -132,6 +132,50 @@ describe("AlbumDetail", () => {
     expect(screen.getByRole("img", { name: "loose.jpg" })).toBeInTheDocument();
   });
 
+  it("shows only the year for a year-granularity album event (book)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method ?? "GET" });
+      if (url.startsWith("/api/albums/1/photos")) return Promise.resolve(jsonResponse(photosPayload));
+      if (url.startsWith("/api/albums/1")) {
+        return Promise.resolve(
+          jsonResponse(
+            albumPayload({
+              events: [
+                {
+                  id: 30,
+                  entityId: 9,
+                  rating: 4,
+                  date: "2022-01-01",
+                  notes: null,
+                  people: [],
+                  photos: [],
+                  albums: [],
+                  autoDelete: false,
+                  createdAt: NOW,
+                  updatedAt: NOW,
+                  entity: {
+                    id: 9,
+                    category: "book",
+                    title: "Dune",
+                    createdAt: NOW,
+                    releaseYear: null,
+                    author: null,
+                  },
+                },
+              ],
+            }),
+          ),
+        );
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText(/Book · 2022$/)).toBeInTheDocument();
+    expect(screen.queryByText(/2022-01-01/)).not.toBeInTheDocument();
+  });
+
   it("shows a remove button only for directly-added people", async () => {
     renderDetail();
     await screen.findByRole("heading", { name: "Road Trip" });

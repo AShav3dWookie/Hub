@@ -22,6 +22,7 @@ import { useSearch } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { DateFilter, type DateMode } from "../components/DateFilter.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 
 
 function SkeletonCard() {
@@ -420,7 +421,9 @@ export function Search() {
                 {entity.logs.map((log) => (
                   <li key={log.id} className="border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="dark:text-slate-200">{log.date}</span>
+                      <span className="dark:text-slate-200">
+                        {formatLogDate(log.date, entity.category)}
+                      </span>
                       {categoryHasRating(entity.category) && (
                         <StarRating value={log.rating} readOnly />
                       )}
@@ -463,7 +466,8 @@ export function Search() {
                   {highlightMatches(log.entity.title, queryTokens)}
                 </Link>
                 <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {CATEGORY_META[log.entity.category].label} · {log.date}
+                  {CATEGORY_META[log.entity.category].label} ·{" "}
+                  {formatLogDate(log.date, log.entity.category)}
                 </span>
               </div>
               {categoryHasRating(log.entity.category) && (

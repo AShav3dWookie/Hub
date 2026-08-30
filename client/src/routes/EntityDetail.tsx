@@ -3,6 +3,7 @@ import { useParams, Navigate, Link } from "react-router-dom";
 import type { PersonTagInput, LogDTO, LoggableCategory } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityDetail, useUpdateLog, useDeleteLog } from "../api/hooks.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { PhotoGallery } from "../components/PhotoGallery.js";
@@ -36,7 +37,7 @@ export function EntityDetail() {
 
       <div className="flex flex-col gap-3">
         {data.logs.map((log) => (
-          <LogRow key={log.id} log={log} fields={fields} />
+          <LogRow key={log.id} log={log} fields={fields} category={data.category as LoggableCategory} />
         ))}
       </div>
     </div>
@@ -46,9 +47,11 @@ export function EntityDetail() {
 function LogRow({
   log,
   fields,
+  category,
 }: {
   log: LogDTO;
   fields: (typeof CATEGORY_FIELDS)[LoggableCategory];
+  category: LoggableCategory;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -155,7 +158,7 @@ function LogRow({
     <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between">
         <span className="font-medium">
-          {fields.dateGranularity === "year" ? log.date.slice(0, 4) : log.date}
+          {formatLogDate(log.date, category)}
         </span>
         {fields.hasRating && <StarRating value={log.rating} readOnly />}
       </div>

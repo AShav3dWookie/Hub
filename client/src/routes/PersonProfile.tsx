@@ -2,6 +2,7 @@ import { useParams, Navigate, Link } from "react-router-dom";
 import { CATEGORY_META, categoryHasRating } from "@logger/shared";
 import { useEntityDetail, usePersonPhotos } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 import { EntityNotes } from "../components/EntityNotes.js";
 import { PhotoStream } from "../components/PhotoStream.js";
 
@@ -65,7 +66,8 @@ export function PersonProfile() {
                 {log.entity.title}
               </Link>
               <span className="text-sm text-slate-500 dark:text-slate-400">
-                {CATEGORY_META[log.entity.category].label} · {log.date}
+                {CATEGORY_META[log.entity.category].label} ·{" "}
+                {formatLogDate(log.date, log.entity.category)}
               </span>
             </div>
             {categoryHasRating(log.entity.category) && <StarRating value={log.rating} readOnly />}

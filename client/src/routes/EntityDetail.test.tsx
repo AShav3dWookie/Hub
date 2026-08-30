@@ -243,6 +243,33 @@ describe("EntityDetail log deletion with photos", () => {
   });
 });
 
+describe("EntityDetail log date display", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("shows only the year for a year-granularity category (book)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("book", [log({ date: "2024-01-01" })])),
+    );
+
+    renderDetail();
+
+    expect(await screen.findByText("2024")).toBeInTheDocument();
+    expect(screen.queryByText("2024-01-01")).not.toBeInTheDocument();
+  });
+
+  it("shows the full date for a day-granularity category (movie)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      jsonResponse(entityPayload("movie", [log({ date: "2024-03-05" })])),
+    );
+
+    renderDetail();
+
+    expect(await screen.findByText("2024-03-05")).toBeInTheDocument();
+  });
+});
+
 describe("EntityDetail log edit mode", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());

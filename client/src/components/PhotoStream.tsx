@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { GalleryPhotoDTO } from "@logger/shared";
 import { Lightbox } from "./Lightbox.js";
+import { formatLogDate } from "../lib/formatLogDate.js";
 
 /**
  * A paginated photo grid with a click-to-open lightbox. Shared by the main Gallery
@@ -139,7 +140,7 @@ export function PhotoStream({
                 <Link to={`/entity/${active.log.entityId}`} className="underline">
                   {active.log.entityTitle}
                 </Link>{" "}
-                · {active.log.date}
+                · {formatLogDate(active.log.date, active.log.category)}
               </span>
             ) : (
               <span className="text-slate-300">Not linked to an event</span>
