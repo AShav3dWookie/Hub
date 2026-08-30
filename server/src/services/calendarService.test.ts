@@ -195,4 +195,90 @@ describe("calendarService.getCalendarRange", () => {
     const db = setup();
     expect(getCalendarRange(db, "2020-05-01", "2020-05-31").items).toEqual([]);
   });
+
+  // ---- regression: a real grid range (Monday-before-1st .. Sunday-after) ----
+
+  it("returns items across the whole grid range, spillover days included", () => {
+    const db = setup();
+    log("hang_out", "Jan spillover", "2024-01-30");
+    log("eating_out", "Feb kickoff", "2024-02-01");
+    importantDate("Dana", "Birthday", "1990-02-14");
+    log("hang_out", "Mar spillover", "2024-03-02");
+    log("hang_out", "Out of grid", "2024-03-10");
+
+    const { items } = getCalendarRange(db, "2024-01-29", "2024-03-03");
+    expect(items.map((i) => `${i.date}:${i.title}`)).toEqual([
+      "2024-01-30:Jan spillover",
+      "2024-02-01:Feb kickoff",
+      "2024-02-14:Dana",
+      "2024-03-02:Mar spillover",
+    ]);
+  });
+
+  it("returns every log on a busy day and keeps them distinct", () => {
+    const db = setup();
+    log("eating_out", "Lunch", "2024-06-15", "12:30");
+    log("hang_out", "Drinks", "2024-06-15", "8pm");
+    log("appointment", "Haircut", "2024-06-15", null);
+
+    const { items } = getCalendarRange(db, "2024-06-01", "2024-06-30");
+    expect(items).toHaveLength(3);
+    expect(items.map((i) => i.title)).toEqual(["Drinks", "Haircut", "Lunch"]); // title-sorted
+    expect(items.map((i) => i.category)).toEqual(["hang_out", "appointment", "eating_out"]);
+    expect(items.map((i) => i.notes)).toEqual(["8pm", null, "12:30"]);
+  });
+
+  it("treats repeat visits to one place as separate day items", () => {
+    const db = setup();
+    const dishoom = findOrCreateEntity(db, "eating_out", "Dishoom");
+    createLog(db, { entityId: dishoom.id, rating: null, date: "2024-06-03", notes: null, people: [] });
+    createLog(db, { entityId: dishoom.id, rating: null, date: "2024-06-19", notes: null, people: [] });
+
+    const { items } = getCalendarRange(db, "2024-06-01", "2024-06-30");
+    expect(items.map((i) => i.date)).toEqual(["2024-06-03", "2024-06-19"]);
+    expect(new Set(items.map((i) => i.entityId))).toEqual(new Set([dishoom.id]));
+    expect(new Set(items.map((i) => i.logId)).size).toBe(2);
+  });
+
+  it("carries the log's entity id, title and category for linking", () => {
+    const db = setup();
+    const l = log("hang_out", "Bowling", "2024-06-10");
+    const { items } = getCalendarRange(db, "2024-06-01", "2024-06-30");
+    expect(items[0]).toMatchObject({
+      kind: "log",
+      title: "Bowling",
+      category: "hang_out",
+      entityCategory: "hang_out",
+      entityId: l.entityId,
+      logId: l.id,
+    });
+  });
+
+  it("returns a same-day log and important date together, deterministically ordered", () => {
+    const db = setup();
+    importantDate("Sam", "Birthday", "1990-06-10");
+    log("hang_out", "Sam's party", "2024-06-10");
+
+    const { items } = getCalendarRange(db, "2024-06-01", "2024-06-30");
+    expect(items.map((i) => [i.kind, i.title])).toEqual([
+      ["important_date", "Sam"],
+      ["log", "Sam's party"],
+    ]);
+  });
+
+  it("zero-pads the placed occurrence date", () => {
+    const db = setup();
+    importantDate("Early", "Birthday", "1990-03-05");
+    const { items } = getCalendarRange(db, "2024-03-01", "2024-03-31");
+    expect(items[0].date).toBe("2024-03-05");
+  });
+
+  it("sorts two important dates on the same day by person name", () => {
+    const db = setup();
+    importantDate("Zara", "Birthday", "1990-06-10");
+    importantDate("Aaron", "Birthday", "1985-06-10");
+
+    const { items } = getCalendarRange(db, "2024-06-01", "2024-06-30");
+    expect(items.map((i) => i.title)).toEqual(["Aaron", "Zara"]);
+  });
 });
