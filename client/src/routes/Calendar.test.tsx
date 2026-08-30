@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Calendar } from "./Calendar.js";
+import { LogAddForm } from "./LogAddForm.js";
 import type { CalendarItem } from "@logger/shared";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -379,5 +380,115 @@ describe("Calendar — add-event shortcut", () => {
     render({ today: "2024-02-15" }, "/calendar?date=2024-99-99");
     await screen.findByText("February 2024");
     expect(cell("2024-02-15")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("starts with the chooser collapsed on the auto-selected day", async () => {
+    render();
+    await screen.findByText("February 2024");
+    expect(selectedHeading()).toBeInTheDocument(); // today is auto-selected
+    expect(addLinks()).toHaveLength(0);
+    expect(screen.getByRole("button", { name: /add event/i })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("starts collapsed when opened via ?date=", async () => {
+    render({ today: "2024-02-15" }, "/calendar?date=2024-05-20");
+    await screen.findByText("May 2024");
+    expect(addLinks()).toHaveLength(0);
+  });
+
+  it("month navigation still works after opening via ?date=", async () => {
+    render({ today: "2024-02-15" }, "/calendar?date=2024-05-20");
+    await screen.findByText("May 2024");
+
+    await userEvent.click(screen.getByRole("button", { name: "Next month" }));
+    await screen.findByText("June 2024");
+    expect(selectedHeading()).toBeNull(); // June isn't today's month → nothing selected
+    expect(cell("2024-05-20")).toBeNull(); // and we've actually left May
+  });
+
+  it("carries the clicked day's date when adding from a spillover cell", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-01-30")); // leading spillover → jumps to January
+    await screen.findByText("January 2024");
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+    expect(addLinks()[0]).toHaveAttribute("href", expect.stringContaining("date=2024-01-30"));
+  });
+
+  it("re-opening the chooser on the same day still works", async () => {
+    render();
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-20"));
+    const toggle = screen.getByRole("button", { name: /add event/i });
+    await userEvent.click(toggle);
+    expect(addLinks()).toHaveLength(3);
+    await userEvent.click(toggle);
+    expect(addLinks()).toHaveLength(0);
+    await userEvent.click(toggle);
+    expect(addLinks()).toHaveLength(3);
+  });
+});
+
+describe("Calendar — add-and-return round trip", () => {
+  const NOW = "2024-02-15";
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("select a day → add → save → back on that calendar day with the new event", async () => {
+    const created: Array<Record<string, unknown>> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      if (url.startsWith("/api/calendar")) {
+        const params = new URL(`http://x${url}`).searchParams;
+        const from = params.get("from")!;
+        const to = params.get("to")!;
+        const items = created
+          .filter((c) => (c.date as string) >= from && (c.date as string) <= to)
+          .map((c) => ({
+            date: c.date,
+            kind: "log",
+            category: "appointment",
+            title: c.title,
+            notes: null,
+            entityId: 1,
+            entityCategory: "appointment",
+            logId: 1,
+          }));
+        return Promise.resolve(jsonResponse({ from, to, items }));
+      }
+      if (url === "/api/logs" && init?.method === "POST") {
+        created.push(JSON.parse(init.body as string));
+        return Promise.resolve(jsonResponse({ id: 1, entityId: 1, photos: [] }, 201));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+
+    const { container: c } = renderWithProviders(
+      <Routes>
+        <Route path="/calendar" element={<Calendar today={NOW} />} />
+        <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
+      </Routes>,
+      { route: "/calendar" },
+    );
+    container = c;
+
+    await screen.findByText("February 2024");
+    await userEvent.click(cell("2024-02-27"));
+    await userEvent.click(screen.getByRole("button", { name: /add event/i }));
+    await userEvent.click(screen.getByRole("link", { name: "Appointment" }));
+
+    // pre-filled date, on the add form
+    await screen.findByRole("button", { name: "Save" });
+    expect(document.querySelector<HTMLInputElement>('input[type="date"]')).toHaveValue("2024-02-27");
+
+    await userEvent.type(screen.getByLabelText("Title"), "Blood test");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    // back on the calendar, February, the 27th selected, showing the new appointment
+    await screen.findByText("February 2024");
+    expect(cell("2024-02-27")).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("link", { name: /Blood test/ })).toBeInTheDocument();
+    expect(created[0]).toMatchObject({ category: "appointment", title: "Blood test", date: "2024-02-27" });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useSearchParams } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { LogAddForm } from "./LogAddForm.js";
 
@@ -9,8 +9,7 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
 
-const dateInput = () =>
-  screen.getByText("Date").parentElement!.querySelector<HTMLInputElement>('input[type="date"]')!;
+const dateInput = () => document.querySelector<HTMLInputElement>('input[type="date"]')!;
 
 describe("LogAddForm photos", () => {
   beforeEach(() => {
@@ -164,19 +163,107 @@ describe("LogAddForm ?date / ?returnTo (calendar shortcut)", () => {
     await screen.findByText("calendar screen");
   });
 
-  it("ignores an off-site returnTo and goes home instead", async () => {
+  it.each(["hang_out", "eating_out"] as const)("pre-fills the date for %s too", (category) => {
+    renderWithProviders(<LogAddForm category={category} />, {
+      route: `/add/${category}?date=2024-02-20`,
+    });
+    expect(dateInput()).toHaveValue("2024-02-20");
+  });
+
+  it("sends the pre-filled date in the create payload", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body });
+      if (url === "/api/logs" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ id: 9, entityId: 1, photos: [] }, 201));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+
+    renderWithProviders(<LogAddForm category="appointment" />, {
+      route: "/add/appointment?date=2025-11-03",
+    });
+    await userEvent.type(screen.getByLabelText("Title"), "Flu jab");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.some((c) => c.url === "/api/logs")).toBe(true));
+    expect(JSON.parse(calls.find((c) => c.url === "/api/logs")!.body as string)).toMatchObject({
+      category: "appointment",
+      title: "Flu jab",
+      date: "2025-11-03",
+    });
+  });
+
+  it("still lets the user change the pre-filled date, and sends the edited value", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body });
+      if (url === "/api/logs" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ id: 9, entityId: 1, photos: [] }, 201));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+
+    renderWithProviders(<LogAddForm category="appointment" />, {
+      route: "/add/appointment?date=2025-11-03",
+    });
+    fireEvent.change(dateInput(), { target: { value: "2025-11-10" } });
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.some((c) => c.url === "/api/logs")).toBe(true));
+    expect(JSON.parse(calls.find((c) => c.url === "/api/logs")!.body as string).date).toBe("2025-11-10");
+  });
+
+  it("goes home on save when there is a ?date= but no ?returnTo", async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
+        <Route path="/" element={<div>home screen</div>} />
+      </Routes>,
+      { route: "/add/appointment?date=2024-02-20" },
+    );
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("home screen");
+  });
+
+  it.each([
+    ["off-site https", "https://evil.example"],
+    ["protocol-relative", "//evil.example"],
+    ["bare path", "calendar"],
+  ])("rejects a %s returnTo and goes home instead", async (_label, returnTo) => {
     renderWithProviders(
       <Routes>
         <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
         <Route path="/" element={<div>home screen</div>} />
         <Route path="/calendar" element={<div>calendar screen</div>} />
       </Routes>,
-      { route: "/add/appointment?returnTo=https://evil.example" },
+      { route: `/add/appointment?returnTo=${encodeURIComponent(returnTo)}` },
     );
 
     await userEvent.type(screen.getByLabelText("Title"), "Dentist");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await screen.findByText("home screen");
+  });
+
+  it("returns to the calendar with the date query param intact", async () => {
+    function CalendarStub() {
+      const [params] = useSearchParams();
+      return <div>calendar on {params.get("date")}</div>;
+    }
+    renderWithProviders(
+      <Routes>
+        <Route path="/add/:category" element={<LogAddForm category="appointment" />} />
+        <Route path="/calendar" element={<CalendarStub />} />
+      </Routes>,
+      { route: "/add/appointment?date=2026-10-15&returnTo=%2Fcalendar%3Fdate%3D2026-10-15" },
+    );
+
+    await userEvent.type(screen.getByLabelText("Title"), "Flu jab");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText("calendar on 2026-10-15");
   });
 });
