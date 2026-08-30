@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
@@ -11,12 +11,19 @@ import { useToast } from "../components/ToastProvider.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
   const fields = CATEGORY_FIELDS[category];
+  const [searchParams] = useSearchParams();
   const [title, setTitle] = useState("");
   const debouncedTitle = useDebouncedValue(title, 300);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [rating, setRating] = useState<number | null>(null);
   const currentYear = new Date().getFullYear();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // A calendar "add" shortcut passes ?date=YYYY-MM-DD to pre-fill day-granularity forms.
+  const [date, setDate] = useState(() => {
+    const d = searchParams.get("date");
+    return fields.dateGranularity === "day" && d && /^\d{4}-\d{2}-\d{2}$/.test(d)
+      ? d
+      : new Date().toISOString().slice(0, 10);
+  });
   const [year, setYear] = useState(() => String(currentYear));
   const [releaseYear, setReleaseYear] = useState("");
   const [author, setAuthor] = useState("");
@@ -30,6 +37,11 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   const createLog = useCreateLog();
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  // Where to go after saving — an in-app path from the calendar shortcut, else home.
+  const returnParam = searchParams.get("returnTo");
+  const returnTo =
+    returnParam && returnParam.startsWith("/") && !returnParam.startsWith("//") ? returnParam : "/";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,13 +92,13 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
         for (const file of photoFiles) formData.append("photos", file);
         await api.postForm(`/logs/${createdLogId}/photos`, formData);
       } catch {
-        navigate("/");
+        navigate(returnTo);
         showToast("Saved, but photos failed to upload — add them from the entry.");
         return;
       }
     }
 
-    navigate("/");
+    navigate(returnTo);
     showToast("Saved!");
   }
 

@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { CATEGORY_META } from "@logger/shared";
 import type { CalendarItem } from "@logger/shared";
 import { useCalendarMonth } from "../api/hooks.js";
-import { addMonths, dayLabel, monthGrid, monthLabel, WEEKDAYS } from "../lib/calendar.js";
+import { addMonths, dayLabel, daysInMonth, monthGrid, monthLabel, WEEKDAYS } from "../lib/calendar.js";
 
 const CATEGORY_DOT: Record<CalendarItem["category"], string> = {
   eating_out: "bg-amber-500",
@@ -12,6 +12,22 @@ const CATEGORY_DOT: Record<CalendarItem["category"], string> = {
   appointment: "bg-sky-500",
   important_date: "bg-rose-500",
 };
+
+/** The log types the calendar shows — the "add for this day" shortcut offers these. Mirrors
+ *  CALENDAR_LOG_CATEGORIES in server/src/services/calendarService.ts. */
+const CALENDAR_ADD_CATEGORIES = ["appointment", "hang_out", "eating_out"] as const;
+
+/** A real YYYY-MM-DD, or null. */
+function validDate(s: string | null): string | null {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  return m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(y, m) ? s : null;
+}
+
+/** Add form for `cat`, date pre-filled, returning to this same calendar day on save. */
+function addHref(cat: string, d: string): string {
+  return `/add/${cat}?date=${d}&returnTo=${encodeURIComponent(`/calendar?date=${d}`)}`;
+}
 
 function categoryLabel(category: CalendarItem["category"]): string {
   return category === "important_date" ? "Important date" : CATEGORY_META[category].label;
@@ -26,12 +42,17 @@ export function Calendar({
   initialMonth,
   today,
 }: { initialMonth?: string; today?: string } = {}) {
+  const [params] = useSearchParams();
+  const focusDate = validDate(params.get("date"));
+
   const todayISO = today ?? new Date().toISOString().slice(0, 10);
-  const startMonth = initialMonth ?? todayISO.slice(0, 7);
+  const startMonth = initialMonth ?? focusDate?.slice(0, 7) ?? todayISO.slice(0, 7);
   const [month, setMonth] = useState(startMonth);
   const [selectedDate, setSelectedDate] = useState<string | null>(
-    todayISO.slice(0, 7) === startMonth ? todayISO : null,
+    focusDate ?? (todayISO.slice(0, 7) === startMonth ? todayISO : null),
   );
+  const [addOpen, setAddOpen] = useState(false);
+  useEffect(() => setAddOpen(false), [selectedDate]);
 
   const grid = useMemo(() => monthGrid(month), [month]);
   const { data, isLoading } = useCalendarMonth(month);
@@ -142,9 +163,33 @@ export function Calendar({
 
       {selectedDate && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {dayLabel(selectedDate)}
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {dayLabel(selectedDate)}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setAddOpen((v) => !v)}
+              aria-expanded={addOpen}
+              className="flex min-h-[36px] items-center gap-1 rounded-md border border-slate-300 px-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Plus size={16} />
+              Add event
+            </button>
+          </div>
+          {addOpen && (
+            <div className="flex flex-wrap gap-2">
+              {CALENDAR_ADD_CATEGORIES.map((cat) => (
+                <Link
+                  key={cat}
+                  to={addHref(cat, selectedDate)}
+                  className="min-h-[36px] rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  {CATEGORY_META[cat].label}
+                </Link>
+              ))}
+            </div>
+          )}
           {selectedItems.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">Nothing on this day.</p>
           ) : (
