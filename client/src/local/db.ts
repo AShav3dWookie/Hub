@@ -120,3 +120,5 @@ export async function setMeta(key: string, value: unknown): Promise<void> {
 export const META_SYNC_CURSOR = "syncCursor";
 export const META_LAST_SYNC_AT = "lastSyncAt";
 export const META_LAST_SYNC_ERROR = "lastSyncError";
+/** Last-known `GET /auth/status` payload, so ProtectedRoute can resolve while offline. */
+export const META_AUTH_STATUS = "authStatus";
