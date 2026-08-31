@@ -2,7 +2,8 @@
 import { clientsClaim } from "workbox-core";
 import { createHandlerBoundToURL, precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { THUMB_CACHE } from "../sync/thumbnailCache.js";
 
 /**
  * The Logger service worker (injectManifest). Precaches the built app shell so the app opens
@@ -29,6 +30,12 @@ registerRoute(
 
 // The sync engine handles offline for the change-feed itself.
 registerRoute(({ url }) => url.pathname.startsWith("/api/sync/"), new NetworkOnly());
+
+// Thumbnails: permanent offline data. Cache on first fetch, keep forever (no expiration).
+registerRoute(
+  ({ url }) => url.pathname.startsWith("/api/photos/") && url.pathname.endsWith("_thumb.webp"),
+  new CacheFirst({ cacheName: THUMB_CACHE }),
+);
 
 // Auth status: prefer fresh, fall back to the last good response (the app also keeps its own
 // copy in IndexedDB — this just avoids a hang on a slow network).

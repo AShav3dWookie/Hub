@@ -8,6 +8,7 @@ import {
   META_LAST_SYNC_ERROR,
 } from "../local/db.js";
 import { applyChanges, countChanges } from "./apply.js";
+import { warmThumbnails } from "./thumbnailCache.js";
 
 export interface PullResult {
   pages: number;
@@ -62,6 +63,7 @@ async function runPull(): Promise<PullResult> {
   let cursor = (await getMeta<string>(META_SYNC_CURSOR)) ?? "0";
   let pages = 0;
   let rows = 0;
+  const thumbUrls: string[] = [];
 
   try {
     for (;;) {
@@ -71,6 +73,7 @@ async function runPull(): Promise<PullResult> {
       await applyChanges(resp);
       pages += 1;
       rows += countChanges(resp);
+      for (const photo of resp.changes.photos) thumbUrls.push(photo.thumbnailUrl);
       cursor = resp.nextCursor;
       if (!resp.hasMore) break;
     }
@@ -82,5 +85,9 @@ async function runPull(): Promise<PullResult> {
 
   await setMeta(META_LAST_SYNC_AT, Date.now());
   await setMeta(META_LAST_SYNC_ERROR, null);
+
+  // Best-effort, non-blocking: keep the thumbnail cache complete for offline browsing.
+  void warmThumbnails(thumbUrls);
+
   return { pages, rows, cursor };
 }

@@ -230,4 +230,24 @@ describe("Lightbox", () => {
     fireEvent.click(dialog);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("shows an offline placeholder when the full image fails to load", () => {
+    render(<Lightbox src="/api/photos/full.jpg" alt="beach.jpg" onClose={() => {}} />);
+
+    fireEvent.error(screen.getByRole("img", { name: "beach.jpg" }));
+
+    expect(screen.getByText(/unavailable offline/i)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "beach.jpg" })).not.toBeInTheDocument();
+  });
+
+  it("recovers the image view when src changes to a working photo", () => {
+    const { rerender } = render(
+      <Lightbox src="/api/photos/bad.jpg" alt="bad.jpg" onClose={() => {}} />,
+    );
+    fireEvent.error(screen.getByRole("img", { name: "bad.jpg" }));
+    expect(screen.getByText(/unavailable offline/i)).toBeInTheDocument();
+
+    rerender(<Lightbox src="/api/photos/good.jpg" alt="good.jpg" onClose={() => {}} />);
+    expect(screen.getByRole("img", { name: "good.jpg" })).toBeInTheDocument();
+  });
 });
