@@ -14,6 +14,7 @@ import { Albums } from "./routes/Albums.js";
 import { AlbumDetail } from "./routes/AlbumDetail.js";
 import { Calendar } from "./routes/Calendar.js";
 import { Login } from "./routes/Login.js";
+import { Settings } from "./routes/Settings.js";
 
 export function App() {
   useSync();
@@ -31,6 +32,7 @@ export function App() {
                 <Route path="/add" element={<Add />} />
                 <Route path="/add/:category" element={<AddCategory />} />
                 <Route path="/search" element={<Search />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/gallery" element={<Gallery />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/albums" element={<Albums />} />
