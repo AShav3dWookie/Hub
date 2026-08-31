@@ -1,0 +1,54 @@
+# Isolated instance of the full PWA build for hands-on testing.
+#
+#   docker compose -f docker-compose.pwa.yml up --build      # → http://localhost:3200
+#   docker compose -f docker-compose.pwa.yml down            # stop (keeps data)
+#   docker compose -f docker-compose.pwa.yml down -v         # stop + wipe the DB
+#
+# Its own project name, port (3200) and named volume, so it never touches the
+# :3000 instance or test-env/. The app is a single container — Express serves both
+# the API and the built PWA from /public; there is no separate "client" server.
+#
+# On first `up` the `seed` service fills the DB with sample data (movies, meals,
+# people, a few photos); later runs keep whatever you've added.
+
+name: logger-pwa
+
+services:
+  seed:
+    build:
+      context: .
+      target: runtime
+    image: logger-pwa:local
+    working_dir: /app/server
+    environment:
+      DB_PATH: /data/logger.db
+    volumes:
+      - pwa-data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        test -f /data/logger.db
+        && echo 'DB already present — leaving it alone'
+        || node dist/scripts/seedTestData.js
+
+  app:
+    build:
+      context: .
+      target: runtime
+    image: logger-pwa:local
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "3200:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DB_PATH: /data/logger.db
+      AUTH_ENABLED: "false"
+    volumes:
+      - pwa-data:/data
+    restart: unless-stopped
+
+volumes:
+  pwa-data:
