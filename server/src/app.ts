@@ -55,8 +55,21 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
 
   const clientDist = path.resolve(process.cwd(), "public");
   if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
+    app.use(
+      express.static(clientDist, {
+        setHeaders(res, filePath) {
+          // The service worker, its Workbox chunks, the manifest and the HTML entry must
+          // always revalidate or PWA updates never land. Content-hashed assets are immutable.
+          if (/(sw\.js|workbox-[^/\\]+\.js|manifest\.webmanifest|index\.html)$/.test(filePath)) {
+            res.setHeader("Cache-Control", "no-cache");
+          } else if (/[/\\]assets[/\\]/.test(filePath)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        },
+      }),
+    );
     app.get(/^(?!\/api).*/, (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path.join(clientDist, "index.html"));
     });
   }

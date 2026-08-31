@@ -1,8 +1,15 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      // `virtual:pwa-register` only exists during a real Vite build (vite-plugin-pwa).
+      "virtual:pwa-register": fileURLToPath(new URL("./src/test/pwaRegisterStub.ts", import.meta.url)),
+    },
+  },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts", "./src/test/setupLocal.ts"],
@@ -10,7 +17,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/test/**", "src/vite-env.d.ts"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/test/**", "src/vite-env.d.ts", "src/sw/**"],
     },
   },
 });
