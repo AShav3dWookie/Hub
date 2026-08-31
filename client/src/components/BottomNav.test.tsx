@@ -20,16 +20,18 @@ function renderNav(initialEntries: string[], initialIndex = initialEntries.lengt
 }
 
 describe("BottomNav", () => {
-  it("renders nothing on the home screen", () => {
+  it("shows only Settings on the home screen", () => {
     renderNav(["/"]);
     expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 
-  it("shows Back and Home on other routes", () => {
+  it("shows Back, Home and Settings on other routes", () => {
     renderNav(["/gallery"]);
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 
   it("Back pops history when there is in-app history", async () => {

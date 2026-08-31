@@ -8,6 +8,8 @@ import { api } from "../api/client.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
+import { OfflineNotice } from "../components/OfflineNotice.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
 
 export function AlbumAddForm() {
@@ -21,6 +23,7 @@ export function AlbumAddForm() {
   const [error, setError] = useState<string | null>(null);
 
   const createAlbum = useCreateAlbum();
+  const online = useOnlineStatus();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -176,9 +179,10 @@ export function AlbumAddForm() {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+      <OfflineNotice />
       <button
         type="submit"
-        disabled={createAlbum.isPending}
+        disabled={createAlbum.isPending || !online}
         className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
       >
         Create album

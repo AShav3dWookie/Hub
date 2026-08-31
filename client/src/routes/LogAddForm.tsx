@@ -8,9 +8,12 @@ import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 import { useToast } from "../components/ToastProvider.js";
+import { OfflineNotice } from "../components/OfflineNotice.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
   const fields = CATEGORY_FIELDS[category];
+  const online = useOnlineStatus();
   const [searchParams] = useSearchParams();
   const [title, setTitle] = useState("");
   const debouncedTitle = useDebouncedValue(title, 300);
@@ -245,9 +248,10 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+      <OfflineNotice />
       <button
         type="submit"
-        disabled={createLog.isPending}
+        disabled={createLog.isPending || !online}
         className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
       >
         Save
