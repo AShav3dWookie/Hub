@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import type { SyncChangesResponse } from "@logger/shared";
+
+const warmThumbnails = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("./thumbnailCache.js", async (orig) => ({
+  ...(await orig<typeof import("./thumbnailCache.js")>()),
+  warmThumbnails,
+}));
+
 import { pullChanges, SyncError } from "./pull.js";
 import {
   getDB,
@@ -9,7 +16,7 @@ import {
   META_LAST_SYNC_AT,
   META_LAST_SYNC_ERROR,
 } from "../local/db.js";
-import { makeEntity, makeLog, resetFixtureCounters } from "../test/seedLocalDb.js";
+import { makeEntity, makeLog, makePhoto, resetFixtureCounters } from "../test/seedLocalDb.js";
 
 interface PageOverrides {
   changes?: Partial<SyncChangesResponse["changes"]>;
@@ -31,7 +38,10 @@ function page(over: PageOverrides = {}): SyncChangesResponse {
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
 
 describe("pullChanges", () => {
-  beforeEach(() => resetFixtureCounters());
+  beforeEach(() => {
+    resetFixtureCounters();
+    warmThumbnails.mockClear();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("walks every page from the stored cursor and applies each", async () => {
@@ -103,6 +113,18 @@ describe("pullChanges", () => {
     expect(await getMeta(META_LAST_SYNC_ERROR)).toBe("auth");
     expect(await getMeta<string>(META_SYNC_CURSOR)).toBe("5");
     expect(await db.count("entities")).toBe(1);
+  });
+
+  it("warms the thumbnail cache with every photo it pulls", async () => {
+    const photo = makePhoto({ thumbnailUrl: "/api/photos/xyz_thumb.webp" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(ok(page({ changes: { photos: [photo] }, nextCursor: "9" })))),
+    );
+
+    await pullChanges();
+
+    expect(warmThumbnails).toHaveBeenCalledWith(["/api/photos/xyz_thumb.webp"]);
   });
 
   it("a network failure is classified and rethrown", async () => {

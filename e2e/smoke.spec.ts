@@ -36,12 +36,11 @@ test.describe("app smoke", () => {
     await expect(page.getByText(/Interstellar|Dune/).first()).toBeVisible();
   });
 
-  test("gallery route loads (no photos in the seed) without error", async ({ page }) => {
+  test("gallery route shows the seeded photos", async ({ page }) => {
     await gotoHome(page);
     await page.getByRole("link", { name: "Gallery", exact: true }).click();
     await expect(page).toHaveURL(/\/gallery/);
-    // No uncaught errors, page settled.
-    await expect(page.locator("body")).toBeVisible();
+    await expect(page.getByRole("img").first()).toBeVisible();
   });
 
   test("the service worker registers and takes control", async ({ page }) => {

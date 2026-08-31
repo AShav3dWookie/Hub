@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
 
 const SWIPE_THRESHOLD = 60; // px of horizontal travel to commit a swipe
 const AXIS_LOCK = 8; // px of travel before we decide the gesture is horizontal / vertical
@@ -46,11 +46,14 @@ export function Lightbox({
   const [dragX, setDragX] = useState(0);
   const [settling, setSettling] = useState<Settling>(null);
 
+  const [srcFailed, setSrcFailed] = useState(false);
+
   // A swap of `src` (our own commit, a delete, or an external jump) resettles the track.
   useEffect(() => {
     setDragX(0);
     setSettling(null);
     settlingRef.current = null;
+    setSrcFailed(false);
   }, [src]);
 
   function beginSettle(dir: Exclude<Settling, null>) {
@@ -229,12 +232,24 @@ export function Lightbox({
             )}
           </div>
           <div className="flex h-full w-full shrink-0 items-center justify-center">
-            <img
-              src={src}
-              alt={alt}
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-full max-w-full rounded-md object-contain"
-            />
+            {srcFailed ? (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="flex flex-col items-center gap-2 px-6 text-center text-slate-300"
+              >
+                <ImageOff size={48} strokeWidth={1.5} />
+                <p className="text-sm">Full photo unavailable offline</p>
+                <p className="text-xs text-slate-500">Reconnect to download it</p>
+              </div>
+            ) : (
+              <img
+                src={src}
+                alt={alt}
+                onClick={(e) => e.stopPropagation()}
+                onError={() => setSrcFailed(true)}
+                className="max-h-full max-w-full rounded-md object-contain"
+              />
+            )}
           </div>
           <div className="flex h-full w-full shrink-0 items-center justify-center">
             {nextSrc && (
