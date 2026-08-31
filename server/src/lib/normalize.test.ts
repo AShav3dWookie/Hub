@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTitle } from "./normalize.js";
+import { normalizeTitle } from "@logger/shared";
 
 describe("normalizeTitle", () => {
   it("lowercases and trims", () => {

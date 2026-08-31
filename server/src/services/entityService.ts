@@ -1,7 +1,7 @@
 import { eq, and, like, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities } from "../db/schema.js";
-import { normalizeTitle } from "../lib/normalize.js";
+import { normalizeTitle } from "@logger/shared";
 import { NotFoundError, BadRequestError } from "../lib/errors.js";
 import type { Category, EntitySummary } from "@logger/shared";
 
