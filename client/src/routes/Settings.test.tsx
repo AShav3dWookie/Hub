@@ -9,6 +9,7 @@ import {
   useOnlineStatus,
   useSyncStatus,
   useForceSync,
+  usePeriodicSyncStatus,
   useThumbnailCacheStats,
   useClearThumbnailCache,
 } from "../api/localHooks.js";
@@ -26,6 +27,9 @@ beforeEach(() => {
     isPending: false,
     isError: false,
   } as unknown as ReturnType<typeof useForceSync>);
+  vi.mocked(usePeriodicSyncStatus).mockReturnValue({
+    data: "unsupported",
+  } as ReturnType<typeof usePeriodicSyncStatus>);
   vi.mocked(useThumbnailCacheStats).mockReturnValue({
     data: { count: 12, bytes: 512_000 },
   } as ReturnType<typeof useThumbnailCacheStats>);
@@ -52,6 +56,14 @@ describe("Settings", () => {
     expect(screen.getByText(/12 · 500 KB/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /clear thumbnails/i }));
     expect(clearMutate).toHaveBeenCalledOnce();
+  });
+
+  it("shows the background-sync status", () => {
+    vi.mocked(usePeriodicSyncStatus).mockReturnValue({
+      data: "active",
+    } as ReturnType<typeof usePeriodicSyncStatus>);
+    renderWithProviders(<Settings />);
+    expect(screen.getByText("On — daily")).toBeInTheDocument();
   });
 
   it("surfaces a sync error", () => {

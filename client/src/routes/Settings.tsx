@@ -3,9 +3,17 @@ import {
   useOnlineStatus,
   useSyncStatus,
   useForceSync,
+  usePeriodicSyncStatus,
   useThumbnailCacheStats,
   useClearThumbnailCache,
 } from "../api/localHooks.js";
+
+const BACKGROUND_SYNC_LABEL: Record<string, string> = {
+  active: "On — daily",
+  denied: "Off — allow background sync for this site",
+  unsupported: "Not available on this device",
+  error: "Unavailable",
+};
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? "dev";
 
@@ -60,6 +68,7 @@ const SYNC_ERROR_LABEL: Record<string, string> = {
 export function Settings() {
   const online = useOnlineStatus();
   const { data: sync } = useSyncStatus();
+  const { data: pbs } = usePeriodicSyncStatus();
   const forceSync = useForceSync();
   const { data: cache } = useThumbnailCacheStats();
   const clearThumbs = useClearThumbnailCache();
@@ -82,7 +91,10 @@ export function Settings() {
       <Section title="Sync">
         <Row label="Last sync" value={relativeTime(sync?.lastSyncAt ?? null)} />
         <Row label="Schedule" value={`When opened, and daily at ${clockTime(sync?.nextScheduledAt ?? null)}`} />
-        <Row label="Background sync" value="Not set up" />
+        <Row
+          label="Background sync"
+          value={pbs ? (BACKGROUND_SYNC_LABEL[pbs] ?? "Unknown") : "…"}
+        />
         {sync?.lastError && (
           <p className="text-sm text-amber-600 dark:text-amber-400">
             {SYNC_ERROR_LABEL[sync.lastError] ?? SYNC_ERROR_LABEL.unknown}
