@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category } from "@logger/shared";
+import type { Category, SyncEntityType } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -201,9 +201,6 @@ export const syncState = sqliteTable("sync_state", {
   id: integer("id").primaryKey(),
   nextRowSeq: integer("next_row_seq").notNull(),
 });
-
-/** The tables whose deletions the change-feed reports as tombstones. */
-export type SyncEntityType = "entity" | "log" | "log_photo" | "album" | "entity_note";
 
 /**
  * Tombstone log. Every hard delete of a syncable row inserts a row here (via an `AFTER DELETE`

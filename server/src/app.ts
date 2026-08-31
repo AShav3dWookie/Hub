@@ -15,6 +15,7 @@ import { createCalendarRouter } from "./routes/calendar.js";
 import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
+import { createSyncRouter } from "./routes/sync.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -49,6 +50,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/calendar", requireAuth, createCalendarRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
+  app.use("/api/sync", requireAuth, createSyncRouter(db));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");

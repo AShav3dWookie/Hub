@@ -87,6 +87,12 @@ export const galleryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 
+export const syncChangesQuerySchema = z.object({
+  /** rowSeq high-watermark; 0 (the default) bootstraps the whole dataset. Opaque to clients. */
+  since: z.coerce.number().int().min(0).optional().default(0),
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(500),
+});
+
 const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")

@@ -134,27 +134,27 @@ CREATE TRIGGER `entity_notes_sync_ad` AFTER DELETE ON `entity_notes` BEGIN
   UPDATE `sync_state` SET `next_row_seq` = `next_row_seq` + 1;
 END;--> statement-breakpoint
 
--- Join-table edits are folded into the parent row's row_seq: touching updated_at makes the
--- parent's own AFTER UPDATE trigger claim a fresh row_seq. The EXISTS guard skips the touch
--- when the parent is itself being deleted (its cascade removes these rows).
+-- Join-table edits are folded into the parent row(s)' row_seq: touching `updated_at` makes
+-- the parent's own AFTER UPDATE trigger claim a fresh row_seq. `album_events` has two parents
+-- (the album and the log) and bumps both so the delta feed re-emits each with fresh link
+-- arrays. `WHERE id = OLD.x` is a harmless no-op when the parent is itself being deleted.
 CREATE TRIGGER `log_people_sync_ai` AFTER INSERT ON `log_people` BEGIN
   UPDATE `logs` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = NEW.`log_id`;
 END;--> statement-breakpoint
-CREATE TRIGGER `log_people_sync_ad` AFTER DELETE ON `log_people`
-  WHEN EXISTS (SELECT 1 FROM `logs` WHERE `id` = OLD.`log_id`) BEGIN
+CREATE TRIGGER `log_people_sync_ad` AFTER DELETE ON `log_people` BEGIN
   UPDATE `logs` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = OLD.`log_id`;
 END;--> statement-breakpoint
 CREATE TRIGGER `album_events_sync_ai` AFTER INSERT ON `album_events` BEGIN
   UPDATE `albums` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = NEW.`album_id`;
+  UPDATE `logs` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = NEW.`log_id`;
 END;--> statement-breakpoint
-CREATE TRIGGER `album_events_sync_ad` AFTER DELETE ON `album_events`
-  WHEN EXISTS (SELECT 1 FROM `albums` WHERE `id` = OLD.`album_id`) BEGIN
+CREATE TRIGGER `album_events_sync_ad` AFTER DELETE ON `album_events` BEGIN
   UPDATE `albums` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = OLD.`album_id`;
+  UPDATE `logs` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = OLD.`log_id`;
 END;--> statement-breakpoint
 CREATE TRIGGER `album_people_sync_ai` AFTER INSERT ON `album_people` BEGIN
   UPDATE `albums` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = NEW.`album_id`;
 END;--> statement-breakpoint
-CREATE TRIGGER `album_people_sync_ad` AFTER DELETE ON `album_people`
-  WHEN EXISTS (SELECT 1 FROM `albums` WHERE `id` = OLD.`album_id`) BEGIN
+CREATE TRIGGER `album_people_sync_ad` AFTER DELETE ON `album_people` BEGIN
   UPDATE `albums` SET `updated_at` = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE `id` = OLD.`album_id`;
 END;
