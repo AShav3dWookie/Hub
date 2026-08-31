@@ -45,6 +45,11 @@ export function createDb(dbPath: string) {
     );
   }
   sqlite.pragma("foreign_keys = ON");
+  // Delta-sync bookkeeping (row_seq / sync_deletions) is driven by triggers. This lets a
+  // trigger fired by an ON DELETE CASCADE fire its own triggers in turn, so cascade-deleted
+  // rows still get tombstoned. The row_seq triggers guard against self-recursion with a
+  // `WHEN NEW.row_seq = OLD.row_seq` clause (see migration 0007).
+  sqlite.pragma("recursive_triggers = ON");
   return drizzle(sqlite, { schema });
 }
 
