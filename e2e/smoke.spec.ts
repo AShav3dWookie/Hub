@@ -44,12 +44,12 @@ test.describe("app smoke", () => {
     await expect(page.locator("body")).toBeVisible();
   });
 
-  test("no service worker is registered yet (pre-PWA baseline)", async ({ page }) => {
+  test("the service worker registers and takes control", async ({ page }) => {
     await gotoHome(page);
-    const reg = await page.evaluate(async () => {
-      if (!("serviceWorker" in navigator)) return "unsupported";
-      return (await navigator.serviceWorker.getRegistration()) ? "registered" : "none";
-    });
-    expect(reg).toBe("none");
+    await expect
+      .poll(async () => page.evaluate(() => navigator.serviceWorker.controller?.state ?? null), {
+        timeout: 10_000,
+      })
+      .toBe("activated");
   });
 });

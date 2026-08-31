@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { useSync } from "./sync/useSync.js";
+import { useRegisterServiceWorker } from "./sw/useRegisterServiceWorker.js";
 import { Layout } from "./components/Layout.js";
 import { ProtectedRoute } from "./components/ProtectedRoute.js";
 import { Home } from "./routes/Home.js";
@@ -16,6 +17,7 @@ import { Login } from "./routes/Login.js";
 
 export function App() {
   useSync();
+  useRegisterServiceWorker();
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

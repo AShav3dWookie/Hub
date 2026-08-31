@@ -7,32 +7,43 @@ export async function gotoHome(page: Page): Promise<void> {
 }
 
 /**
- * The state of the page's active service worker (`"activated"`, `"installing"`, …),
- * or `null` when nothing is registered. Polls briefly since registration is async.
+ * Waits for the page's service worker to have an **active** worker and returns its state
+ * (normally `"activated"`), or `null` if none activates within `timeoutMs`.
  */
-export async function serviceWorkerState(page: Page, timeoutMs = 10_000): Promise<string | null> {
+export async function serviceWorkerState(page: Page, timeoutMs = 15_000): Promise<string | null> {
   return page.evaluate(async (timeout) => {
     if (!("serviceWorker" in navigator)) return null;
     const deadline = Date.now() + timeout;
+    await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((r) => setTimeout(r, timeout)),
+    ]);
+    let state: string | null = null;
     while (Date.now() < deadline) {
       const reg = await navigator.serviceWorker.getRegistration();
-      const worker = reg?.active ?? reg?.waiting ?? reg?.installing ?? null;
-      if (worker) return worker.state;
-      await new Promise((r) => setTimeout(r, 200));
+      state = reg?.active?.state ?? null;
+      if (state === "activated") return state;
+      await new Promise((r) => setTimeout(r, 100));
     }
-    return null;
+    return state;
   }, timeoutMs);
 }
 
-/** Read every record from an IndexedDB object store, in the page's origin. `[]` if absent. */
+/**
+ * Read every record from an IndexedDB object store in the page's origin. `[]` if the database
+ * doesn't exist yet — it never *creates* one (that would pre-empt the app's own schema
+ * upgrade and wedge it).
+ */
 export async function readStore<T = unknown>(
   page: Page,
   dbName: string,
   storeName: string,
 ): Promise<T[]> {
   return page.evaluate(
-    ({ dbName, storeName }) =>
-      new Promise<T[]>((resolve, reject) => {
+    async ({ dbName, storeName }) => {
+      const existing = await indexedDB.databases();
+      if (!existing.some((d) => d.name === dbName)) return [] as T[];
+      return new Promise<T[]>((resolve, reject) => {
         const open = indexedDB.open(dbName);
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
@@ -49,7 +60,8 @@ export async function readStore<T = unknown>(
             resolve(req.result as T[]);
           };
         };
-      }),
+      });
+    },
     { dbName, storeName },
   );
 }
