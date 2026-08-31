@@ -4,15 +4,23 @@ import { createHandlerBoundToURL, precacheAndRoute, cleanupOutdatedCaches } from
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies";
 import { THUMB_CACHE } from "../sync/thumbnailCache.js";
+import { pullChanges } from "../sync/pull.js";
+import { PERIODIC_SYNC_TAG } from "./periodicSync.js";
 
 /**
  * The Logger service worker (injectManifest). Precaches the built app shell so the app opens
- * with zero network, routes navigations to the cached `index.html`, and keeps `/api` on the
- * network — the sync engine owns offline data. The thumbnail / original image caches are
- * added in the next branches.
+ * with zero network, routes navigations to the cached `index.html`, keeps `/api` on the
+ * network (the sync engine owns offline data), caches thumbnails permanently, and runs the
+ * change-feed pull on the daily Periodic Background Sync.
  */
 
-declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> };
+declare const self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
+};
+
+interface PeriodicSyncEvent extends ExtendableEvent {
+  tag: string;
+}
 
 self.skipWaiting();
 clientsClaim();
@@ -46,3 +54,12 @@ registerRoute(
 
 // Everything else under /api (mutations, photos for now) is online-only.
 registerRoute(({ url }) => url.pathname.startsWith("/api/"), new NetworkOnly());
+
+// Daily Periodic Background Sync: pull the change-feed into the replica so an unopened,
+// installed app still converges. Best-effort — a failed pull is recorded in meta.
+self.addEventListener("periodicsync", (event) => {
+  const e = event as PeriodicSyncEvent;
+  if (e.tag === PERIODIC_SYNC_TAG) {
+    e.waitUntil(pullChanges().catch(() => undefined));
+  }
+});

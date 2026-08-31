@@ -8,6 +8,7 @@ import {
 import { forceSync, nextScheduledSyncAt } from "../sync/engine.js";
 import type { SyncErrorKind } from "../sync/pull.js";
 import { thumbnailCacheStats, clearThumbnailCache } from "../sync/thumbnailCache.js";
+import { periodicSyncStatus, type PeriodicSyncStatus } from "../sw/periodicSync.js";
 
 /** Live `navigator.onLine`. */
 export function useOnlineStatus(): boolean {
@@ -51,6 +52,13 @@ export function useForceSync() {
       void queryClient.invalidateQueries({ queryKey: ["sync-status"] });
       void queryClient.invalidateQueries();
     },
+  });
+}
+
+export function usePeriodicSyncStatus() {
+  return useQuery<PeriodicSyncStatus>({
+    queryKey: ["periodic-sync-status"],
+    queryFn: () => periodicSyncStatus(),
   });
 }
 

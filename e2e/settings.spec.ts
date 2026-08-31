@@ -10,6 +10,9 @@ test.describe("Settings", () => {
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(page.getByText("Online")).toBeVisible();
     await expect(page.getByText("Last sync")).toBeVisible();
+    // Background sync resolves to a real state (headless Chromium can't grant it).
+    await expect(page.getByText("Background sync", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Not available on this device|Off — allow|On — daily/)).toBeVisible();
 
     await page.getByRole("button", { name: /sync now/i }).click();
     // it settles back out of the syncing state
