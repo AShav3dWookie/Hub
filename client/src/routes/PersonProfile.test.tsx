@@ -3,23 +3,14 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { primeRepo } from "../test/mockRepo.js";
 import { PersonProfile } from "./PersonProfile.js";
 import type { GalleryPhotoDTO } from "@logger/shared";
 
+vi.mock("../local/repo.js");
+import { repo } from "../local/repo.js";
+
 const NOW = "2024-05-01T00:00:00.000Z";
-
-function jsonResponse(body: unknown, status = 200) {
-  return { ok: status < 400, status, json: async () => body };
-}
-
-/** Serve /entities/:id (profile), /entities/:id/notes (empty), /entities/:id/photos (given photos). */
-function mockApi(profile: unknown, photos: GalleryPhotoDTO[] = []) {
-  (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-    if (url.includes("/photos")) return Promise.resolve(jsonResponse({ photos, nextCursor: null }));
-    if (url.includes("/notes")) return Promise.resolve(jsonResponse([]));
-    return Promise.resolve(jsonResponse(profile));
-  });
-}
 
 function photo(id: number): GalleryPhotoDTO {
   return {
@@ -33,6 +24,13 @@ function photo(id: number): GalleryPhotoDTO {
   };
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function setProfile(profile: any, photos: GalleryPhotoDTO[] = []) {
+  vi.mocked(repo.getEntityDetail).mockResolvedValue(profile);
+  vi.mocked(repo.getGallery).mockResolvedValue({ photos, nextCursor: null });
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function renderProfile() {
   return renderWithProviders(
     <Routes>
@@ -44,12 +42,10 @@ function renderProfile() {
 }
 
 describe("PersonProfile", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
+  beforeEach(() => primeRepo(repo));
 
   it("renders stats and appearances", async () => {
-    mockApi({
+    setProfile({
       type: "person",
       entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
       appearances: [
@@ -61,6 +57,8 @@ describe("PersonProfile", () => {
           notes: "loved it",
           people: [],
           photos: [],
+          albums: [],
+          autoDelete: false,
           createdAt: NOW,
           updatedAt: NOW,
           entity: { id: 3, category: "movie", title: "Inception", createdAt: NOW, releaseYear: null, author: null },
@@ -79,7 +77,7 @@ describe("PersonProfile", () => {
   });
 
   it("does not show a rating bar for a non-rated appearance (hang-out)", async () => {
-    mockApi({
+    setProfile({
       type: "person",
       entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
       appearances: [
@@ -91,6 +89,8 @@ describe("PersonProfile", () => {
           notes: null,
           people: [],
           photos: [],
+          albums: [],
+          autoDelete: false,
           createdAt: NOW,
           updatedAt: NOW,
           entity: { id: 4, category: "hang_out", title: "Bowling night", createdAt: NOW, releaseYear: null, author: null },
@@ -106,7 +106,7 @@ describe("PersonProfile", () => {
   });
 
   it("shows only the year for a year-granularity appearance (book)", async () => {
-    mockApi({
+    setProfile({
       type: "person",
       entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
       appearances: [
@@ -118,6 +118,8 @@ describe("PersonProfile", () => {
           notes: null,
           people: [],
           photos: [],
+          albums: [],
+          autoDelete: false,
           createdAt: NOW,
           updatedAt: NOW,
           entity: { id: 3, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
@@ -133,7 +135,7 @@ describe("PersonProfile", () => {
   });
 
   it("shows an empty state when there are no appearances", async () => {
-    mockApi({
+    setProfile({
       type: "person",
       entity: { id: 7, category: "person", title: "Newbie", createdAt: NOW, releaseYear: null, author: null },
       appearances: [],
@@ -145,7 +147,7 @@ describe("PersonProfile", () => {
   });
 
   it("redirects to the entity page when the id is not a person", async () => {
-    mockApi({
+    setProfile({
       type: "entity",
       id: 7,
       category: "movie",
@@ -164,14 +166,14 @@ describe("PersonProfile", () => {
   });
 
   const personProfile = {
-    type: "person",
-    entity: { id: 7, category: "person", title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
+    type: "person" as const,
+    entity: { id: 7, category: "person" as const, title: "Sarah", createdAt: NOW, releaseYear: null, author: null },
     appearances: [],
     stats: { totalLogs: 0, favoriteCategory: null, mostFrequentCoPerson: null },
   };
 
   it("renders the person's linked photos as a grid with no delete control", async () => {
-    mockApi(personProfile, [photo(2), photo(1)]);
+    setProfile(personProfile, [photo(2), photo(1)]);
     renderProfile();
 
     const thumbs = await screen.findAllByRole("img");
@@ -184,7 +186,7 @@ describe("PersonProfile", () => {
   });
 
   it("shows a per-person empty state when there are no linked photos", async () => {
-    mockApi(personProfile, []);
+    setProfile(personProfile, []);
     renderProfile();
     expect(await screen.findByText("No photos of Sarah yet.")).toBeInTheDocument();
   });
