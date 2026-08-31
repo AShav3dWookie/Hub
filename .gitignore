@@ -11,3 +11,7 @@ coverage/
 *.tsbuildinfo
 .claude/
 .playwright-mcp/
+server/public/
+e2e/.artifacts/
+playwright-report/
+test-results/

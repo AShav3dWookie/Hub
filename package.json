@@ -16,6 +16,9 @@
     "test:client": "npm run test --workspace client",
     "test:coverage": "npm run test:coverage --workspace server && npm run test:coverage --workspace client",
     "lint": "npm run lint --workspace server && npm run lint --workspace client",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report e2e/.artifacts/report",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json",
     "db:generate": "drizzle-kit generate --config server/drizzle.config.ts",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build",
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^2.1.9",
     "drizzle-orm": "^0.45.2",
     "eslint": "^10.9.1",
