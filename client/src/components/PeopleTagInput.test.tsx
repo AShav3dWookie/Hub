@@ -4,11 +4,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PersonTagInput } from "@logger/shared";
+import { primeRepo } from "../test/mockRepo.js";
 import { PeopleTagInput } from "./PeopleTagInput.js";
 
-function jsonResponse(body: unknown, status = 200) {
-  return { ok: status < 400, status, json: async () => body };
-}
+vi.mock("../local/repo.js");
+import { repo } from "../local/repo.js";
 
 /** Controlled wrapper so the component behaves as it does in a real form. */
 function Harness({ initial = [] as PersonTagInput[] }) {
@@ -23,9 +23,7 @@ function Harness({ initial = [] as PersonTagInput[] }) {
 }
 
 describe("PeopleTagInput", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([])));
-  });
+  beforeEach(() => primeRepo(repo));
 
   it("adds a new person by typing a name and pressing Enter", async () => {
     render(<Harness />);
@@ -50,9 +48,9 @@ describe("PeopleTagInput", () => {
   });
 
   it("adds an existing person from the autocomplete list by id", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse([{ id: 12, title: "Sarah", category: "person" }]),
-    );
+    vi.mocked(repo.searchEntitiesByTitle).mockResolvedValue([
+      { id: 12, title: "Sarah", category: "person" },
+    ]);
     render(<Harness />);
     await userEvent.type(screen.getByPlaceholderText(/Add a person/), "Sar");
 

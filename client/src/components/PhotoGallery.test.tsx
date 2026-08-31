@@ -5,6 +5,13 @@ import { renderWithProviders } from "../test/renderWithProviders.js";
 import { PhotoGallery } from "./PhotoGallery.js";
 import type { LogPhotoDTO } from "@logger/shared";
 
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
+
 const NOW = "2024-05-01T00:00:00.000Z";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -25,8 +32,6 @@ function photo(id: number): LogPhotoDTO {
 describe("PhotoGallery", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
-    // Take the Lightbox's instant (reduced-motion) nav path so these specs don't
-    // have to pump CSS transitions — the slide itself is covered in Lightbox.test.
     vi.stubGlobal(
       "matchMedia",
       vi.fn().mockReturnValue({
@@ -57,9 +62,7 @@ describe("PhotoGallery", () => {
   });
 
   it("steps through photos with the arrow buttons and keys, hiding arrows at the ends", async () => {
-    renderWithProviders(
-      <PhotoGallery logId={7} photos={[photo(1), photo(2), photo(3)]} />,
-    );
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1), photo(2), photo(3)]} />);
 
     await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
     const dialog = await screen.findByRole("dialog");

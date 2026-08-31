@@ -3,7 +3,18 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { primeRepo } from "../test/mockRepo.js";
 import { AlbumDetail } from "./AlbumDetail.js";
+import type { AlbumDTO, GalleryResponse } from "@logger/shared";
+
+vi.mock("../local/repo.js");
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
+import { repo } from "../local/repo.js";
 
 const NOW = "2024-05-01T00:00:00.000Z";
 
@@ -11,7 +22,7 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
 
-function albumPayload(over: Record<string, unknown> = {}) {
+function albumPayload(over: Partial<AlbumDTO> = {}): AlbumDTO {
   return {
     id: 1,
     title: "Road Trip",
@@ -35,14 +46,7 @@ function albumPayload(over: Record<string, unknown> = {}) {
         autoDelete: false,
         createdAt: NOW,
         updatedAt: NOW,
-        entity: {
-          id: 9,
-          category: "movie",
-          title: "Heat",
-          createdAt: NOW,
-          releaseYear: null,
-          author: null,
-        },
+        entity: { id: 9, category: "movie", title: "Heat", createdAt: NOW, releaseYear: null, author: null },
       },
     ],
     people: [
@@ -54,7 +58,7 @@ function albumPayload(over: Record<string, unknown> = {}) {
   };
 }
 
-const photosPayload = {
+const photosPayload: GalleryResponse = {
   photos: [
     {
       id: 100,
@@ -81,29 +85,19 @@ const photosPayload = {
 type Call = { url: string; method: string };
 let calls: Call[];
 
-function mockFetch() {
+function trackFetch() {
   calls = [];
   (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? "GET" });
-    if (url.startsWith("/api/albums/1/photos")) {
-      return Promise.resolve(
-        init?.method && init.method !== "GET" ? jsonResponse([], 201) : jsonResponse(photosPayload),
-      );
-    }
-    if (url.startsWith("/api/albums/1")) {
-      if (init?.method === "DELETE") return Promise.resolve(jsonResponse(null, 204));
-      if (init?.method === "POST" || init?.method === "PUT") {
-        return Promise.resolve(jsonResponse(init.method === "POST" ? [] : albumPayload()));
-      }
-      return Promise.resolve(jsonResponse(albumPayload()));
-    }
-    return Promise.resolve(jsonResponse([]));
+    return Promise.resolve(
+      init?.method && init.method !== "GET" && init.method !== "DELETE"
+        ? jsonResponse([], 201)
+        : jsonResponse(undefined, 204),
+    );
   });
 }
 
-function lastMatching(pred: (c: Call) => boolean): Call | undefined {
-  return [...calls].reverse().find(pred);
-}
+const lastMatching = (pred: (c: Call) => boolean) => [...calls].reverse().find(pred);
 
 function renderDetail() {
   return renderWithProviders(
@@ -116,8 +110,11 @@ function renderDetail() {
 
 describe("AlbumDetail", () => {
   beforeEach(() => {
+    primeRepo(repo);
+    vi.mocked(repo.getAlbum).mockResolvedValue(albumPayload());
+    vi.mocked(repo.getGallery).mockResolvedValue(photosPayload);
     vi.stubGlobal("fetch", vi.fn());
-    mockFetch();
+    trackFetch();
   });
 
   it("renders header, events, people and the aggregated photo grid", async () => {
@@ -127,48 +124,31 @@ describe("AlbumDetail", () => {
     expect(screen.getByText("2024-04-01 – 2024-04-07")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "/entity/9");
 
-    // both the event photo and the loose photo, each once
     expect(await screen.findByRole("img", { name: "event.jpg" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "loose.jpg" })).toBeInTheDocument();
   });
 
   it("shows only the year for a year-granularity album event (book)", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method ?? "GET" });
-      if (url.startsWith("/api/albums/1/photos")) return Promise.resolve(jsonResponse(photosPayload));
-      if (url.startsWith("/api/albums/1")) {
-        return Promise.resolve(
-          jsonResponse(
-            albumPayload({
-              events: [
-                {
-                  id: 30,
-                  entityId: 9,
-                  rating: 4,
-                  date: "2022-01-01",
-                  notes: null,
-                  people: [],
-                  photos: [],
-                  albums: [],
-                  autoDelete: false,
-                  createdAt: NOW,
-                  updatedAt: NOW,
-                  entity: {
-                    id: 9,
-                    category: "book",
-                    title: "Dune",
-                    createdAt: NOW,
-                    releaseYear: null,
-                    author: null,
-                  },
-                },
-              ],
-            }),
-          ),
-        );
-      }
-      return Promise.resolve(jsonResponse([]));
-    });
+    vi.mocked(repo.getAlbum).mockResolvedValue(
+      albumPayload({
+        events: [
+          {
+            id: 30,
+            entityId: 9,
+            rating: 4,
+            date: "2022-01-01",
+            notes: null,
+            people: [],
+            photos: [],
+            albums: [],
+            autoDelete: false,
+            createdAt: NOW,
+            updatedAt: NOW,
+            entity: { id: 9, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
+          },
+        ],
+      }),
+    );
 
     renderDetail();
 
@@ -188,12 +168,10 @@ describe("AlbumDetail", () => {
   it("only lets you delete loose photos from the album view", async () => {
     renderDetail();
 
-    // open the loose photo → delete control present
     await userEvent.click(await screen.findByRole("img", { name: "loose.jpg" }));
     expect(screen.getByRole("button", { name: /delete photo/i })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
 
-    // open the event photo → no delete control
     await userEvent.click(screen.getByRole("img", { name: "event.jpg" }));
     expect(screen.queryByRole("button", { name: /delete photo/i })).not.toBeInTheDocument();
   });
@@ -206,37 +184,24 @@ describe("AlbumDetail", () => {
   });
 
   it("links a new event picked from the search box", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method ?? "GET" });
-      if (url.startsWith("/api/search")) {
-        return Promise.resolve(
-          jsonResponse({
-            groupBy: "log",
-            logs: [
-              {
-                id: 55,
-                entityId: 40,
-                rating: null,
-                date: "2024-04-03",
-                notes: null,
-                people: [],
-                photos: [],
-                albums: [],
-                autoDelete: false,
-                createdAt: NOW,
-                updatedAt: NOW,
-                entity: { id: 40, category: "movie", title: "Sicario", createdAt: NOW, releaseYear: null, author: null },
-              },
-            ],
-          }),
-        );
-      }
-      if (url.startsWith("/api/albums/1/photos")) return Promise.resolve(jsonResponse(photosPayload));
-      if (url.startsWith("/api/albums/1")) {
-        if (init?.method === "POST") return Promise.resolve(jsonResponse([]));
-        return Promise.resolve(jsonResponse(albumPayload()));
-      }
-      return Promise.resolve(jsonResponse([]));
+    vi.mocked(repo.search).mockResolvedValue({
+      groupBy: "log",
+      logs: [
+        {
+          id: 55,
+          entityId: 40,
+          rating: null,
+          date: "2024-04-03",
+          notes: null,
+          people: [],
+          photos: [],
+          albums: [],
+          autoDelete: false,
+          createdAt: NOW,
+          updatedAt: NOW,
+          entity: { id: 40, category: "movie", title: "Sicario", createdAt: NOW, releaseYear: null, author: null },
+        },
+      ],
     });
 
     renderDetail();
@@ -269,9 +234,7 @@ describe("AlbumDetail", () => {
     await userEvent.upload(input, new File(["x"], "new.png", { type: "image/png" }));
 
     await vi.waitFor(() =>
-      expect(
-        lastMatching((c) => c.method === "POST" && c.url === "/api/albums/1/photos"),
-      ).toBeTruthy(),
+      expect(lastMatching((c) => c.method === "POST" && c.url === "/api/albums/1/photos")).toBeTruthy(),
     );
   });
 
@@ -294,10 +257,7 @@ describe("AlbumDetail", () => {
   it("adds a person to the album", async () => {
     renderDetail();
     await screen.findByRole("heading", { name: "Road Trip" });
-    await userEvent.type(
-      screen.getByPlaceholderText(/add a person/i),
-      "Robin{Enter}",
-    );
+    await userEvent.type(screen.getByPlaceholderText(/add a person/i), "Robin{Enter}");
     await userEvent.click(screen.getByRole("button", { name: /add to album/i }));
 
     await vi.waitFor(() =>

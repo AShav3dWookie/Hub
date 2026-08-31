@@ -3,8 +3,18 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { primeRepo } from "../test/mockRepo.js";
 import { EntityDetail } from "./EntityDetail.js";
 import type { Category, LogDTO, LogPhotoDTO } from "@logger/shared";
+
+vi.mock("../local/repo.js");
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
+import { repo } from "../local/repo.js";
 
 const NOW = "2024-05-01T00:00:00.000Z";
 
@@ -29,8 +39,8 @@ function log(overrides: Partial<LogDTO> = {}): LogDTO {
   };
 }
 
-function entityPayload(category: Category, logs: LogDTO[]) {
-  return {
+function setEntity(category: Category, logs: LogDTO[]) {
+  vi.mocked(repo.getEntityDetail).mockResolvedValue({
     type: "entity",
     id: 5,
     category,
@@ -42,7 +52,7 @@ function entityPayload(category: Category, logs: LogDTO[]) {
     visitCount: logs.length,
     averageRating: 4,
     latestDate: "2024-01-02",
-  };
+  });
 }
 
 function renderDetail() {
@@ -56,62 +66,46 @@ function renderDetail() {
 
 describe("EntityDetail photo gallery", () => {
   beforeEach(() => {
+    primeRepo(repo);
     vi.stubGlobal("fetch", vi.fn());
   });
 
   it("shows the photo gallery for a movie log", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [log({ photos: [] })])),
-    );
-
+    setEntity("movie", [log({ photos: [] })]);
     renderDetail();
-
     expect(await screen.findByRole("button", { name: /add photos/i })).toBeInTheDocument();
   });
 
   it("shows a subtle 'part of X album' link when the log belongs to an album", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [log({ albums: [{ id: 7, title: "Road Trip" }] })])),
-    );
-
+    setEntity("movie", [log({ albums: [{ id: 7, title: "Road Trip" }] })]);
     renderDetail();
-
     const link = await screen.findByRole("link", { name: "Road Trip" });
     expect(link).toHaveAttribute("href", "/album/7");
   });
 
   it("renders no album line when the log has no albums", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [log({ albums: [] })])),
-    );
-
+    setEntity("movie", [log({ albums: [] })]);
     renderDetail();
     await screen.findByRole("button", { name: /add photos/i });
     expect(screen.queryByText(/part of/i)).not.toBeInTheDocument();
   });
 
   it("renders existing photo thumbnails for an eating_out log", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(
-        entityPayload("eating_out", [
-          log({
-            photos: [
-              {
-                id: 8,
-                logId: 1,
-                url: "/api/photos/full-8.jpg",
-                thumbnailUrl: "/api/photos/thumb-8.webp",
-                originalName: "dinner.jpg",
-                createdAt: NOW,
-              },
-            ],
-          }),
-        ]),
-      ),
-    );
-
+    setEntity("eating_out", [
+      log({
+        photos: [
+          {
+            id: 8,
+            logId: 1,
+            url: "/api/photos/full-8.jpg",
+            thumbnailUrl: "/api/photos/thumb-8.webp",
+            originalName: "dinner.jpg",
+            createdAt: NOW,
+          },
+        ],
+      }),
+    ]);
     renderDetail();
-
     expect(await screen.findByRole("img", { name: "dinner.jpg" })).toHaveAttribute(
       "src",
       "/api/photos/thumb-8.webp",
@@ -120,12 +114,8 @@ describe("EntityDetail photo gallery", () => {
 
   it("does not show the gallery for TV / book / game logs", async () => {
     for (const category of ["tv", "book", "game"] as const) {
-      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-        jsonResponse(entityPayload(category, [log()])),
-      );
-
+      setEntity(category, [log()]);
       const { unmount } = renderDetail();
-
       await screen.findByText(`A ${category}`);
       expect(screen.queryByRole("button", { name: /add photos/i })).not.toBeInTheDocument();
       unmount();
@@ -134,19 +124,14 @@ describe("EntityDetail photo gallery", () => {
 
   it("shows the read-mode rating bar for rated categories but not for hang-out / appointment", async () => {
     for (const category of ["movie", "book"] as const) {
-      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-        jsonResponse(entityPayload(category, [log({ rating: 3 })])),
-      );
+      setEntity(category, [log({ rating: 3 })]);
       const { unmount } = renderDetail();
       await screen.findByText(`A ${category}`);
       expect(screen.getByRole("radiogroup", { name: "Rating" })).toBeInTheDocument();
       unmount();
     }
-
     for (const category of ["hang_out", "appointment"] as const) {
-      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-        jsonResponse(entityPayload(category, [log({ rating: null })])),
-      );
+      setEntity(category, [log({ rating: null })]);
       const { unmount } = renderDetail();
       await screen.findByText(`A ${category}`);
       expect(screen.queryByRole("radiogroup", { name: "Rating" })).not.toBeInTheDocument();
@@ -169,28 +154,17 @@ describe("EntityDetail photo gallery", () => {
     });
 
   it("view mode shows the thumbnail + Add photos but no per-photo delete", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [withPhoto()])),
-    );
-
+    setEntity("movie", [withPhoto()]);
     renderDetail();
-
     expect(await screen.findByRole("img", { name: "dinner.jpg" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Delete dinner.jpg" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete dinner.jpg" })).not.toBeInTheDocument();
   });
 
   it("the event editor exposes the per-photo delete (and keeps Add photos)", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [withPhoto()])),
-    );
-
+    setEntity("movie", [withPhoto()]);
     renderDetail();
-
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
-
     expect(screen.getByRole("button", { name: "Delete dinner.jpg" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
   });
@@ -198,6 +172,7 @@ describe("EntityDetail photo gallery", () => {
 
 describe("EntityDetail log deletion with photos", () => {
   beforeEach(() => {
+    primeRepo(repo);
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -210,20 +185,18 @@ describe("EntityDetail log deletion with photos", () => {
     createdAt: NOW,
   };
 
-  function mockDelete() {
+  function trackDeletes() {
     const calls: string[] = [];
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      if (init?.method === "DELETE") {
-        calls.push(url);
-        return Promise.resolve(jsonResponse(undefined, 204));
-      }
-      return Promise.resolve(jsonResponse(entityPayload("movie", [log({ photos: [photo] })])));
+      if (init?.method === "DELETE") calls.push(url);
+      return Promise.resolve(jsonResponse(undefined, 204));
     });
     return calls;
   }
 
   it("offers keep-vs-delete when the log has photos; 'keep' sends no query", async () => {
-    const calls = mockDelete();
+    setEntity("movie", [log({ photos: [photo] })]);
+    const calls = trackDeletes();
     renderDetail();
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
@@ -233,7 +206,8 @@ describe("EntityDetail log deletion with photos", () => {
   });
 
   it("'delete log & photos' sends ?deletePhotos=true", async () => {
-    const calls = mockDelete();
+    setEntity("movie", [log({ photos: [photo] })]);
+    const calls = trackDeletes();
     renderDetail();
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
@@ -245,46 +219,36 @@ describe("EntityDetail log deletion with photos", () => {
 
 describe("EntityDetail log date display", () => {
   beforeEach(() => {
+    primeRepo(repo);
     vi.stubGlobal("fetch", vi.fn());
   });
 
   it("shows only the year for a year-granularity category (book)", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("book", [log({ date: "2024-01-01" })])),
-    );
-
+    setEntity("book", [log({ date: "2024-01-01" })]);
     renderDetail();
-
     expect(await screen.findByText("2024")).toBeInTheDocument();
     expect(screen.queryByText("2024-01-01")).not.toBeInTheDocument();
   });
 
   it("shows the full date for a day-granularity category (movie)", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse(entityPayload("movie", [log({ date: "2024-03-05" })])),
-    );
-
+    setEntity("movie", [log({ date: "2024-03-05" })]);
     renderDetail();
-
     expect(await screen.findByText("2024-03-05")).toBeInTheDocument();
   });
 });
 
 describe("EntityDetail log edit mode", () => {
   beforeEach(() => {
+    primeRepo(repo);
     vi.stubGlobal("fetch", vi.fn());
   });
 
   it("edits a log's notes and PUTs the update", async () => {
+    setEntity("movie", [log({ notes: "first viewing" })]);
     const calls: Array<{ url: string; method?: string; body: unknown }> = [];
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
       calls.push({ url, method: init?.method, body: init?.body });
-      if (init?.method === "PUT") {
-        return Promise.resolve(jsonResponse(log({ notes: "second viewing" })));
-      }
-      return Promise.resolve(
-        jsonResponse(entityPayload("movie", [log({ notes: "first viewing" })])),
-      );
+      return Promise.resolve(jsonResponse(log({ notes: "second viewing" })));
     });
 
     renderDetail();
@@ -303,9 +267,10 @@ describe("EntityDetail log edit mode", () => {
   });
 
   it("cancels an edit without calling the API", async () => {
+    setEntity("movie", [log({ notes: "keep me" })]);
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init?: RequestInit) => {
       if (init?.method === "PUT") throw new Error("should not PUT on cancel");
-      return Promise.resolve(jsonResponse(entityPayload("movie", [log({ notes: "keep me" })])));
+      return Promise.resolve(jsonResponse({}));
     });
 
     renderDetail();
