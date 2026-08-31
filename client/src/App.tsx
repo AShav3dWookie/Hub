@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import { useSyncBootstrap } from "./sync/useSyncBootstrap.js";
+import { useSync } from "./sync/useSync.js";
 import { Layout } from "./components/Layout.js";
 import { ProtectedRoute } from "./components/ProtectedRoute.js";
 import { Home } from "./routes/Home.js";
@@ -15,7 +15,7 @@ import { Calendar } from "./routes/Calendar.js";
 import { Login } from "./routes/Login.js";
 
 export function App() {
-  useSyncBootstrap();
+  useSync();
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
