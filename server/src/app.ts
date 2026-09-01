@@ -50,7 +50,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/calendar", requireAuth, createCalendarRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
-  app.use("/api/sync", requireAuth, createSyncRouter(db));
+  app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");

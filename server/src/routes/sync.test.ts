@@ -6,7 +6,7 @@ import { createLog, updateLog, deleteLog } from "../services/logService.js";
 import { findOrCreateEntity } from "../services/entityService.js";
 import { createEntityNote } from "../services/entityNotesService.js";
 import { createAlbum, addAlbumEvent } from "../services/albumService.js";
-import type { SyncChangesResponse } from "@logger/shared";
+import type { MutationEnvelope, MutationResult, SyncChangesResponse } from "@logger/shared";
 
 describe("GET /api/sync/changes", () => {
   let ctx: ReturnType<typeof createTestDb>;
@@ -210,5 +210,218 @@ describe("GET /api/sync/changes", () => {
     expect(body.changes.entityNotes).toEqual([
       expect.objectContaining({ id: note.id, entityId: person.id, tag: "Birthday" }),
     ]);
+  });
+});
+
+describe("POST /api/sync/mutations", () => {
+  let ctx: ReturnType<typeof createTestDb>;
+  afterEach(() => ctx?.cleanup());
+
+  function setup() {
+    ctx = createTestDb();
+    return createApp(ctx.db);
+  }
+
+  const mutate = async (
+    app: ReturnType<typeof createApp>,
+    mutations: MutationEnvelope[],
+  ): Promise<MutationResult[]> => {
+    const res = await request(app).post("/api/sync/mutations").send({ mutations });
+    expect(res.status).toBe(200);
+    return res.body.results as MutationResult[];
+  };
+
+  const changesNow = async (app: ReturnType<typeof createApp>) => {
+    const res = await request(app).get("/api/sync/changes?since=0");
+    expect(res.status).toBe(200);
+    return res.body as SyncChangesResponse;
+  };
+
+  it("creates an entity, returns its temp→real idMap, and is idempotent on replay", async () => {
+    const app = setup();
+    const batch: MutationEnvelope[] = [
+      { mutationId: "m1", type: "entity.create", tempId: -1, payload: { category: "movie", title: "Heat" } },
+    ];
+
+    const [first] = await mutate(app, batch);
+    expect(first).toMatchObject({ mutationId: "m1", status: "applied" });
+    const realId = first.idMap?.[-1];
+    expect(realId).toEqual(expect.any(Number));
+    expect(realId).toBeGreaterThan(0);
+
+    // Replaying the same mutationId returns the stored result and creates nothing new.
+    const [replayed] = await mutate(app, batch);
+    expect(replayed).toEqual(first);
+
+    const body = await changesNow(app);
+    expect(body.changes.entities.filter((e) => e.title === "Heat")).toHaveLength(1);
+  });
+
+  it("resolves an intra-batch temp entityId on a following log.create", async () => {
+    const app = setup();
+    const results = await mutate(app, [
+      { mutationId: "e", type: "entity.create", tempId: -1, payload: { category: "movie", title: "Heat" } },
+      { mutationId: "l", type: "log.create", tempId: -2, payload: { entityId: -1, date: "2024-01-01", rating: 5 } },
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+    const entityId = results[0].idMap?.[-1];
+    const logId = results[1].idMap?.[-2];
+
+    const body = await changesNow(app);
+    const log = body.changes.logs.find((l) => l.id === logId);
+    expect(log).toMatchObject({ entityId, rating: 5 });
+  });
+
+  it("resolves a temp person id inside log.create people[]", async () => {
+    const app = setup();
+    const results = await mutate(app, [
+      { mutationId: "p", type: "entity.create", tempId: -2, payload: { category: "person", title: "Sam" } },
+      {
+        mutationId: "l",
+        type: "log.create",
+        tempId: -3,
+        payload: { category: "movie", title: "Heat", date: "2024-01-01", people: [{ id: -2 }] },
+      },
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+    const personId = results[0].idMap?.[-2];
+    const logId = results[1].idMap?.[-3];
+
+    const body = await changesNow(app);
+    expect(body.changes.logs.find((l) => l.id === logId)?.peopleIds).toEqual([personId]);
+  });
+
+  it("collapses entity.create onto an existing row via normalized-title dedup", async () => {
+    const app = setup();
+    const existing = findOrCreateEntity(ctx.db, "eating_out", "Chipotle");
+
+    const [r] = await mutate(app, [
+      { mutationId: "m1", type: "entity.create", tempId: -1, payload: { category: "eating_out", title: "  chipotle " } },
+    ]);
+    expect(r.status).toBe("applied");
+    expect(r.idMap?.[-1]).toBe(existing.id);
+  });
+
+  it("applies a stale-baseVersion update but flags it as a conflict", async () => {
+    const app = setup();
+    const log = createLog(ctx.db, {
+      category: "movie",
+      title: "Heat",
+      rating: 3,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    const v1 = (await changesNow(app)).changes.logs[0].version;
+    updateLog(ctx.db, log.id, { rating: 4, date: "2024-01-01", notes: "server edit", people: [] });
+    const v2 = (await changesNow(app)).changes.logs[0].version;
+    expect(v2).toBeGreaterThan(v1);
+
+    const batch: MutationEnvelope[] = [
+      {
+        mutationId: "u1",
+        type: "log.update",
+        baseVersion: v1,
+        payload: { logId: log.id, rating: 5, date: "2024-01-01", notes: "offline edit", people: [] },
+      },
+    ];
+    const [r] = await mutate(app, batch);
+    expect(r).toMatchObject({ mutationId: "u1", status: "conflict" });
+    expect(r.serverVersion).toBeGreaterThan(v2);
+
+    // Last write wins — the offline value is on the server.
+    expect((await changesNow(app)).changes.logs[0]).toMatchObject({ rating: 5, notes: "offline edit" });
+
+    // Replay returns the same conflict result.
+    expect((await mutate(app, batch))[0]).toEqual(r);
+  });
+
+  it("skips log.update / note.update against a missing row", async () => {
+    const app = setup();
+    const [r] = await mutate(app, [
+      { mutationId: "u", type: "log.update", payload: { logId: 987654, date: "2024-01-01", people: [] } },
+    ]);
+    expect(r).toMatchObject({ mutationId: "u", status: "skipped" });
+  });
+
+  it("handles log.delete with deletePhotos:true and delete-of-already-deleted", async () => {
+    const app = setup();
+    const a = createLog(ctx.db, {
+      category: "movie",
+      title: "One",
+      rating: 3,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    const b = createLog(ctx.db, {
+      category: "movie",
+      title: "Two",
+      rating: 3,
+      date: "2024-01-01",
+      notes: null,
+      people: [],
+    });
+    deleteLog(ctx.db, b.id); // already gone before its envelope arrives
+
+    const results = await mutate(app, [
+      { mutationId: "d1", type: "log.delete", payload: { logId: a.id, deletePhotos: true } },
+      { mutationId: "d2", type: "log.delete", payload: { logId: b.id } },
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+
+    const body = await changesNow(app);
+    expect(body.changes.logs.map((l) => l.id)).not.toContain(a.id);
+  });
+
+  it("isolates a poison envelope — it errors, later envelopes still apply, and it isn't re-run", async () => {
+    const app = setup();
+    const results = await mutate(app, [
+      // -99 was never created in this batch → unresolved temp id → throws → error.
+      { mutationId: "bad", type: "log.create", tempId: -1, payload: { entityId: -99, date: "2024-01-01" } },
+      { mutationId: "good", type: "entity.create", tempId: -2, payload: { category: "movie", title: "Survivor" } },
+    ]);
+    expect(results[0]).toMatchObject({ mutationId: "bad", status: "error" });
+    expect(results[0].error).toBeTruthy();
+    expect(results[1]).toMatchObject({ mutationId: "good", status: "applied" });
+
+    expect((await changesNow(app)).changes.entities.filter((e) => e.title === "Survivor")).toHaveLength(1);
+
+    // Replay: the poison result is served from cache, the good one is deduped.
+    const replay = await mutate(app, [
+      { mutationId: "bad", type: "log.create", tempId: -1, payload: { entityId: -99, date: "2024-01-01" } },
+      { mutationId: "good", type: "entity.create", tempId: -2, payload: { category: "movie", title: "Survivor" } },
+    ]);
+    expect(replay[0].status).toBe("error");
+    expect(replay[1]).toEqual(results[1]);
+    expect((await changesNow(app)).changes.entities.filter((e) => e.title === "Survivor")).toHaveLength(1);
+  });
+
+  it("preserves array order in the results", async () => {
+    const app = setup();
+    const batch: MutationEnvelope[] = ["a", "b", "c", "d", "e"].map((id, i) => ({
+      mutationId: id,
+      type: "entity.create" as const,
+      tempId: -(i + 1),
+      payload: { category: "movie", title: `Movie ${id}` },
+    }));
+    const results = await mutate(app, batch);
+    expect(results.map((r) => r.mutationId)).toEqual(["a", "b", "c", "d", "e"]);
+    expect(results.every((r) => r.status === "applied")).toBe(true);
+  });
+
+  it("400s on a malformed batch", async () => {
+    const app = setup();
+    expect((await request(app).post("/api/sync/mutations").send({})).status).toBe(400);
+    expect(
+      (await request(app).post("/api/sync/mutations").send({ mutations: [{ type: "log.create" }] })).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post("/api/sync/mutations")
+          .send({ mutations: [{ mutationId: "x", type: "nope.bad", payload: {} }] })
+      ).status,
+    ).toBe(400);
   });
 });

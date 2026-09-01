@@ -221,3 +221,15 @@ export const syncDeletions = sqliteTable(
     rowSeqIdx: index("sync_deletions_row_seq_idx").on(table.rowSeq),
   }),
 );
+
+/**
+ * Idempotency log for `POST /api/sync/mutations`. Each replayed `mutation_id` returns its
+ * stored result instead of re-applying — so a client that retries a batch after a network
+ * blip (server applied, client never got the response) can't double-create. Not a syncable
+ * table; no triggers.
+ */
+export const syncAppliedMutations = sqliteTable("sync_applied_mutations", {
+  mutationId: text("mutation_id").primaryKey(),
+  resultJson: text("result_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
