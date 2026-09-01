@@ -26,6 +26,7 @@
     "pwa:up": "docker compose -f docker-compose.pwa.yml up --build",
     "pwa:down": "docker compose -f docker-compose.pwa.yml down",
     "pwa:reset": "docker compose -f docker-compose.pwa.yml down -v",
+    "pwa:client": "docker compose -f docker-compose.pwa.yml up -d --force-recreate --no-deps client",
     "seed:test-data": "npm run build --workspace shared && npm run seed:test-data --workspace server"
   },
   "devDependencies": {
