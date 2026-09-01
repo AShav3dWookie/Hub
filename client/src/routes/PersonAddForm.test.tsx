@@ -27,6 +27,23 @@ describe("PersonAddForm", () => {
     expect(await pendingOutbox()).toEqual([]);
   });
 
+  it("still submits while offline (the form is no longer gated)", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    renderWithProviders(<PersonAddForm />);
+
+    const submit = screen.getByRole("button", { name: /create person/i });
+    expect(submit).not.toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Name"), "Offline Person");
+    await userEvent.click(submit);
+
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({
+      type: "entity.create",
+      payload: { category: "person", title: "Offline Person" },
+    });
+  });
+
   it("queues an entity.create with the trimmed name and writes a temp person row", async () => {
     renderWithProviders(<PersonAddForm />);
     await userEvent.type(screen.getByLabelText("Name"), "  Sarah  ");

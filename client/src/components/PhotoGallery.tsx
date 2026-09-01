@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 import { Lightbox } from "./Lightbox.js";
 import { useToast } from "./ToastProvider.js";
 
@@ -27,7 +28,11 @@ export function PhotoGallery({
   const upload = useUploadLogPhotos(logId);
   const deletePhoto = useDeleteLogPhoto(logId);
   const { showToast } = useToast();
+  const online = useOnlineStatus();
 
+  // Photos go straight to the server (no offline queue): only possible online, and only once
+  // the entry itself has a real server id (a freshly-created offline entry has a temp one).
+  const canEditPhotos = online && logId > 0;
   const atLimit = photos.length >= MAX_PHOTOS;
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -73,7 +78,7 @@ export function PhotoGallery({
                 className="h-full w-full object-cover"
               />
             </button>
-            {allowDelete && (
+            {allowDelete && canEditPhotos && (
               <button
                 type="button"
                 aria-label={`Delete ${photo.originalName}`}
@@ -86,7 +91,7 @@ export function PhotoGallery({
           </div>
         ))}
 
-        {!atLimit && (
+        {!atLimit && canEditPhotos && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -97,6 +102,14 @@ export function PhotoGallery({
           </button>
         )}
       </div>
+
+      {!canEditPhotos && (
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {logId < 0
+            ? "Photos can be added once this entry has synced."
+            : "Reconnect to add or remove photos."}
+        </p>
+      )}
 
       <input
         ref={fileInputRef}

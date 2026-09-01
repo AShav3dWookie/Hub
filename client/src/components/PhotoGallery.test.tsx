@@ -97,6 +97,22 @@ describe("PhotoGallery", () => {
     );
   });
 
+  it("hides the photo controls for a not-yet-synced entry (temp id)", () => {
+    renderWithProviders(<PhotoGallery logId={-3} photos={[photo(1)]} allowDelete />);
+
+    expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+    expect(screen.getByText(/once this entry has synced/i)).toBeInTheDocument();
+  });
+
+  it("hides the photo controls while offline", () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} allowDelete />);
+
+    expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
+    expect(screen.getByText(/reconnect to add or remove photos/i)).toBeInTheDocument();
+  });
+
   it("has no delete affordance by default", async () => {
     renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} />);
 
