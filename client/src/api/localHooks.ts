@@ -6,6 +6,8 @@ import {
   META_LAST_SYNC_ERROR,
 } from "../local/db.js";
 import { forceSync, nextScheduledSyncAt } from "../sync/engine.js";
+import { deadLetters, discardDeadLetters, listOutbox } from "../local/outbox.js";
+import type { OutboxRecord } from "../local/db.js";
 import type { SyncErrorKind } from "../sync/pull.js";
 import { thumbnailCacheStats, clearThumbnailCache } from "../sync/thumbnailCache.js";
 import { periodicSyncStatus, type PeriodicSyncStatus } from "../sw/periodicSync.js";
@@ -50,6 +52,39 @@ export function useForceSync() {
     mutationFn: () => forceSync(),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+      void queryClient.invalidateQueries({ queryKey: ["outbox"] });
+      void queryClient.invalidateQueries();
+    },
+  });
+}
+
+export interface OutboxSummary {
+  /** Envelopes still waiting to be pushed. */
+  pending: number;
+  /** Envelopes the server rejected — the user can only discard these. */
+  dead: OutboxRecord[];
+}
+
+export function useOutbox() {
+  return useQuery<OutboxSummary>({
+    queryKey: ["outbox"],
+    queryFn: async () => {
+      const all = await listOutbox();
+      return {
+        pending: all.filter((r) => r.status === "pending").length,
+        dead: await deadLetters(),
+      };
+    },
+    refetchInterval: 10_000,
+  });
+}
+
+export function useDiscardDeadLetters() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => discardDeadLetters(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["outbox"] });
       void queryClient.invalidateQueries();
     },
   });
