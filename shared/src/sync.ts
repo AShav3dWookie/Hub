@@ -100,6 +100,63 @@ export interface SyncTombstone {
   deletedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Write path — `POST /api/sync/mutations` (the writes tier)
+// ---------------------------------------------------------------------------
+
+/**
+ * The mutations the offline outbox can queue and replay. Photo add/delete are deliberately
+ * absent — photos stay online-only. `entity.update` / `entity.delete` have no UI.
+ */
+export type MutationType =
+  | "entity.create"
+  | "log.create"
+  | "log.update"
+  | "log.delete"
+  | "album.create"
+  | "album.update"
+  | "album.delete"
+  | "album.addEvent"
+  | "album.removeEvent"
+  | "album.addPerson"
+  | "album.removePerson"
+  | "note.create"
+  | "note.update"
+  | "note.delete";
+
+/**
+ * One queued write. `payload` mirrors the matching REST body but its id references may be
+ * **negative temp ids** — placeholders the client minted for rows the server hasn't seen yet.
+ * The server resolves them from earlier `*.create` results in the same batch. `tempId` (also
+ * negative) is the placeholder for the row a `*.create` produces. `baseVersion` is the
+ * `version` the client last saw, for last-write-wins conflict reporting on `*.update`.
+ */
+export interface MutationEnvelope {
+  mutationId: string;
+  type: MutationType;
+  tempId?: number;
+  payload: unknown;
+  baseVersion?: number;
+}
+
+export interface MutationResult {
+  mutationId: string;
+  status: "applied" | "conflict" | "skipped" | "error";
+  /** temp id → real server id, for every row this mutation created (incl. dedup collapses). */
+  idMap?: Record<number, number>;
+  /** The row's `version` after the write (for `*.update`). */
+  serverVersion?: number;
+  error?: string;
+}
+
+export interface SyncMutationsRequest {
+  mutations: MutationEnvelope[];
+}
+
+export interface SyncMutationsResponse {
+  results: MutationResult[];
+}
+
 /** Response for `GET /api/sync/changes`. */
 export interface SyncChangesResponse {
   /** Upserts since the cursor, grouped by table; each group is ordered by `rowSeq` ascending. */

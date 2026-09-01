@@ -282,4 +282,33 @@ describe("migrations", () => {
 
     c.close();
   });
+
+  it("0008 creates sync_applied_mutations (plain table, no triggers, not in the change feed)", () => {
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+
+    const cols = (c.prepare("PRAGMA table_info(sync_applied_mutations)").all() as Array<{
+      name: string;
+      notnull: number;
+      pk: number;
+    }>).reduce<Record<string, { notnull: number; pk: number }>>((acc, col) => {
+      acc[col.name] = { notnull: col.notnull, pk: col.pk };
+      return acc;
+    }, {});
+    expect(cols).toMatchObject({
+      mutation_id: { pk: 1 },
+      result_json: { notnull: 1 },
+      created_at: { notnull: 1 },
+    });
+
+    // No sync triggers were installed for it — it must not feed the change feed.
+    const triggers = (
+      c.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{
+        name: string;
+      }>
+    ).map((r) => r.name);
+    expect(triggers.some((t) => t.startsWith("sync_applied_mutations"))).toBe(false);
+
+    c.close();
+  });
 });
