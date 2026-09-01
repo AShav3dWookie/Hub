@@ -73,13 +73,13 @@ export async function discardDeadLetters(): Promise<number> {
   return removed;
 }
 
-/** Deep-replace every negative id that appears as a key in `map` — in a payload, tempId, affects. */
-function rewriteValue(value: unknown, map: Map<number, number>): unknown {
+/** Deep-replace every number that appears as a key in `map` (ids only — payloads hold no other negatives). */
+export function deepRemapIds(value: unknown, map: Map<number, number>): unknown {
   if (typeof value === "number") return map.get(value) ?? value;
-  if (Array.isArray(value)) return value.map((v) => rewriteValue(v, map));
+  if (Array.isArray(value)) return value.map((v) => deepRemapIds(v, map));
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, rewriteValue(v, map)]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, deepRemapIds(v, map)]),
     );
   }
   return value;
@@ -96,7 +96,7 @@ export async function rewriteOutboxIds(map: Map<number, number>): Promise<void> 
   const tx = db.transaction("outbox", "readwrite");
   for (const rec of await tx.store.getAll()) {
     if (rec.status !== "pending") continue;
-    rec.payload = rewriteValue(rec.payload, map);
+    rec.payload = deepRemapIds(rec.payload, map);
     if (rec.tempId != null && map.has(rec.tempId)) rec.tempId = map.get(rec.tempId);
     rec.affects = rec.affects.map((a) => ({ ...a, id: map.get(a.id) ?? a.id }));
     await tx.store.put(rec);

@@ -101,6 +101,26 @@ describe("applyChanges", () => {
     expect(await getMeta<string>(META_SYNC_CURSOR)).toBe("11");
   });
 
+  it("leaves a locally-dirty row alone and ignores a tombstone for it", async () => {
+    const db = await getDB();
+    await db.put("logs", { ...makeLog({ id: 5, entityId: 1, notes: "my offline edit" }), _localDirty: true });
+    await db.put("entities", { ...makeEntity({ id: 9, title: "Server truth" }), _localDeleted: true });
+
+    await applyChanges(
+      feed({
+        changes: {
+          logs: [makeLog({ id: 5, entityId: 1, notes: "server version", version: 3, rowSeq: 20 })],
+        },
+        deletions: [{ entityType: "entity", id: 9, rowSeq: 21, deletedAt: "2026-06-15T00:00:00.000Z" }],
+        nextCursor: "21",
+      }),
+    );
+
+    expect((await db.get("logs", 5))?.notes).toBe("my offline edit");
+    expect(await db.get("entities", 9)).toBeDefined(); // tombstone ignored — still soft-deleted locally
+    expect(await getMeta<string>(META_SYNC_CURSOR)).toBe("21");
+  });
+
   it("countChanges sums upserts and deletions", () => {
     resetFixtureCounters();
     expect(
