@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { pushOutbox } from "./push.js";
 import { getDB, type OutboxRecord } from "../local/db.js";
 import { listOutbox, pendingOutbox } from "../local/outbox.js";
-import { makeEntity, makeLog, resetFixtureCounters } from "../test/seedLocalDb.js";
+import { makeAlbum, makeEntity, makeLog, resetFixtureCounters } from "../test/seedLocalDb.js";
 
 function outboxRec(
   over: Partial<OutboxRecord> & Pick<OutboxRecord, "mutationId" | "seq" | "type">,
@@ -157,5 +157,74 @@ describe("pushOutbox", () => {
     expect(await pushOutbox()).toEqual({ pushed: 1, dead: 0 });
     expect(await listOutbox()).toEqual([]);
     expect((await db.getAll("logs"))[0]._localDirty).toBeUndefined();
+  });
+
+  it("a second push cycle keeps the first cycle's reconciled ids and links", async () => {
+    const db = await getDB();
+    // Cycle 1: create a temp entity + its log.
+    await seedTwoCreates();
+    vi.stubGlobal(
+      "fetch",
+      fetchReturning({
+        results: [
+          { mutationId: "e", status: "applied", idMap: { "-1": 100 } },
+          { mutationId: "l", status: "applied", idMap: { "-2": 200 } },
+        ],
+      }),
+    );
+    expect(await pushOutbox()).toEqual({ pushed: 2, dead: 0 });
+    expect((await db.getAll("entities")).map((e) => e.id)).toEqual([100]);
+    expect((await db.getAll("logs"))[0]).toMatchObject({ id: 200, entityId: 100 });
+
+    // Cycle 2: offline the user makes a NEW album that links the now-real log, plus edits it.
+    await db.put("albums", {
+      ...makeAlbum({ id: -3, eventLogIds: [200] }),
+      _localDirty: true,
+    });
+    const log = (await db.getAll("logs"))[0];
+    await db.put("logs", { ...log, albumIds: [-3], notes: "with album", _localDirty: true });
+    const tx = db.transaction("outbox", "readwrite");
+    await tx.store.put(
+      outboxRec({
+        mutationId: "a",
+        seq: 3,
+        type: "album.create",
+        tempId: -3,
+        payload: { title: "Trip", eventLogIds: [200], people: [] },
+        affects: [
+          { store: "albums", id: -3 },
+          { store: "logs", id: 200 },
+        ],
+      }),
+    );
+    await tx.store.put(
+      outboxRec({
+        mutationId: "u2",
+        seq: 4,
+        type: "log.update",
+        payload: { logId: 200, date: "2024-01-01", notes: "with album", people: [] },
+        affects: [{ store: "logs", id: 200 }],
+      }),
+    );
+    await tx.done;
+
+    vi.stubGlobal(
+      "fetch",
+      fetchReturning({
+        results: [
+          { mutationId: "a", status: "applied", idMap: { "-3": 300 } },
+          { mutationId: "u2", status: "applied" },
+        ],
+      }),
+    );
+    expect(await pushOutbox()).toEqual({ pushed: 2, dead: 0 });
+
+    // First cycle's ids are untouched; the album re-keyed and the link survives on both sides.
+    expect((await db.getAll("entities")).map((e) => e.id)).toEqual([100]);
+    expect((await db.getAll("albums"))[0]).toMatchObject({ id: 300, eventLogIds: [200] });
+    const finalLog = (await db.getAll("logs"))[0];
+    expect(finalLog).toMatchObject({ id: 200, entityId: 100, albumIds: [300], notes: "with album" });
+    expect(finalLog._localDirty).toBeUndefined();
+    expect(await listOutbox()).toEqual([]);
   });
 });
