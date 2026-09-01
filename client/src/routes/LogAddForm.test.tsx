@@ -3,10 +3,25 @@ import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route, useSearchParams } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { LogAddForm } from "./LogAddForm.js";
+
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
+}
+
+/** The payload of the queued `log.create` envelope (its inline entity is a separate envelope). */
+async function queuedLogCreate() {
+  const envs = await pendingOutbox();
+  const log = envs.find((e) => e.type === "log.create");
+  return { envs, log, payload: log?.payload as Record<string, unknown> | undefined };
 }
 
 const dateInput = () => document.querySelector<HTMLInputElement>('input[type="date"]')!;
@@ -27,38 +42,19 @@ describe("LogAddForm photos", () => {
     expect(screen.queryByText("Photos")).not.toBeInTheDocument();
   });
 
-  it("creates the log first, then uploads photos against the returned id", async () => {
-    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
-    const fetchMock = fetch as ReturnType<typeof vi.fn>;
-    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method, body: init?.body });
-      if (url === "/api/logs" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 42, entityId: 1, photos: [] }, 201));
-      }
-      if (url === "/api/logs/42/photos") {
-        return Promise.resolve(jsonResponse([], 201));
-      }
-      return Promise.resolve(jsonResponse([])); // autocomplete
-    });
+  it("queues an entity.create + log.create for a new-title movie", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse([]));
 
     renderWithProviders(<LogAddForm category="movie" />);
 
     await userEvent.type(screen.getByLabelText("Title"), "Sicario");
-    await userEvent.upload(
-      screen.getByText("Photos").parentElement!.querySelector("input[type=file]")!,
-      new File(["x"], "poster.png", { type: "image/png" }),
-    );
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => {
-      expect(calls.some((c) => c.url === "/api/logs/42/photos")).toBe(true);
-    });
-
-    const createIdx = calls.findIndex((c) => c.url === "/api/logs" && c.method === "POST");
-    const uploadIdx = calls.findIndex((c) => c.url === "/api/logs/42/photos");
-    expect(createIdx).toBeGreaterThanOrEqual(0);
-    expect(uploadIdx).toBeGreaterThan(createIdx);
-    expect(calls[uploadIdx].body).toBeInstanceOf(FormData);
+    await waitFor(async () => expect((await pendingOutbox()).length).toBeGreaterThanOrEqual(2));
+    const { envs, payload } = await queuedLogCreate();
+    expect(envs.map((e) => e.type)).toEqual(["entity.create", "log.create"]);
+    expect(envs[0].payload).toMatchObject({ category: "movie", title: "Sicario" });
+    expect(payload).toMatchObject({ entityId: envs[0].tempId, rating: null });
   });
 });
 
@@ -84,30 +80,15 @@ describe("LogAddForm event categories", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
-  it("sends autoDelete when creating an appointment", async () => {
-    const calls: Array<{ url: string; body: unknown }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, body: init?.body });
-      if (url === "/api/logs" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 7, entityId: 1, photos: [] }, 201));
-      }
-      return Promise.resolve(jsonResponse([]));
-    });
-
+  it("queues autoDelete when creating an appointment", async () => {
     renderWithProviders(<LogAddForm category="appointment" />);
     await userEvent.type(screen.getByLabelText("Title"), "Dentist");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => {
-      expect(calls.some((c) => c.url === "/api/logs")).toBe(true);
-    });
-    const create = calls.find((c) => c.url === "/api/logs")!;
-    expect(JSON.parse(create.body as string)).toMatchObject({
-      category: "appointment",
-      title: "Dentist",
-      autoDelete: true,
-      rating: null,
-    });
+    await waitFor(async () => expect((await queuedLogCreate()).log).toBeDefined());
+    const { envs, payload } = await queuedLogCreate();
+    expect(envs[0].payload).toMatchObject({ category: "appointment", title: "Dentist" });
+    expect(payload).toMatchObject({ autoDelete: true, rating: null });
   });
 
   it("hang out: people + photos, no rating", () => {
@@ -170,40 +151,18 @@ describe("LogAddForm ?date / ?returnTo (calendar shortcut)", () => {
     expect(dateInput()).toHaveValue("2024-02-20");
   });
 
-  it("sends the pre-filled date in the create payload", async () => {
-    const calls: Array<{ url: string; body: unknown }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, body: init?.body });
-      if (url === "/api/logs" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 9, entityId: 1, photos: [] }, 201));
-      }
-      return Promise.resolve(jsonResponse([]));
-    });
-
+  it("queues the pre-filled date in the create payload", async () => {
     renderWithProviders(<LogAddForm category="appointment" />, {
       route: "/add/appointment?date=2025-11-03",
     });
     await userEvent.type(screen.getByLabelText("Title"), "Flu jab");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/logs")).toBe(true));
-    expect(JSON.parse(calls.find((c) => c.url === "/api/logs")!.body as string)).toMatchObject({
-      category: "appointment",
-      title: "Flu jab",
-      date: "2025-11-03",
-    });
+    await waitFor(async () => expect((await queuedLogCreate()).log).toBeDefined());
+    expect((await queuedLogCreate()).payload).toMatchObject({ date: "2025-11-03" });
   });
 
-  it("still lets the user change the pre-filled date, and sends the edited value", async () => {
-    const calls: Array<{ url: string; body: unknown }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, body: init?.body });
-      if (url === "/api/logs" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 9, entityId: 1, photos: [] }, 201));
-      }
-      return Promise.resolve(jsonResponse([]));
-    });
-
+  it("still lets the user change the pre-filled date, and queues the edited value", async () => {
     renderWithProviders(<LogAddForm category="appointment" />, {
       route: "/add/appointment?date=2025-11-03",
     });
@@ -211,8 +170,8 @@ describe("LogAddForm ?date / ?returnTo (calendar shortcut)", () => {
     await userEvent.type(screen.getByLabelText("Title"), "Dentist");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/logs")).toBe(true));
-    expect(JSON.parse(calls.find((c) => c.url === "/api/logs")!.body as string).date).toBe("2025-11-10");
+    await waitFor(async () => expect((await queuedLogCreate()).log).toBeDefined());
+    expect((await queuedLogCreate()).payload).toMatchObject({ date: "2025-11-10" });
   });
 
   it("goes home on save when there is a ?date= but no ?returnTo", async () => {

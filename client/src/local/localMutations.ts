@@ -265,26 +265,27 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
       case "log.update": {
         const { logId } = m.input;
         const row = await logs.get(logId);
-        if (!row) return { id: logId };
         const peopleIds = await resolvePeople(m.input.people ?? []);
-        Object.assign(row, {
-          rating: m.input.rating ?? null,
-          date: m.input.date,
-          notes: m.input.notes ?? null,
-          autoDelete: m.input.autoDelete ?? false,
-          peopleIds,
-          updatedAt: now,
-          _localDirty: true,
-        });
-        await logs.put(row);
+        if (row) {
+          Object.assign(row, {
+            rating: m.input.rating ?? null,
+            date: m.input.date,
+            notes: m.input.notes ?? null,
+            autoDelete: m.input.autoDelete ?? false,
+            peopleIds,
+            updatedAt: now,
+            _localDirty: true,
+          });
+          await logs.put(row);
+        }
 
         const payload = {
           logId,
-          rating: row.rating,
-          date: row.date,
-          notes: row.notes,
+          rating: m.input.rating ?? null,
+          date: m.input.date,
+          notes: m.input.notes ?? null,
           people: peopleIds.map((pid) => ({ id: pid })),
-          autoDelete: row.autoDelete,
+          autoDelete: m.input.autoDelete ?? false,
         };
 
         const create = logId < 0 ? await pendingCreateFor(logId) : undefined;
@@ -296,7 +297,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             people: payload.people,
             autoDelete: payload.autoDelete,
           });
-          return row;
+          return row ?? { id: logId };
         }
         // Fold into a prior pending log.update for the same row, else queue a new one.
         const prior = (await pending()).find(
@@ -309,11 +310,11 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           await enqueue({
             type: "log.update",
             payload,
-            baseVersion: row.version || undefined,
+            baseVersion: row?.version || undefined,
             affects: [{ store: "logs", id: logId }],
           });
         }
-        return row;
+        return row ?? { id: logId };
       }
 
       case "log.delete": {
@@ -392,23 +393,24 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
       case "album.update": {
         const { albumId } = m.input;
         const row = await albums.get(albumId);
-        if (!row) return { id: albumId };
-        Object.assign(row, {
+        if (row) {
+          Object.assign(row, {
+            title: m.input.title,
+            notes: m.input.notes ?? null,
+            dateStart: m.input.dateStart ?? null,
+            dateEnd: m.input.dateEnd ?? null,
+            updatedAt: now,
+            _localDirty: true,
+          });
+          await albums.put(row);
+        }
+
+        const payload = {
+          albumId,
           title: m.input.title,
           notes: m.input.notes ?? null,
           dateStart: m.input.dateStart ?? null,
           dateEnd: m.input.dateEnd ?? null,
-          updatedAt: now,
-          _localDirty: true,
-        });
-        await albums.put(row);
-
-        const payload = {
-          albumId,
-          title: row.title,
-          notes: row.notes,
-          dateStart: row.dateStart,
-          dateEnd: row.dateEnd,
         };
         const create = albumId < 0 ? await pendingCreateFor(albumId) : undefined;
         if (create) {
@@ -418,7 +420,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             dateStart: payload.dateStart,
             dateEnd: payload.dateEnd,
           });
-          return row;
+          return row ?? { id: albumId };
         }
         const prior = (await pending()).find(
           (r) => r.type === "album.update" && (r.payload as { albumId: number }).albumId === albumId,
@@ -430,11 +432,11 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           await enqueue({
             type: "album.update",
             payload,
-            baseVersion: row.version || undefined,
+            baseVersion: row?.version || undefined,
             affects: [{ store: "albums", id: albumId }],
           });
         }
-        return row;
+        return row ?? { id: albumId };
       }
 
       case "album.delete": {
@@ -629,32 +631,35 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
       case "note.update": {
         const { noteId } = m.input;
         const row = await notes.get(noteId);
-        if (!row) return { id: noteId };
-        Object.assign(row, {
-          category: m.input.category ?? row.category,
-          body: m.input.body ?? "",
-          tag: m.input.tag ?? null,
-          eventDate: m.input.eventDate ?? null,
-          updatedAt: now,
-          _localDirty: true,
-        });
-        await notes.put(row);
+        const nextCategory = m.input.category ?? row?.category ?? "general";
+        const nextBody = m.input.body ?? "";
+        const nextTag = m.input.tag ?? null;
+        const nextEventDate = m.input.eventDate ?? null;
+        if (row) {
+          Object.assign(row, {
+            category: nextCategory,
+            body: nextBody,
+            tag: nextTag,
+            eventDate: nextEventDate,
+            updatedAt: now,
+            _localDirty: true,
+          });
+          await notes.put(row);
+        }
 
-        const payload: Record<string, unknown> = {
-          noteId,
-          category: row.category,
-          body: row.body,
-        };
-        if (row.tag) payload.tag = row.tag;
-        if (row.eventDate) payload.eventDate = row.eventDate;
+        const payload: Record<string, unknown> = { noteId, category: nextCategory, body: nextBody };
+        if (nextTag) payload.tag = nextTag;
+        if (nextEventDate) payload.eventDate = nextEventDate;
 
         const create = noteId < 0 ? await pendingCreateFor(noteId) : undefined;
         if (create) {
-          const patch: Record<string, unknown> = { category: row.category, body: row.body };
-          patch.tag = row.tag ?? undefined;
-          patch.eventDate = row.eventDate ?? undefined;
-          await collapseIntoCreate(create, patch);
-          return row;
+          await collapseIntoCreate(create, {
+            category: nextCategory,
+            body: nextBody,
+            tag: nextTag ?? undefined,
+            eventDate: nextEventDate ?? undefined,
+          });
+          return row ?? { id: noteId };
         }
         const prior = (await pending()).find(
           (r) => r.type === "note.update" && (r.payload as { noteId: number }).noteId === noteId,
@@ -666,11 +671,11 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           await enqueue({
             type: "note.update",
             payload,
-            baseVersion: row.version || undefined,
+            baseVersion: row?.version || undefined,
             affects: [{ store: "entityNotes", id: noteId }],
           });
         }
-        return row;
+        return row ?? { id: noteId };
       }
 
       case "note.delete": {

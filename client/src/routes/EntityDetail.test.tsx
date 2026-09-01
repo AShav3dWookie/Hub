@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { primeRepo } from "../test/mockRepo.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { EntityDetail } from "./EntityDetail.js";
 import type { Category, LogDTO, LogPhotoDTO } from "@logger/shared";
 
@@ -185,35 +186,32 @@ describe("EntityDetail log deletion with photos", () => {
     createdAt: NOW,
   };
 
-  function trackDeletes() {
-    const calls: string[] = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      if (init?.method === "DELETE") calls.push(url);
-      return Promise.resolve(jsonResponse(undefined, 204));
-    });
-    return calls;
-  }
-
-  it("offers keep-vs-delete when the log has photos; 'keep' sends no query", async () => {
+  it("offers keep-vs-delete when the log has photos; 'keep' queues deletePhotos:false", async () => {
     setEntity("movie", [log({ photos: [photo] })]);
-    const calls = trackDeletes();
     renderDetail();
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /keep photos/i }));
 
-    expect(calls).toEqual(["/api/logs/1"]);
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({
+      type: "log.delete",
+      payload: { logId: 1, deletePhotos: false },
+    });
   });
 
-  it("'delete log & photos' sends ?deletePhotos=true", async () => {
+  it("'delete log & photos' queues deletePhotos:true", async () => {
     setEntity("movie", [log({ photos: [photo] })]);
-    const calls = trackDeletes();
     renderDetail();
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /Delete log & 1 photo/ }));
 
-    expect(calls).toEqual(["/api/logs/1?deletePhotos=true"]);
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({
+      type: "log.delete",
+      payload: { logId: 1, deletePhotos: true },
+    });
   });
 });
 
@@ -243,14 +241,8 @@ describe("EntityDetail log edit mode", () => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
-  it("edits a log's notes and PUTs the update", async () => {
+  it("edits a log's notes and queues a log.update", async () => {
     setEntity("movie", [log({ notes: "first viewing" })]);
-    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method, body: init?.body });
-      return Promise.resolve(jsonResponse(log({ notes: "second viewing" })));
-    });
-
     renderDetail();
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
@@ -261,9 +253,11 @@ describe("EntityDetail log edit mode", () => {
     await userEvent.type(notes, "second viewing");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    const put = calls.find((c) => c.method === "PUT");
-    expect(put?.url).toBe("/api/logs/1");
-    expect(JSON.parse(put!.body as string)).toMatchObject({ notes: "second viewing", people: [] });
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({
+      type: "log.update",
+      payload: { logId: 1, notes: "second viewing", people: [] },
+    });
   });
 
   it("cancels an edit without calling the API", async () => {

@@ -11,25 +11,27 @@ import type {
   UpdateLogRequest,
   CreateEntityRequest,
   SearchQuery,
-  LogDTO,
   LogPhotoDTO,
   CreateEntityNoteRequest,
   UpdateEntityNoteRequest,
-  AlbumDTO,
   CreateAlbumRequest,
   UpdateAlbumRequest,
-  PersonRef,
   PersonTagInput,
 } from "@logger/shared";
 import { api } from "./client.js";
 import { repo } from "../local/repo.js";
+import { applyLocalMutation } from "../local/localMutations.js";
 import { refreshAfterMutation } from "./afterMutation.js";
 import { gridRange } from "../lib/calendar.js";
 
 /**
  * All data hooks. Reads resolve from the local IndexedDB replica via `repo` (never the
- * network); writes still POST/PUT/DELETE to the server, then `refreshAfterMutation` pulls the
- * change back and invalidates. Query keys are unchanged so components/tests are untouched.
+ * network). Writes are **local-first**: `applyLocalMutation` mutates the replica optimistically
+ * and queues an envelope in the outbox; `refreshAfterMutation` then invalidates every query and
+ * kicks a sync (which pushes the queue and pulls the server's answer back). Photo up/downloads
+ * are the exception — they still go straight to the server (online-only for now).
+ *
+ * Query keys are unchanged so components/tests are untouched.
  */
 
 export function useEntityAutocomplete(category: Category, q: string) {
@@ -64,7 +66,7 @@ export function useSearch(query: SearchQuery, options: { enabled?: boolean } = {
 export function useCreateEntity() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateEntityRequest) => api.post("/entities", input),
+    mutationFn: (input: CreateEntityRequest) => applyLocalMutation({ type: "entity.create", input }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -72,7 +74,7 @@ export function useCreateEntity() {
 export function useCreateLog() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateLogRequest) => api.post<LogDTO>("/logs", input),
+    mutationFn: (input: CreateLogRequest) => applyLocalMutation({ type: "log.create", input }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -80,7 +82,8 @@ export function useCreateLog() {
 export function useUpdateLog(logId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateLogRequest) => api.put<LogDTO>(`/logs/${logId}`, input),
+    mutationFn: (input: UpdateLogRequest) =>
+      applyLocalMutation({ type: "log.update", input: { ...input, logId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -89,7 +92,7 @@ export function useDeleteLog() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ logId, deletePhotos }: { logId: number; deletePhotos: boolean }) =>
-      api.delete(`/logs/${logId}${deletePhotos ? "?deletePhotos=true" : ""}`),
+      applyLocalMutation({ type: "log.delete", input: { logId, deletePhotos } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -174,7 +177,7 @@ export function useAlbumPhotos(id: number | undefined) {
 export function useCreateAlbum() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateAlbumRequest) => api.post<AlbumDTO>("/albums", input),
+    mutationFn: (input: CreateAlbumRequest) => applyLocalMutation({ type: "album.create", input }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -182,7 +185,8 @@ export function useCreateAlbum() {
 export function useUpdateAlbum(id: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateAlbumRequest) => api.put<AlbumDTO>(`/albums/${id}`, input),
+    mutationFn: (input: UpdateAlbumRequest) =>
+      applyLocalMutation({ type: "album.update", input: { ...input, albumId: id } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -191,7 +195,7 @@ export function useDeleteAlbum() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, deletePhotos }: { id: number; deletePhotos: boolean }) =>
-      api.delete(`/albums/${id}${deletePhotos ? "?deletePhotos=true" : ""}`),
+      applyLocalMutation({ type: "album.delete", input: { albumId: id, deletePhotos } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -199,7 +203,8 @@ export function useDeleteAlbum() {
 export function useAddAlbumEvent(id: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (logId: number) => api.post<AlbumDTO>(`/albums/${id}/events`, { logId }),
+    mutationFn: (logId: number) =>
+      applyLocalMutation({ type: "album.addEvent", input: { albumId: id, logId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -207,7 +212,8 @@ export function useAddAlbumEvent(id: number) {
 export function useRemoveAlbumEvent(id: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (logId: number) => api.delete(`/albums/${id}/events/${logId}`),
+    mutationFn: (logId: number) =>
+      applyLocalMutation({ type: "album.removeEvent", input: { albumId: id, logId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -215,7 +221,8 @@ export function useRemoveAlbumEvent(id: number) {
 export function useAddAlbumPerson(id: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (person: PersonTagInput) => api.post<PersonRef[]>(`/albums/${id}/people`, person),
+    mutationFn: (person: PersonTagInput) =>
+      applyLocalMutation({ type: "album.addPerson", input: { albumId: id, person } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -223,7 +230,8 @@ export function useAddAlbumPerson(id: number) {
 export function useRemoveAlbumPerson(id: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (personId: number) => api.delete(`/albums/${id}/people/${personId}`),
+    mutationFn: (personId: number) =>
+      applyLocalMutation({ type: "album.removePerson", input: { albumId: id, personId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
@@ -260,24 +268,24 @@ export function useCreateEntityNote(entityId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateEntityNoteRequest) =>
-      api.post(`/entities/${entityId}/notes`, input),
+      applyLocalMutation({ type: "note.create", input: { ...input, entityId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
 
-export function useUpdateEntityNote(entityId: number, noteId: number) {
+export function useUpdateEntityNote(_entityId: number, noteId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateEntityNoteRequest) =>
-      api.put(`/entities/${entityId}/notes/${noteId}`, input),
+      applyLocalMutation({ type: "note.update", input: { ...input, noteId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
 
-export function useDeleteEntityNote(entityId: number) {
+export function useDeleteEntityNote(_entityId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (noteId: number) => api.delete(`/entities/${entityId}/notes/${noteId}`),
+    mutationFn: (noteId: number) => applyLocalMutation({ type: "note.delete", input: { noteId } }),
     onSuccess: () => refreshAfterMutation(queryClient),
   });
 }
