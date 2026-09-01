@@ -1,23 +1,29 @@
-# Isolated instance of the full PWA build for hands-on testing.
+# Isolated, production-shaped instance of the app for hands-on PWA testing.
 #
-#   docker compose -f docker-compose.pwa.yml up --build      # → http://localhost:3200
-#   docker compose -f docker-compose.pwa.yml down            # stop (keeps data)
-#   docker compose -f docker-compose.pwa.yml down -v         # stop + wipe the DB
+#   npm run pwa:up        # build + start   → http://localhost:3200
+#   npm run pwa:down      # stop, keep the data
+#   npm run pwa:reset     # stop + wipe the data
 #
-# Its own project name, port (3200) and named volume, so it never touches the
-# :3000 instance or test-env/. The app is a single container — Express serves both
-# the API and the built PWA from /public; there is no separate "client" server.
+# Topology mirrors the home-server deployment (Cloudflare → nginx → app container):
 #
-# On first `up` the `seed` service fills the DB with sample data (movies, meals,
-# people, a few photos); later runs keep whatever you've added.
+#   browser ──▶ nginx  (:3200, this compose)  ──▶ app  (Express, internal :3000)
+#                                                  ├─ /api/*        the backend
+#                                                  └─ everything else  the built PWA
+#                                                     (static HTML/JS/CSS + sw.js +
+#                                                      manifest) from server/public
+#
+# There is no "client server": the PWA is a static bundle built once and served by
+# the app container. In the browser, the "client" is the installed app + its
+# service worker + IndexedDB — none of which live in a container.
+#
+# Its own compose project name, port and named volume, so it never touches the
+# :3000 instance or test-env/.
 
 name: logger-pwa
 
 services:
   seed:
-    build:
-      context: .
-      target: runtime
+    build: { context: ., target: runtime }
     image: logger-pwa:local
     working_dir: /app/server
     environment:
@@ -32,15 +38,13 @@ services:
         || node dist/scripts/seedTestData.js
 
   app:
-    build:
-      context: .
-      target: runtime
+    build: { context: ., target: runtime }
     image: logger-pwa:local
     depends_on:
       seed:
         condition: service_completed_successfully
-    ports:
-      - "3200:3000"
+    expose:
+      - "3000"
     environment:
       PORT: 3000
       NODE_ENV: production
@@ -48,6 +52,17 @@ services:
       AUTH_ENABLED: "false"
     volumes:
       - pwa-data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "3200:80"
+    volumes:
+      - ./docker/nginx.pwa.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
 
 volumes:
