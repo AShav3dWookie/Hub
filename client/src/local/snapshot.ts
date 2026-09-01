@@ -5,7 +5,7 @@ import type {
   LogSyncDTO,
   PhotoSyncDTO,
 } from "@logger/shared";
-import { getDB } from "./db.js";
+import { getDB, type LocalWriteMeta } from "./db.js";
 import { expiredAppointmentLogIds } from "./sweep.js";
 
 /**
@@ -14,7 +14,9 @@ import { expiredAppointmentLogIds } from "./sweep.js";
  * already, and the dataset is a personal-scale few thousand rows at most.
  *
  * Expired auto-delete appointment logs are filtered out here (the client-side sweep), so no
- * downstream query has to think about them.
+ * downstream query has to think about them. Rows the writes tier has soft-deleted
+ * (`_localDeleted`) are dropped here too — the replica keeps them until their `*.delete`
+ * envelope flushes, but no read should ever see them.
  */
 export interface LocalSnapshot {
   entities: EntitySyncDTO[];
@@ -32,30 +34,38 @@ function index<T extends { id: number }>(rows: T[]): Map<number, T> {
   return new Map(rows.map((r) => [r.id, r]));
 }
 
+const live = <T extends LocalWriteMeta>(rows: T[]): T[] => rows.filter((r) => !r._localDeleted);
+
 export function buildSnapshot(
   data: {
-    entities: EntitySyncDTO[];
-    logs: LogSyncDTO[];
-    photos: PhotoSyncDTO[];
-    albums: AlbumSyncDTO[];
-    notes: EntityNoteSyncDTO[];
+    entities: (EntitySyncDTO & LocalWriteMeta)[];
+    logs: (LogSyncDTO & LocalWriteMeta)[];
+    photos: (PhotoSyncDTO & LocalWriteMeta)[];
+    albums: (AlbumSyncDTO & LocalWriteMeta)[];
+    notes: (EntityNoteSyncDTO & LocalWriteMeta)[];
   },
   now: Date = new Date(),
 ): LocalSnapshot {
-  const entityById = index(data.entities);
-  const expired = expiredAppointmentLogIds(data.logs, entityById, now);
-  const logs = expired.size > 0 ? data.logs.filter((l) => !expired.has(l.id)) : data.logs;
+  const entities = live(data.entities);
+  const photos = live(data.photos);
+  const albums = live(data.albums);
+  const notes = live(data.notes);
+
+  const entityById = index(entities);
+  const notDeleted = live(data.logs);
+  const expired = expiredAppointmentLogIds(notDeleted, entityById, now);
+  const logs = expired.size > 0 ? notDeleted.filter((l) => !expired.has(l.id)) : notDeleted;
 
   return {
-    entities: data.entities,
+    entities,
     logs,
-    photos: data.photos,
-    albums: data.albums,
-    notes: data.notes,
+    photos,
+    albums,
+    notes,
     entityById,
     logById: index(logs),
-    photoById: index(data.photos),
-    albumById: index(data.albums),
+    photoById: index(photos),
+    albumById: index(albums),
   };
 }
 
