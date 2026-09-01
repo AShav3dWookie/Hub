@@ -1,81 +1,99 @@
 # Testing the PWA by hand
 
-## First: why there's no "client server"
+## The shape of it
 
-In development you run two servers — `dev:server` (the API on :3000) and `dev:client`
-(Vite on :5173, hot-reload + a proxy to the API). **Neither of those exists in
-production, and the PWA cannot be tested with them** (`vite-plugin-pwa` disables the
-service worker under `vite dev`).
-
-In production the client is not a server at all. `npm run build` compiles the React
-app to plain static files — HTML, JS, CSS, `sw.js`, `manifest.webmanifest`, icons —
-and the **app container** (Express) serves them:
+`npm run pwa:up` starts four containers that mirror the home-server deployment,
+with a **separate client machine** so you test a clean phone, not your dev browser:
 
 ```
-browser ──▶ nginx (:3200) ──▶ app container (Express, :3000)
-                               ├─ /api/*             the backend
-                               └─ everything else    the built PWA bundle
-                                                     from  server/public/
+your browser ─▶ http://localhost:3210 ─▶ client  (a real Chromium, in a container)
+                                            │  talks over the container network to…
+your browser ─▶ http://localhost:3200 ─┐    ▼
+                                     nginx ─▶ app  (Express, internal :3000)
+                                              ├─ /api/*            the backend
+                                              └─ everything else   the built PWA
+                                                 (HTML/JS/CSS + sw.js + manifest)
+                                                 from server/public/
+      seed  (one-shot: fills a fresh DB volume, then exits)
 ```
 
-That's the whole backend. The "client", in PWA terms, is what runs **in the
-browser**: the installed app window, its **service worker** (caches the shell,
-serves it offline), and **IndexedDB** (the local data replica). None of that lives
-in a container — it's the browser's job, and it only appears when a real build is
-served from a real origin.
+### Why there's no "client server"
 
-So this compose stack **is** production reality — the same single app container
-you already run with `docker compose up`, now behind an nginx reverse proxy to
-match the eventual `hub.aaronhanna.uk` topology (Cloudflare → nginx → app).
-Testing against it exercises exactly what ships.
+In dev you run `dev:server` (API) *and* `dev:client` (Vite). **Neither exists in
+production and neither can run the PWA** — `vite-plugin-pwa` disables the service
+worker under `vite dev`. `npm run build` compiles the client to plain static files
+that the **app container** serves. That's the entire backend.
 
-> TLS: Cloudflare terminates HTTPS in production. Locally, `http://localhost:3200`
-> is already a "secure context", so the service worker registers and the app is
-> installable on your desktop. Installing on a **real phone** needs the actual
-> HTTPS domain — that's the separate WAN task, still out of scope.
+The "client" is not a server — it's a **browser**. In production it's your phone; in
+this stack it's the `client` container: a real Chromium (same Blink engine as
+Chrome on Android) reaching the app as `http://nginx` over the container network,
+exactly as a phone hits the home server. What makes a PWA a PWA — the service
+worker, the caches, IndexedDB, the install — all lives in that browser.
+
+### Two ways to test
+
+| | Your own browser → `http://localhost:3200` | The client container → `http://localhost:3210` |
+|---|---|---|
+| Speed | instant | opens a Chromium desktop in a browser tab |
+| State | **carries your real browser's history** — old service worker, half-full IndexedDB, a previous install | a clean, separate machine |
+| Reset to a true first-run | clear site data by hand | `npm run pwa:client` — recreates the container: no SW, no IndexedDB, no install |
+| Use it for | quick checks | **verifying how a fresh phone behaves after a server change** |
+
+`http://localhost:3200` works for PWA features because `localhost` is a "secure
+context". The client container reaches a non-localhost origin, so its Chromium runs
+with `--unsafely-treat-insecure-origin-as-secure` (Chromium's built-in PWA-testing
+switch) to let the service worker register there too.
 
 ## Run it
 
 ```bash
-npm run pwa:up        # build + start   → http://localhost:3200
-npm run pwa:down      # stop, keep whatever data you've added
+npm run pwa:up        # build + start everything
+npm run pwa:down      # stop, keep the data
 npm run pwa:reset     # stop + wipe the DB (next up re-seeds)
+npm run pwa:client    # recreate ONLY the client → a brand-new browser
 ```
 
-First `up` seeds sample data (movies, meals, people, a few photos). Later runs keep
-your changes. Everything runs in containers — no local node servers.
+First `up` seeds sample data (movies, meals, people, a few photos) into a named
+`pwa-data` volume; later runs keep whatever you've added. Everything is containers —
+no local node servers.
 
-Its own compose project (`logger-pwa`), port **3200**, and a named `pwa-data`
-volume, so it never collides with your `:3000` instance, `:3100` (the automated e2e
-harness) or `:5173` (Vite dev).
+Own compose project (`logger-pwa`) and ports (**3200** server, **3210** client), so
+it never collides with your `:3000` instance, `:3100` (the automated e2e harness) or
+`:5173` (Vite dev). The client image (`linuxserver/chromium`, ~1.5 GB) is pulled
+once.
 
-## What to try — all against http://localhost:3200
+## What to try
+
+Do this in the **client** at `http://localhost:3210` for a faithful test (or your
+own browser at `:3200` for a quick one).
 
 | Check | How |
 |---|---|
-| **Installs as an app** | Chrome address-bar install icon → Install. Opens in its own window. |
-| **Opens with the backend down** | `npm run pwa:down`, then open the installed app (or reload the tab). Shell + all data still render from the service worker + IndexedDB. `npm run pwa:up` to bring it back. |
-| **Offline browsing** | DevTools → Network → **Offline**. Navigate, search, open entities, the calendar — all from IndexedDB, no requests. |
+| **Fresh install + first sync** | `npm run pwa:client`, open `:3210`. The app loads, registers its service worker, and syncs the seed data into IndexedDB — all on first visit. Install it: address-bar install icon → Install. |
+| **Opens with the backend down** | `docker compose -f docker-compose.pwa.yml stop app`, then reload the client. Shell + all data still render. `start app` to restore. |
+| **Offline browsing** | Client's DevTools → Network → **Offline**. Navigate, search, open entities, the calendar — all from IndexedDB. |
 | **Reload while offline** | Offline + `Ctrl-R`. The service worker serves the cached shell. |
-| **Gallery offline** | Open the Gallery once online (warms the thumbnail cache), go offline, reload — thumbnails still paint. Open a photo → an "unavailable offline" placeholder (full-size originals aren't cached in this tier). |
+| **Gallery offline** | Open the Gallery once online, go offline, reload — thumbnails still paint. Open a photo → an "unavailable offline" placeholder (full-size originals aren't cached in this tier). |
 | **Settings** | Bottom-bar gear → last-sync time, **Sync now**, thumbnail cache size + **Clear thumbnails**, background-sync status. |
 | **Offline writes are blocked** | Offline → open an Add form → an "offline" banner appears and Save is disabled. Back online → it re-enables. |
-| **Sync picks up server changes** | While it's running, change something through the API (a second browser tab, or `curl -X POST http://localhost:3200/api/logs ...`), then hit **Sync now** in Settings, or just reopen the app. |
+| **Sync picks up server changes** | Change data via the API (`curl -X POST http://localhost:3200/api/logs ...` from your terminal), then hit **Sync now** in the client's Settings, or reopen the app. |
+| **Cold client sees the change** | After a server change: `npm run pwa:client`, reopen `:3210` — the fresh browser syncs the new state from scratch. |
 
 ## Inspecting
 
-DevTools → **Application**:
+Client's DevTools → **Application**:
 
 - **Service Workers** — `sw.js` should be *activated*.
-- **Cache Storage** — `workbox-precache-*` (the app shell), `logger-thumbs` (thumbnails).
+- **Cache Storage** — a `workbox-precache-*` bucket (the shell) and `logger-thumbs`.
 - **IndexedDB → logger** — `entities` / `logs` / `photos` / `albums` / `entityNotes`
   mirror the server; `meta` holds `syncCursor` / `lastSyncAt` / `lastSyncError`.
 
 ## Notes
 
-- The seed runs only when the volume has no `logger.db` — your added data survives
-  `pwa:down` / `pwa:up`. Use `pwa:reset` for a clean slate.
+- The seed runs only when the volume has no `logger.db` — added data survives
+  `pwa:down` / `pwa:up`. `pwa:reset` for a clean slate.
 - Auth is disabled in this stack.
-- `npm run test:e2e` is a *separate*, automated Playwright suite — it stands up its
-  own throwaway server on :3100 for speed and isolation, and isn't meant for
-  hands-on use. For that, always use `npm run pwa:up`.
+- Real-phone install still needs the HTTPS `hub.aaronhanna.uk` setup — separate WAN
+  task, out of scope.
+- `npm run test:e2e` is a *separate*, automated Playwright suite (its own throwaway
+  server on :3100) — not for hands-on use.

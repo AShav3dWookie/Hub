@@ -1,22 +1,25 @@
 # Isolated, production-shaped instance of the app for hands-on PWA testing.
 #
-#   npm run pwa:up        # build + start   → http://localhost:3200
+#   npm run pwa:up        # build + start   → server on :3200, client browser on :3210
 #   npm run pwa:down      # stop, keep the data
 #   npm run pwa:reset     # stop + wipe the data
+#   npm run pwa:client    # recreate ONLY the client → a brand-new browser (fresh install)
 #
-# Topology mirrors the home-server deployment (Cloudflare → nginx → app container):
+# Topology mirrors the home-server deployment (Cloudflare → nginx → app container),
+# with a separate "client machine" so you test a clean phone, not your dev browser:
 #
-#   browser ──▶ nginx  (:3200, this compose)  ──▶ app  (Express, internal :3000)
-#                                                  ├─ /api/*        the backend
-#                                                  └─ everything else  the built PWA
-#                                                     (static HTML/JS/CSS + sw.js +
-#                                                      manifest) from server/public
+#   your browser ─▶ http://localhost:3210 ─▶ client container (visible Chromium)
+#                                              │  talks over the compose network to…
+#   your browser ─▶ http://localhost:3200 ─┐   ▼
+#                                          nginx ─▶ app (Express, internal :3000)
+#                                                   ├─ /api/*         the backend
+#                                                   └─ everything else  the built PWA
+#                                                      from server/public
 #
-# There is no "client server": the PWA is a static bundle built once and served by
-# the app container. In the browser, the "client" is the installed app + its
-# service worker + IndexedDB — none of which live in a container.
+# There is no "client server": the PWA is a static bundle served by the app
+# container. The *client* here is a browser (Chromium) — the same thing a phone is.
 #
-# Its own compose project name, port and named volume, so it never touches the
+# Its own compose project name, ports and named volume, so it never touches the
 # :3000 instance or test-env/.
 
 name: logger-pwa
@@ -63,6 +66,41 @@ services:
       - "3200:80"
     volumes:
       - ./docker/nginx.pwa.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+  # A separate "client machine": a real Chromium (same Blink engine as Chrome on
+  # Android) in a KasmVNC desktop. Open http://localhost:3210 in your own browser,
+  # then install the PWA / toggle offline / etc. It reaches the app as `http://nginx`
+  # over the compose network — genuinely over the wire, like a phone hitting the
+  # home server.
+  #
+  # No /config volume on purpose: the whole browser profile (service worker, caches,
+  # IndexedDB, installed apps) lives in the container's writable layer, so
+  # `npm run pwa:client` (a --force-recreate) hands you a brand-new browser.
+  #
+  # `--unsafely-treat-insecure-origin-as-secure` lets the service worker register
+  # over plain HTTP on a non-localhost origin — Chromium's built-in PWA-testing
+  # mechanism. (Your own browser at http://localhost:3200 doesn't need it: localhost
+  # is already a secure context.)
+  client:
+    image: lscr.io/linuxserver/chromium:latest
+    depends_on:
+      nginx:
+        condition: service_started
+    ports:
+      - "3210:3000"              # the browser UI — open this in your own browser
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+      CHROME_CLI: >-
+        --unsafely-treat-insecure-origin-as-secure=http://nginx
+        --no-first-run
+        --disable-fre
+        http://nginx/
+    shm_size: "1gb"
+    security_opt:
+      - seccomp:unconfined
     restart: unless-stopped
 
 volumes:
