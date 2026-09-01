@@ -425,3 +425,172 @@ describe("POST /api/sync/mutations", () => {
     ).toBe(400);
   });
 });
+
+describe("POST /api/sync/mutations — persistence across batches", () => {
+  let ctx: ReturnType<typeof createTestDb>;
+  afterEach(() => ctx?.cleanup());
+
+  function setup() {
+    ctx = createTestDb();
+    return createApp(ctx.db);
+  }
+  const mutate = async (app: ReturnType<typeof createApp>, mutations: MutationEnvelope[]) => {
+    const res = await request(app).post("/api/sync/mutations").send({ mutations });
+    expect(res.status).toBe(200);
+    return res.body.results as MutationResult[];
+  };
+  const changesNow = async (app: ReturnType<typeof createApp>) => {
+    const res = await request(app).get("/api/sync/changes?since=0");
+    expect(res.status).toBe(200);
+    return res.body as SyncChangesResponse;
+  };
+
+  it("a create in batch 1 is still there — and editable by real id — in batch 2", async () => {
+    const app = setup();
+    const b1 = await mutate(app, [
+      { mutationId: "e1", type: "entity.create", tempId: -1, payload: { category: "movie", title: "Sicario" } },
+      {
+        mutationId: "l1",
+        type: "log.create",
+        tempId: -2,
+        payload: { entityId: -1, date: "2024-01-01", notes: "first pass", people: [] },
+      },
+    ]);
+    const entityId = b1[0].idMap![-1];
+    const logId = b1[1].idMap![-2];
+
+    // A completely separate batch (fresh idMap) edits the row by its real id + adds a note.
+    const b2 = await mutate(app, [
+      {
+        mutationId: "u1",
+        type: "log.update",
+        payload: { logId, date: "2024-01-01", notes: "revised", people: [] },
+      },
+      { mutationId: "n1", type: "note.create", tempId: -1, payload: { entityId, body: "a note" } },
+    ]);
+    expect(b2.map((r) => r.status)).toEqual(["applied", "applied"]);
+
+    const feed = await changesNow(app);
+    expect(feed.changes.entities.filter((e) => e.id === entityId)).toHaveLength(1);
+    expect(feed.changes.logs.find((l) => l.id === logId)).toMatchObject({ notes: "revised" });
+    expect(feed.changes.entityNotes.find((n) => n.entityId === entityId)).toMatchObject({ body: "a note" });
+  });
+
+  it("a delete in a later batch leaves a tombstone and drops the row from the feed", async () => {
+    const app = setup();
+    const [e, l] = await mutate(app, [
+      { mutationId: "e", type: "entity.create", tempId: -1, payload: { category: "movie", title: "Gone" } },
+      { mutationId: "l", type: "log.create", tempId: -2, payload: { entityId: -1, date: "2024-01-01", people: [] } },
+    ]);
+    const logId = l.idMap![-2];
+    void e;
+
+    await mutate(app, [{ mutationId: "d", type: "log.delete", payload: { logId } }]);
+
+    const feed = await changesNow(app);
+    expect(feed.changes.logs.some((row) => row.id === logId)).toBe(false);
+    expect(feed.deletions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ entityType: "log", id: logId })]),
+    );
+  });
+
+  it("album event links made across two batches persist on both sides", async () => {
+    const app = setup();
+    const b1 = await mutate(app, [
+      { mutationId: "e", type: "entity.create", tempId: -1, payload: { category: "movie", title: "Trip Film" } },
+      { mutationId: "l", type: "log.create", tempId: -2, payload: { entityId: -1, date: "2024-01-01", people: [] } },
+      { mutationId: "a", type: "album.create", tempId: -3, payload: { title: "Road Trip", eventLogIds: [], people: [] } },
+    ]);
+    const logId = b1[1].idMap![-2];
+    const albumId = b1[2].idMap![-3];
+
+    await mutate(app, [
+      { mutationId: "ae", type: "album.addEvent", payload: { albumId, logId } },
+      { mutationId: "ap", type: "album.addPerson", tempId: -1, payload: { albumId, person: { name: "Pat" } } },
+    ]);
+
+    const feed = await changesNow(app);
+    expect(feed.changes.albums.find((x) => x.id === albumId)?.eventLogIds).toEqual([logId]);
+    expect(feed.changes.logs.find((x) => x.id === logId)?.albumIds).toEqual([albumId]);
+    const pat = feed.changes.entities.find((x) => x.title === "Pat");
+    expect(feed.changes.albums.find((x) => x.id === albumId)?.personIds).toEqual([pat!.id]);
+  });
+
+  it("replaying batch 1 after batch 2 does not regress or duplicate the newer state", async () => {
+    const app = setup();
+    const batch1: MutationEnvelope[] = [
+      { mutationId: "e", type: "entity.create", tempId: -1, payload: { category: "eating_out", title: "Chipotle" } },
+      {
+        mutationId: "l",
+        type: "log.create",
+        tempId: -2,
+        payload: { entityId: -1, date: "2024-01-01", notes: "v1", people: [] },
+      },
+    ];
+    const r1 = await mutate(app, batch1);
+    const entityId = r1[0].idMap![-1];
+    const logId = r1[1].idMap![-2];
+
+    await mutate(app, [
+      { mutationId: "u", type: "log.update", payload: { logId, date: "2024-01-01", notes: "v2", people: [] } },
+    ]);
+
+    // A retry of the whole first batch (offline client didn't get the 200).
+    const replay = await mutate(app, batch1);
+    expect(replay.map((r) => r.status)).toEqual(["applied", "applied"]);
+    expect(replay[0].idMap![-1]).toBe(entityId);
+    expect(replay[1].idMap![-2]).toBe(logId);
+
+    const feed = await changesNow(app);
+    expect(feed.changes.entities.filter((e) => e.title === "Chipotle")).toHaveLength(1);
+    expect(feed.changes.logs.filter((l) => l.entityId === entityId)).toHaveLength(1);
+    expect(feed.changes.logs.find((l) => l.id === logId)?.notes).toBe("v2"); // not clobbered back to v1
+  });
+
+  it("note create → update → delete across three batches ends deleted, with a tombstone", async () => {
+    const app = setup();
+    const [ent] = await mutate(app, [
+      { mutationId: "e", type: "entity.create", tempId: -1, payload: { category: "person", title: "Robin" } },
+    ]);
+    const entityId = ent.idMap![-1];
+
+    const [noteRes] = await mutate(app, [
+      { mutationId: "nc", type: "note.create", tempId: -1, payload: { entityId, body: "draft" } },
+    ]);
+    const noteId = noteRes.idMap![-1];
+
+    await mutate(app, [
+      { mutationId: "nu", type: "note.update", payload: { noteId, body: "final" } },
+    ]);
+    expect((await changesNow(app)).changes.entityNotes.find((n) => n.id === noteId)?.body).toBe("final");
+
+    await mutate(app, [{ mutationId: "nd", type: "note.delete", payload: { noteId } }]);
+
+    const feed = await changesNow(app);
+    expect(feed.changes.entityNotes.some((n) => n.id === noteId)).toBe(false);
+    expect(feed.deletions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ entityType: "entity_note", id: noteId })]),
+    );
+  });
+
+  it("a large single batch of creates all persist with distinct real ids", async () => {
+    const app = setup();
+    const batch: MutationEnvelope[] = Array.from({ length: 40 }, (_, i) => ({
+      mutationId: `m${i}`,
+      type: "entity.create" as const,
+      tempId: -(i + 1),
+      payload: { category: "movie", title: `Bulk ${i}` },
+    }));
+    const results = await mutate(app, batch);
+    expect(results.every((r) => r.status === "applied")).toBe(true);
+
+    const realIds = results.map((r) => Object.values(r.idMap!)[0]);
+    expect(new Set(realIds).size).toBe(40);
+    expect(realIds.every((id) => id > 0)).toBe(true);
+
+    const feed = await changesNow(app);
+    for (let i = 0; i < 40; i++) {
+      expect(feed.changes.entities.filter((e) => e.title === `Bulk ${i}`)).toHaveLength(1);
+    }
+  });
+});

@@ -75,3 +75,24 @@ export async function offline<T>(page: Page, fn: () => Promise<T>): Promise<T> {
     await page.context().setOffline(false);
   }
 }
+
+/** How many queued (pending + dead) mutation envelopes the outbox holds right now. */
+export async function outboxCount(page: Page): Promise<number> {
+  return (await readStore(page, "logger", "outbox")).length;
+}
+
+/**
+ * Drive a sync from the Settings screen and wait for the outbox to fully drain. Assumes the
+ * context is back online. Use after queuing offline writes to push them to the server.
+ */
+export async function syncFromSettings(page: Page, timeoutMs = 20_000): Promise<void> {
+  await page.goto("/settings");
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if ((await outboxCount(page)) === 0) return;
+    const btn = page.getByRole("button", { name: /^(sync now|retry now)$/i }).first();
+    if (await btn.isEnabled().catch(() => false)) await btn.click().catch(() => {});
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`outbox did not drain within ${timeoutMs}ms (still ${await outboxCount(page)})`);
+}
