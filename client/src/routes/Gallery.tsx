@@ -1,4 +1,5 @@
 import { useGallery, useDeleteGalleryPhoto } from "../api/hooks.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 import { PhotoStream } from "../components/PhotoStream.js";
 import { useToast } from "../components/ToastProvider.js";
 
@@ -6,6 +7,7 @@ export function Gallery() {
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useGallery();
   const deletePhoto = useDeleteGalleryPhoto();
   const { showToast } = useToast();
+  const online = useOnlineStatus();
 
   const photos = data?.pages.flatMap((page) => page.photos) ?? [];
 
@@ -28,7 +30,7 @@ export function Gallery() {
         isFetchingNextPage={isFetchingNextPage}
         fetchNextPage={fetchNextPage}
         emptyText="No photos yet — add some from a movie or a meal."
-        onDelete={handleDelete}
+        onDelete={online ? handleDelete : undefined}
       />
     </div>
   );

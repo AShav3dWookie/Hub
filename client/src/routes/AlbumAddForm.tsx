@@ -4,11 +4,9 @@ import { X } from "lucide-react";
 import type { LogWithEntityDTO, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META } from "@logger/shared";
 import { useCreateAlbum } from "../api/hooks.js";
-import { api } from "../api/client.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
-import { OfflineNotice } from "../components/OfflineNotice.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
 
@@ -61,20 +59,13 @@ export function AlbumAddForm() {
       return;
     }
 
-    if (photoFiles.length > 0) {
-      try {
-        const formData = new FormData();
-        for (const file of photoFiles) formData.append("photos", file);
-        await api.postForm(`/albums/${albumId}/photos`, formData);
-      } catch {
-        navigate(`/album/${albumId}`);
-        showToast("Album created, but photos failed to upload — add them from the album.");
-        return;
-      }
-    }
-
     navigate(`/album/${albumId}`);
-    showToast("Album created!");
+    if (photoFiles.length > 0) {
+      // The album only has a temp id until it syncs — photos are added from its page after.
+      showToast("Album created — add the photos once it has synced.");
+    } else {
+      showToast(online ? "Album created!" : "Album created — will sync when you're back online.");
+    }
   }
 
   return (
@@ -179,10 +170,9 @@ export function AlbumAddForm() {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <OfflineNotice />
       <button
         type="submit"
-        disabled={createAlbum.isPending || !online}
+        disabled={createAlbum.isPending}
         className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
       >
         Create album
