@@ -27,7 +27,10 @@ export function countChanges(resp: SyncChangesResponse): number {
  * delete every tombstoned row, then advance the stored cursor. All-or-nothing so a failed
  * write never leaves the cursor ahead of the data.
  *
- * The lite tier has no local writes, so incoming rows always win — no dirty/version guard.
+ * **Dirty guard (writes tier):** a row the user has changed locally but not yet pushed
+ * (`_localDirty`) or soft-deleted (`_localDeleted`) is left alone — the incoming server copy
+ * is skipped, not written over, and a tombstone for it is ignored. Once its outbox envelope
+ * flushes, `reconcile` / `finalizeLocalRows` clears the flag and the next pull lands normally.
  */
 export async function applyChanges(resp: SyncChangesResponse): Promise<void> {
   const db = await getDB();
@@ -37,16 +40,33 @@ export async function applyChanges(resp: SyncChangesResponse): Promise<void> {
   );
 
   const { entities, logs, photos, albums, entityNotes } = resp.changes;
-  const writes: Promise<unknown>[] = [
-    ...entities.map((r) => tx.objectStore("entities").put(r)),
-    ...logs.map((r) => tx.objectStore("logs").put(r)),
-    ...photos.map((r) => tx.objectStore("photos").put(r)),
-    ...albums.map((r) => tx.objectStore("albums").put(r)),
-    ...entityNotes.map((r) => tx.objectStore("entityNotes").put(r)),
-    ...resp.deletions.map((t) => tx.objectStore(STORE_FOR[t.entityType]).delete(t.id)),
-    tx.objectStore("meta").put({ key: META_SYNC_CURSOR, value: resp.nextCursor }),
-  ];
 
-  await Promise.all(writes);
+  /** Has the user touched this row locally? Then the server copy must not clobber it. */
+  const isDirty = (row?: { _localDirty?: boolean; _localDeleted?: boolean }) =>
+    Boolean(row?._localDirty || row?._localDeleted);
+
+  for (const row of entities) {
+    if (!isDirty(await tx.objectStore("entities").get(row.id))) await tx.objectStore("entities").put(row);
+  }
+  for (const row of logs) {
+    if (!isDirty(await tx.objectStore("logs").get(row.id))) await tx.objectStore("logs").put(row);
+  }
+  for (const row of photos) {
+    if (!isDirty(await tx.objectStore("photos").get(row.id))) await tx.objectStore("photos").put(row);
+  }
+  for (const row of albums) {
+    if (!isDirty(await tx.objectStore("albums").get(row.id))) await tx.objectStore("albums").put(row);
+  }
+  for (const row of entityNotes) {
+    if (!isDirty(await tx.objectStore("entityNotes").get(row.id)))
+      await tx.objectStore("entityNotes").put(row);
+  }
+
+  for (const t of resp.deletions) {
+    const store = STORE_FOR[t.entityType];
+    if (!isDirty(await tx.objectStore(store).get(t.id))) await tx.objectStore(store).delete(t.id);
+  }
+
+  await tx.objectStore("meta").put({ key: META_SYNC_CURSOR, value: resp.nextCursor });
   await tx.done;
 }
