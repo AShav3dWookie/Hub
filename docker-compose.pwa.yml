@@ -4,6 +4,8 @@
 #   npm run pwa:down      # stop, keep the data
 #   npm run pwa:reset     # stop + wipe the data
 #   npm run pwa:client    # recreate ONLY the client → a brand-new browser (fresh install)
+#   npm run pwa:offline   # cut the client's network — server stays up, :3210 stays visible
+#   npm run pwa:online    # reconnect the client
 #
 # Topology mirrors the home-server deployment (Cloudflare → nginx → app container),
 # with a separate "client machine" so you test a clean phone, not your dev browser:
@@ -24,11 +26,21 @@
 
 name: logger-pwa
 
+# `edge` carries all client↔server traffic. `client-lan` has only the client on it
+# and exists purely so the client keeps a network interface — and its published
+# :3210 port — when `edge` is disconnected (`npm run pwa:offline`). That's a real
+# network partition: the client can't resolve or reach the server, but the server
+# keeps running and you keep watching the client.
+networks:
+  edge:
+  client-lan:
+
 services:
   seed:
     build: { context: ., target: runtime }
     image: logger-pwa:local
     working_dir: /app/server
+    networks: [edge]
     environment:
       DB_PATH: /data/logger.db
     volumes:
@@ -46,6 +58,7 @@ services:
     depends_on:
       seed:
         condition: service_completed_successfully
+    networks: [edge]
     expose:
       - "3000"
     environment:
@@ -62,6 +75,7 @@ services:
     depends_on:
       app:
         condition: service_started
+    networks: [edge]
     ports:
       - "3200:80"
     volumes:
@@ -87,6 +101,7 @@ services:
     depends_on:
       nginx:
         condition: service_started
+    networks: [edge, client-lan]
     ports:
       - "3210:3000"              # the browser UI — open this in your own browser
     environment:

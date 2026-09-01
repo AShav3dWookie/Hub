@@ -51,6 +51,8 @@ npm run pwa:up        # build + start everything
 npm run pwa:down      # stop, keep the data
 npm run pwa:reset     # stop + wipe the DB (next up re-seeds)
 npm run pwa:client    # recreate ONLY the client → a brand-new browser
+npm run pwa:offline   # cut the client off the network (server stays up, :3210 stays visible)
+npm run pwa:online    # reconnect it
 ```
 
 First `up` seeds sample data (movies, meals, people, a few photos) into a named
@@ -70,9 +72,10 @@ own browser at `:3200` for a quick one).
 | Check | How |
 |---|---|
 | **Fresh install + first sync** | `npm run pwa:client`, open `:3210`. The app loads, registers its service worker, and syncs the seed data into IndexedDB — all on first visit. Install it: address-bar install icon → Install. |
-| **Opens with the backend down** | `docker compose -f docker-compose.pwa.yml stop app`, then reload the client. Shell + all data still render. `start app` to restore. |
-| **Offline browsing** | Client's DevTools → Network → **Offline**. Navigate, search, open entities, the calendar — all from IndexedDB. |
-| **Reload while offline** | Offline + `Ctrl-R`. The service worker serves the cached shell. |
+| **Client loses signal, server fine** | `npm run pwa:offline` — a real network cut: the client can't resolve or reach the server, the server keeps running, and you keep watching at :3210. Reload the client → shell + data still render. `npm run pwa:online` to restore. |
+| **Offline browsing** | With the client offline, navigate, search, open entities, the calendar — all from IndexedDB, no requests. |
+| **Reload while offline** | Offline + `Ctrl-R` in the client. The service worker serves the cached shell. |
+| **Offline UI (banners / "Offline" chip)** | Use the client's DevTools → Network → **Offline** instead — it also flips `navigator.onLine`, which the offline banners key off. (`pwa:offline` cuts the wire but leaves a local interface, so Chromium may still report "online" while every request fails — realistic for a dead connection / captive portal.) |
 | **Gallery offline** | Open the Gallery once online, go offline, reload — thumbnails still paint. Open a photo → an "unavailable offline" placeholder (full-size originals aren't cached in this tier). |
 | **Settings** | Bottom-bar gear → last-sync time, **Sync now**, thumbnail cache size + **Clear thumbnails**, background-sync status. |
 | **Offline writes are blocked** | Offline → open an Add form → an "offline" banner appears and Save is disabled. Back online → it re-enables. |
