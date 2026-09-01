@@ -3,6 +3,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { primeRepo } from "../test/mockRepo.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { EntityNotes } from "./EntityNotes.js";
 import type { EntityNoteDTO } from "@logger/shared";
 
@@ -16,10 +17,6 @@ vi.mock("../api/afterMutation.js", () => ({
 import { repo } from "../local/repo.js";
 
 const NOW = "2024-05-01T00:00:00.000Z";
-
-function jsonResponse(body: unknown, status = 200) {
-  return { ok: status < 400, status, json: async () => body };
-}
 
 describe("EntityNotes", () => {
   beforeEach(() => {
@@ -58,28 +55,18 @@ describe("EntityNotes", () => {
     expect(screen.getByRole("button", { name: /Conversation topic/ })).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("submits a new note to the API", async () => {
-    const fetchMock = fetch as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue(
-      jsonResponse(
-        { id: 2, entityId: 5, category: "general", body: "Loves hiking", createdAt: NOW, updatedAt: NOW },
-        201,
-      ),
-    );
-
+  it("queues a note.create envelope for the new note", async () => {
     renderWithProviders(<EntityNotes entityId={5} />);
     await screen.findByRole("button", { name: /General/ });
 
     await userEvent.type(screen.getByPlaceholderText(/Conversation topics/), "Loves hiking");
     await userEvent.click(screen.getByRole("button", { name: "Add note" }));
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/entities/5/notes",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ category: "general", body: "Loves hiking" }),
-      }),
-    );
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({
+      type: "note.create",
+      payload: { entityId: 5, category: "general", body: "Loves hiking" },
+    });
   });
 
   it("shows a delete confirmation before removing a note", async () => {

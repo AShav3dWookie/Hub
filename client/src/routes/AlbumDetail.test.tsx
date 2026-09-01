@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { primeRepo } from "../test/mockRepo.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { AlbumDetail } from "./AlbumDetail.js";
 import type { AlbumDTO, GalleryResponse } from "@logger/shared";
 
@@ -17,6 +18,18 @@ vi.mock("../api/afterMutation.js", () => ({
 import { repo } from "../local/repo.js";
 
 const NOW = "2024-05-01T00:00:00.000Z";
+
+/** Wait until a pending outbox envelope of `type` exists, then return its payload. */
+async function queuedPayload(type: string): Promise<Record<string, unknown>> {
+  let payload: Record<string, unknown> | undefined;
+  await vi.waitFor(async () => {
+    payload = (await pendingOutbox()).find((e) => e.type === type)?.payload as
+      | Record<string, unknown>
+      | undefined;
+    expect(payload).toBeDefined();
+  });
+  return payload as Record<string, unknown>;
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
@@ -209,9 +222,7 @@ describe("AlbumDetail", () => {
     await userEvent.type(screen.getByPlaceholderText(/find an event to add/i), "sic");
     await userEvent.click(await screen.findByRole("button", { name: /Sicario/ }));
 
-    await vi.waitFor(() =>
-      expect(lastMatching((c) => c.method === "POST" && c.url === "/api/albums/1/events")).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.addEvent")).toMatchObject({ albumId: 1, logId: 55 });
   });
 
   it("deletes a loose photo through the album photo endpoint", async () => {
@@ -241,17 +252,13 @@ describe("AlbumDetail", () => {
   it("removes an event from the album", async () => {
     renderDetail();
     await userEvent.click(await screen.findByRole("button", { name: /remove heat from album/i }));
-    await vi.waitFor(() =>
-      expect(lastMatching((c) => c.method === "DELETE" && c.url === "/api/albums/1/events/30")).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.removeEvent")).toMatchObject({ albumId: 1, logId: 30 });
   });
 
   it("removes a directly-added person", async () => {
     renderDetail();
     await userEvent.click(await screen.findByRole("button", { name: "Remove Alex" }));
-    await vi.waitFor(() =>
-      expect(lastMatching((c) => c.method === "DELETE" && c.url === "/api/albums/1/people/2")).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.removePerson")).toMatchObject({ albumId: 1, personId: 2 });
   });
 
   it("adds a person to the album", async () => {
@@ -260,28 +267,20 @@ describe("AlbumDetail", () => {
     await userEvent.type(screen.getByPlaceholderText(/add a person/i), "Robin{Enter}");
     await userEvent.click(screen.getByRole("button", { name: /add to album/i }));
 
-    await vi.waitFor(() =>
-      expect(lastMatching((c) => c.method === "POST" && c.url === "/api/albums/1/people")).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.addPerson")).toMatchObject({ albumId: 1 });
   });
 
   it("deletes the album, offering keep-photos vs delete-photos", async () => {
     renderDetail();
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /delete album, keep photos/i }));
-    await vi.waitFor(() =>
-      expect(lastMatching((c) => c.method === "DELETE" && c.url === "/api/albums/1")).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.delete")).toMatchObject({ albumId: 1, deletePhotos: false });
   });
 
   it("deletes the album and its loose photos when chosen", async () => {
     renderDetail();
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /delete album & its loose photos/i }));
-    await vi.waitFor(() =>
-      expect(
-        lastMatching((c) => c.method === "DELETE" && c.url === "/api/albums/1?deletePhotos=true"),
-      ).toBeTruthy(),
-    );
+    expect(await queuedPayload("album.delete")).toMatchObject({ albumId: 1, deletePhotos: true });
   });
 });

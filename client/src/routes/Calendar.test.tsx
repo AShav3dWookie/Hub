@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { primeRepo } from "../test/mockRepo.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { Calendar } from "./Calendar.js";
 import { LogAddForm } from "./LogAddForm.js";
 import type { CalendarItem } from "@logger/shared";
@@ -431,44 +432,38 @@ describe("Calendar — add-and-return round trip", () => {
   });
 
   it("select a day → add → save → back on that calendar day with the new event", async () => {
-    const created: Array<Record<string, unknown>> = [];
+    // The write is local-first: reflect the queued log.create back through the calendar read.
+    vi.mocked(repo.getCalendarRange).mockImplementation(async (from: string, to: string) => {
+      const logCreate = (await pendingOutbox()).find((e) => e.type === "log.create");
+      const date = (logCreate?.payload as { date?: string } | undefined)?.date;
+      const items =
+        logCreate && date && date >= from && date <= to
+          ? [
+              {
+                date,
+                kind: "log" as const,
+                category: "appointment" as const,
+                title: "Blood test",
+                notes: null,
+                entityId: 1,
+                entityCategory: "appointment" as const,
+                logId: 1,
+              },
+            ]
+          : [];
+      return { from, to, items };
+    });
 
-    vi.mocked(repo.getCalendarRange).mockImplementation(async (from: string, to: string) => ({
-      from,
-      to,
-      items: created
-        .filter((c) => (c.date as string) >= from && (c.date as string) <= to)
-        .map((c) => ({
-          date: c.date as string,
-          kind: "log" as const,
-          category: "appointment" as const,
-          title: c.title as string,
-          notes: null,
-          entityId: 1,
-          entityCategory: "appointment" as const,
-          logId: 1,
-        })),
-    }));
-
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      if (url === "/api/logs" && init?.method === "POST") {
-        created.push(JSON.parse(init.body as string));
-        return Promise.resolve({ ok: true, status: 201, json: async () => ({ id: 1, entityId: 1, photos: [] }) });
-      }
-      if (url.startsWith("/api/sync/changes")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [] },
-            deletions: [],
-            nextCursor: "0",
-            hasMore: false,
-            serverTime: NOW,
-          }),
-        });
-      }
-      return Promise.resolve({ ok: true, status: 200, json: async () => [] });
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [] },
+        deletions: [],
+        nextCursor: "0",
+        hasMore: false,
+        serverTime: NOW,
+      }),
     });
 
     const { container: c } = renderWithProviders(
@@ -494,6 +489,12 @@ describe("Calendar — add-and-return round trip", () => {
     await screen.findByText("February 2024");
     expect(cell("2024-02-27")).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByRole("link", { name: /Blood test/ })).toBeInTheDocument();
-    expect(created[0]).toMatchObject({ category: "appointment", title: "Blood test", date: "2024-02-27" });
+
+    const envs = await pendingOutbox();
+    expect(envs.find((e) => e.type === "entity.create")?.payload).toMatchObject({
+      category: "appointment",
+      title: "Blood test",
+    });
+    expect(envs.find((e) => e.type === "log.create")?.payload).toMatchObject({ date: "2024-02-27" });
   });
 });
