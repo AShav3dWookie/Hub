@@ -1,8 +1,11 @@
-import { RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   useOnlineStatus,
   useSyncStatus,
   useForceSync,
+  useOutbox,
+  useDiscardDeadLetters,
   usePeriodicSyncStatus,
   useThumbnailCacheStats,
   useClearThumbnailCache,
@@ -70,8 +73,14 @@ export function Settings() {
   const { data: sync } = useSyncStatus();
   const { data: pbs } = usePeriodicSyncStatus();
   const forceSync = useForceSync();
+  const { data: outbox } = useOutbox();
+  const discardDead = useDiscardDeadLetters();
   const { data: cache } = useThumbnailCacheStats();
   const clearThumbs = useClearThumbnailCache();
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
+  const pending = outbox?.pending ?? 0;
+  const dead = outbox?.dead ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -113,6 +122,71 @@ export function Settings() {
           <p className="text-sm text-red-600 dark:text-red-400">Sync failed — try again when online.</p>
         )}
       </Section>
+
+      {(pending > 0 || dead.length > 0) && (
+        <Section title="Pending changes">
+          {pending > 0 && (
+            <Row
+              label="Waiting to sync"
+              value={`${pending} change${pending === 1 ? "" : "s"}`}
+            />
+          )}
+          {pending > 0 && (
+            <button
+              type="button"
+              onClick={() => forceSync.mutate()}
+              disabled={forceSync.isPending || !online}
+              className="flex min-h-[44px] items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
+            >
+              <RefreshCw size={16} className={forceSync.isPending ? "animate-spin" : undefined} />
+              Retry now
+            </button>
+          )}
+
+          {dead.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-md bg-red-50 p-3 text-sm dark:bg-red-950">
+              <p className="flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
+                <AlertTriangle size={16} />
+                {dead.length} change{dead.length === 1 ? "" : "s"} couldn&apos;t sync
+              </p>
+              <p className="text-xs text-red-600 dark:text-red-400">
+                The server rejected {dead.length === 1 ? "it" : "them"}. Discarding drops the queued
+                change; your data reverts to the server&apos;s copy on the next sync.
+              </p>
+              {confirmingDiscard ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-red-700 dark:text-red-300">Discard {dead.length}?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      discardDead.mutate();
+                      setConfirmingDiscard(false);
+                    }}
+                    className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDiscard(false)}
+                    className="min-h-[44px] rounded-md border border-red-300 px-3 text-sm text-red-700 dark:border-red-800 dark:text-red-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDiscard(true)}
+                  className="self-start rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-800 dark:text-red-300"
+                >
+                  Discard
+                </button>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title="Storage">
         <Row

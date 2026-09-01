@@ -9,6 +9,8 @@ import {
   useOnlineStatus,
   useSyncStatus,
   useForceSync,
+  useOutbox,
+  useDiscardDeadLetters,
   usePeriodicSyncStatus,
   useThumbnailCacheStats,
   useClearThumbnailCache,
@@ -16,6 +18,7 @@ import {
 
 const forceSyncMutate = vi.fn();
 const clearMutate = vi.fn();
+const discardMutate = vi.fn();
 
 beforeEach(() => {
   vi.mocked(useOnlineStatus).mockReturnValue(true);
@@ -27,6 +30,13 @@ beforeEach(() => {
     isPending: false,
     isError: false,
   } as unknown as ReturnType<typeof useForceSync>);
+  vi.mocked(useOutbox).mockReturnValue({
+    data: { pending: 0, dead: [] },
+  } as unknown as ReturnType<typeof useOutbox>);
+  vi.mocked(useDiscardDeadLetters).mockReturnValue({
+    mutate: discardMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useDiscardDeadLetters>);
   vi.mocked(usePeriodicSyncStatus).mockReturnValue({
     data: "unsupported",
   } as ReturnType<typeof usePeriodicSyncStatus>);
@@ -39,6 +49,7 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof useClearThumbnailCache>);
   forceSyncMutate.mockClear();
   clearMutate.mockClear();
+  discardMutate.mockClear();
 });
 
 describe("Settings", () => {
@@ -86,5 +97,38 @@ describe("Settings", () => {
     } as ReturnType<typeof useThumbnailCacheStats>);
     renderWithProviders(<Settings />);
     expect(screen.getByRole("button", { name: /clear thumbnails/i })).toBeDisabled();
+  });
+
+  it("hides the Pending changes section when the outbox is empty", () => {
+    renderWithProviders(<Settings />);
+    expect(screen.queryByText("Pending changes")).not.toBeInTheDocument();
+  });
+
+  it("shows the pending count and a Retry now button", async () => {
+    vi.mocked(useOutbox).mockReturnValue({
+      data: { pending: 3, dead: [] },
+    } as unknown as ReturnType<typeof useOutbox>);
+    renderWithProviders(<Settings />);
+
+    expect(screen.getByText("Pending changes")).toBeInTheDocument();
+    expect(screen.getByText("3 changes")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /retry now/i }));
+    expect(forceSyncMutate).toHaveBeenCalledOnce();
+  });
+
+  it("confirms before discarding dead-lettered changes", async () => {
+    vi.mocked(useOutbox).mockReturnValue({
+      data: {
+        pending: 0,
+        dead: [{ mutationId: "x", type: "log.update", seq: 1, status: "dead" }],
+      },
+    } as unknown as ReturnType<typeof useOutbox>);
+    renderWithProviders(<Settings />);
+
+    expect(screen.getByText(/1 change couldn't sync/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(discardMutate).not.toHaveBeenCalled(); // confirmation first
+    await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(discardMutate).toHaveBeenCalledOnce();
   });
 });
