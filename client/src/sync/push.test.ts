@@ -159,6 +159,16 @@ describe("pushOutbox", () => {
     expect((await db.getAll("logs"))[0]._localDirty).toBeUndefined();
   });
 
+  it("with an empty queue, still clears a row left dirty by an annihilated add/remove", async () => {
+    const db = await getDB();
+    // An album whose add-then-remove-event pair annihilated: back to server state, but flagged.
+    await db.put("albums", { ...makeAlbum({ id: 4, eventLogIds: [] }), _localDirty: true });
+    vi.stubGlobal("fetch", fetchReturning({ results: [] }));
+
+    expect(await pushOutbox()).toEqual({ pushed: 0, dead: 0, skipped: true });
+    expect((await db.getAll("albums"))[0]._localDirty).toBeUndefined();
+  });
+
   it("a second push cycle keeps the first cycle's reconciled ids and links", async () => {
     const db = await getDB();
     // Cycle 1: create a temp entity + its log.

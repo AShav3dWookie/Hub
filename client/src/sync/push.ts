@@ -43,7 +43,12 @@ async function runPush(): Promise<PushResult> {
   }
 
   const queued = await pendingOutbox();
-  if (queued.length === 0) return { pushed: 0, dead: 0, skipped: true };
+  if (queued.length === 0) {
+    // Nothing to push, but a row can still be stranded `_localDirty` with no envelope — e.g. an
+    // offline add-then-remove that annihilated its own pair. Reconcile it back to server truth.
+    await finalizeLocalRows();
+    return { pushed: 0, dead: 0, skipped: true };
+  }
 
   const mutations: MutationEnvelope[] = queued.map((r) => ({
     mutationId: r.mutationId,

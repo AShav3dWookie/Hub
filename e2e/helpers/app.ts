@@ -85,11 +85,23 @@ export async function outboxCount(page: Page): Promise<number> {
  * Drive a sync from the Settings screen and wait for the outbox to fully drain. Assumes the
  * context is back online. Use after queuing offline writes to push them to the server.
  */
-export async function syncFromSettings(page: Page, timeoutMs = 20_000): Promise<void> {
+export async function syncFromSettings(page: Page, timeoutMs = 25_000): Promise<void> {
+  // A just-clicked mutation writes to IndexedDB asynchronously; navigating before that commits
+  // would abort the transaction and lose the queued envelope. Give it a beat to land.
+  await page.waitForTimeout(500);
   await page.goto("/settings");
   const start = Date.now();
+  let zeroSince: number | null = null;
   while (Date.now() - start < timeoutMs) {
-    if ((await outboxCount(page)) === 0) return;
+    if ((await outboxCount(page)) === 0) {
+      // Require the queue to stay empty for a beat: the push removes envelopes just before its
+      // POST resolves, so a bare "count === 0" can still be a hair ahead of the server commit.
+      zeroSince ??= Date.now();
+      if (Date.now() - zeroSince >= 700) return;
+      await page.waitForTimeout(200);
+      continue;
+    }
+    zeroSince = null;
     const btn = page.getByRole("button", { name: /^(sync now|retry now)$/i }).first();
     if (await btn.isEnabled().catch(() => false)) await btn.click().catch(() => {});
     await page.waitForTimeout(300);

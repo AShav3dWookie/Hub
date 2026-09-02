@@ -22,11 +22,23 @@ type MutationEnvelope = ParsedMutationEnvelope;
 
 const nowIso = () => new Date().toISOString();
 
+/**
+ * A negative temp id that isn't in the batch id map *yet*. The dispatcher may just be seeing
+ * this envelope before the `*.create` that produces the id — `applyMutations` defers it and
+ * retries after the rest of the batch, so envelope order doesn't have to be perfect.
+ */
+class UnresolvedTempIdError extends BadRequestError {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnresolvedTempIdError";
+  }
+}
+
 /** Resolve a value that may be a negative temp id to its real id from the batch map. */
 function resolve(value: unknown, idMap: Map<number, number>, ctx: string): unknown {
   if (typeof value !== "number" || value >= 0) return value;
   const real = idMap.get(value);
-  if (real == null) throw new BadRequestError(`Unresolved temp id ${value} (${ctx})`);
+  if (real == null) throw new UnresolvedTempIdError(`Unresolved temp id ${value} (${ctx})`);
   return real;
 }
 
@@ -266,10 +278,13 @@ function toMessage(e: unknown): string {
 }
 
 /**
- * Replay a batch of queued client mutations. Each envelope is applied in its own transaction,
- * in array order; a batch-local id map resolves negative temp ids from earlier `*.create`
- * results. Every `mutationId` is recorded (success or error) so a replayed batch returns the
- * stored result instead of re-applying — idempotent retry.
+ * Replay a batch of queued client mutations. Each envelope is applied in its own transaction;
+ * a batch-local id map resolves negative temp ids from `*.create` results. Envelopes whose
+ * temp-id dependency hasn't been created yet are **deferred and retried** after the rest of
+ * the batch (so a create that gains a dependency out of order still lands), until a pass makes
+ * no progress. Every `mutationId` is recorded (success or error) so a replayed batch returns
+ * the stored result instead of re-applying — idempotent retry. Results come back in input
+ * order regardless of the deferral shuffle.
  */
 export function applyMutations(
   db: AppDb,
@@ -277,9 +292,18 @@ export function applyMutations(
   envelopes: ParsedMutationEnvelope[],
 ): MutationResult[] {
   const idMap = new Map<number, number>();
-  const results: MutationResult[] = [];
+  const done = new Map<string, MutationResult>();
 
-  for (const env of envelopes) {
+  const record = (mutationId: string, result: MutationResult) => {
+    db.insert(syncAppliedMutations)
+      .values({ mutationId, resultJson: JSON.stringify(result), createdAt: nowIso() })
+      .onConflictDoNothing()
+      .run();
+    done.set(mutationId, result);
+  };
+
+  /** Apply one envelope now. `"defer"` = its temp-id dependency isn't in the batch map yet. */
+  const runOne = (env: ParsedMutationEnvelope): MutationResult | "defer" => {
     const cached = db
       .select({ resultJson: syncAppliedMutations.resultJson })
       .from(syncAppliedMutations)
@@ -287,19 +311,15 @@ export function applyMutations(
       .get();
     if (cached) {
       const result = JSON.parse(cached.resultJson) as MutationResult;
-      // Re-seed the batch id map so later envelopes can still resolve this create.
       if (result.idMap) {
         for (const [temp, real] of Object.entries(result.idMap)) idMap.set(Number(temp), real);
       }
-      results.push(result);
-      continue;
+      return result;
     }
 
-    let result: MutationResult;
     try {
-      // better-sqlite3 is single-connection: everything inside runs in this BEGIN/COMMIT,
-      // whether it goes through `db` or the tx handle.
-      result = db.transaction(() => {
+      // better-sqlite3 is single-connection: everything inside runs in this BEGIN/COMMIT.
+      return db.transaction(() => {
         const r = dispatchOne(db, photosDir, env, idMap);
         db.insert(syncAppliedMutations)
           .values({ mutationId: env.mutationId, resultJson: JSON.stringify(r), createdAt: nowIso() })
@@ -307,19 +327,40 @@ export function applyMutations(
         return r;
       });
     } catch (e) {
-      result = { mutationId: env.mutationId, status: "error", error: toMessage(e) };
-      // Record the failure OUTSIDE a transaction so a replay won't re-run the poison envelope.
-      db.insert(syncAppliedMutations)
-        .values({
-          mutationId: env.mutationId,
-          resultJson: JSON.stringify(result),
-          createdAt: nowIso(),
-        })
-        .onConflictDoNothing()
-        .run();
+      if (e instanceof UnresolvedTempIdError) return "defer";
+      // A real failure — record it OUTSIDE a transaction so a replay won't re-run the poison.
+      return { mutationId: env.mutationId, status: "error", error: toMessage(e) } satisfies MutationResult;
     }
-    results.push(result);
+  };
+
+  let queue = [...envelopes];
+  while (queue.length > 0) {
+    const deferred: ParsedMutationEnvelope[] = [];
+    let progressed = false;
+    for (const env of queue) {
+      const r = runOne(env);
+      if (r === "defer") {
+        deferred.push(env);
+        continue;
+      }
+      // dispatchOne already stored a success inside its txn; errors are stored here.
+      if (r.status === "error") record(env.mutationId, r);
+      else done.set(env.mutationId, r);
+      progressed = true;
+    }
+    if (deferred.length === 0) break;
+    if (!progressed) {
+      for (const env of deferred) {
+        record(env.mutationId, {
+          mutationId: env.mutationId,
+          status: "error",
+          error: "Unresolved temp id — its create is missing from the batch",
+        });
+      }
+      break;
+    }
+    queue = deferred;
   }
 
-  return results;
+  return envelopes.map((e) => done.get(e.mutationId)!);
 }
