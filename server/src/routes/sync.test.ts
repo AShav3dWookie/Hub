@@ -189,6 +189,12 @@ describe("GET /api/sync/changes", () => {
     expect([...seen].sort((a, b) => a - b)).toEqual([...seen].sort((a, b) => a - b));
   });
 
+  it("serves the change-feed with Cache-Control: no-store", async () => {
+    const app = setup();
+    const res = await request(app).get("/api/sync/changes?since=0");
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
   it("400s on a malformed cursor or limit", async () => {
     const app = setup();
     expect((await request(app).get("/api/sync/changes?since=-1")).status).toBe(400);
@@ -571,6 +577,49 @@ describe("POST /api/sync/mutations — persistence across batches", () => {
     expect(feed.deletions).toEqual(
       expect.arrayContaining([expect.objectContaining({ entityType: "entity_note", id: noteId })]),
     );
+  });
+
+  it("resolves an out-of-order dependency by deferring the envelope", async () => {
+    const app = setup();
+    // album.create references a person whose entity.create comes LATER in the batch.
+    const results = await mutate(app, [
+      {
+        mutationId: "a",
+        type: "album.create",
+        tempId: -1,
+        payload: { title: "Ordered Late", eventLogIds: [], people: [{ id: -2 }] },
+      },
+      { mutationId: "p", type: "entity.create", tempId: -2, payload: { category: "person", title: "Latecomer" } },
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+    const albumId = results[0].idMap![-1];
+    const personId = results[1].idMap![-2];
+
+    const feed = await changesNow(app);
+    expect(feed.changes.albums.find((x) => x.id === albumId)?.personIds).toEqual([personId]);
+    // Replaying the same (still out-of-order) batch is a no-op.
+    const replay = await mutate(app, [
+      {
+        mutationId: "a",
+        type: "album.create",
+        tempId: -1,
+        payload: { title: "Ordered Late", eventLogIds: [], people: [{ id: -2 }] },
+      },
+      { mutationId: "p", type: "entity.create", tempId: -2, payload: { category: "person", title: "Latecomer" } },
+    ]);
+    expect(replay.map((r) => r.status)).toEqual(["applied", "applied"]);
+    expect((await changesNow(app)).changes.entities.filter((e) => e.title === "Latecomer")).toHaveLength(1);
+  });
+
+  it("a genuinely unresolvable temp id still errors after the deferral passes", async () => {
+    const app = setup();
+    const [bad, good] = await mutate(app, [
+      { mutationId: "bad", type: "log.create", tempId: -1, payload: { entityId: -77, date: "2024-01-01", people: [] } },
+      { mutationId: "good", type: "entity.create", tempId: -2, payload: { category: "movie", title: "Fine" } },
+    ]);
+    expect(bad.status).toBe("error");
+    expect(good.status).toBe("applied");
+    expect((await changesNow(app)).changes.entities.filter((e) => e.title === "Fine")).toHaveLength(1);
   });
 
   it("a large single batch of creates all persist with distinct real ids", async () => {
