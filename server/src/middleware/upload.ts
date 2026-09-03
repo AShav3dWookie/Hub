@@ -6,7 +6,7 @@ import {
   isAllowedMediaMime,
 } from "@logger/shared";
 import { MAX_PHOTOS_PER_LOG, MAX_PHOTOS_PER_ALBUM } from "../services/logPhotosService.js";
-import { AppError, BadRequestError } from "./errors.js";
+import { AppError, BadRequestError } from "../lib/errors.js";
 
 const MAX_FILES = Math.max(MAX_PHOTOS_PER_LOG, MAX_PHOTOS_PER_ALBUM);
 

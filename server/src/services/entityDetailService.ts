@@ -2,15 +2,13 @@ import { eq, inArray } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs, logPeople } from "../db/schema.js";
 import { getEntityById, toEntitySummary } from "./entityService.js";
-import { getLogsForEntity } from "./logService.js";
+import { getLogsForEntity, toLogWithEntity } from "./logService.js";
 import { BadRequestError } from "../lib/errors.js";
 import { computePersonStats } from "@logger/shared";
 import type {
   EntityWithLogsDTO,
   PersonProfileDTO,
   LogWithEntityDTO,
-  LogPhotoDTO,
-  AlbumRef,
   PersonRef,
 } from "@logger/shared";
 
@@ -70,26 +68,14 @@ export function getPersonProfile(db: AppDb, id: number): PersonProfileDTO {
       peopleByLog.set(row.logId, list);
     }
 
+    // Person-profile appearances are a summary list, like search results, not a detail view.
+    // `toLogWithEntity` defaults photos and album refs to [], which is exactly what is wanted
+    // here: no per-log photo lookup is triggered.
     appearances = logRows
       .map((row) => {
         const parentEntity = entityById.get(row.entityId);
         if (!parentEntity) return null;
-        return {
-          id: row.id,
-          entityId: row.entityId,
-          rating: row.rating,
-          date: row.date,
-          notes: row.notes,
-          people: peopleByLog.get(row.id) ?? [],
-          // Person-profile appearances are a summary list (like search results),
-          // not a detail view — photos + album refs are only surfaced on the entity page.
-          photos: [] as LogPhotoDTO[],
-          albums: [] as AlbumRef[],
-          autoDelete: row.autoDelete,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          entity: toEntitySummary(parentEntity),
-        } satisfies LogWithEntityDTO;
+        return toLogWithEntity(row, peopleByLog.get(row.id) ?? [], parentEntity);
       })
       .filter((x): x is LogWithEntityDTO => x !== null)
       .sort((a, b) => b.date.localeCompare(a.date));
