@@ -1,4 +1,5 @@
 import type { Category, LoggableCategory } from "./categories.js";
+import type { MediaKind } from "./media.js";
 import type { MatchMode } from "./search.js";
 import type { NoteCategory } from "./notes.js";
 
@@ -22,14 +23,19 @@ export interface EntitySummary {
   author: string | null;
 }
 
-/** A photo attached to a log. Only logs whose category has hasPeople can have photos (see CATEGORY_FIELDS). */
+/**
+ * A photo or video attached to a log. Only logs whose category has hasPeople can have
+ * attachments (see CATEGORY_FIELDS). Videos appear inline with photos in every view.
+ */
 export interface LogPhotoDTO {
   id: number;
-  /** The log this photo belongs to, or null if that log was deleted but the photo was kept (gallery orphan). */
+  /** The log this attachment belongs to, or null if that log was deleted but it was kept (gallery orphan). */
   logId: number | null;
-  /** Path to the full-size image, served under /api/photos. */
+  /** Whether this is a still image or a video, derived from the stored MIME type. */
+  kind: MediaKind;
+  /** Path to the full-size image / the video file, served under /api/photos. */
   url: string;
-  /** Path to the server-generated thumbnail, served under /api/photos. */
+  /** Path to the server-generated thumbnail (a webp poster frame for videos), served under /api/photos. */
   thumbnailUrl: string;
   originalName: string;
   createdAt: string;

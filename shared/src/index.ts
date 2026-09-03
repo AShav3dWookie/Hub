@@ -1,4 +1,5 @@
 export * from "./categories.js";
+export * from "./media.js";
 export * from "./types.js";
 export * from "./albums.js";
 export * from "./calendar.js";

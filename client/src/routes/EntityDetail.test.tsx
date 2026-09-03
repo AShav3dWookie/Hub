@@ -98,6 +98,7 @@ describe("EntityDetail photo gallery", () => {
           {
             id: 8,
             logId: 1,
+            kind: "photo",
             url: "/api/photos/full-8.jpg",
             thumbnailUrl: "/api/photos/thumb-8.webp",
             originalName: "dinner.jpg",
@@ -146,6 +147,7 @@ describe("EntityDetail photo gallery", () => {
         {
           id: 8,
           logId: 1,
+          kind: "photo",
           url: "/api/photos/full-8.jpg",
           thumbnailUrl: "/api/photos/thumb-8.webp",
           originalName: "dinner.jpg",
@@ -180,6 +182,7 @@ describe("EntityDetail log deletion with photos", () => {
   const photo: LogPhotoDTO = {
     id: 8,
     logId: 1,
+    kind: "photo",
     url: "/api/photos/full-8.jpg",
     thumbnailUrl: "/api/photos/thumb-8.webp",
     originalName: "dinner.jpg",

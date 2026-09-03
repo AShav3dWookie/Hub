@@ -96,13 +96,31 @@ catch-all that excludes `/api`. `errorHandler` is last.
 when disabled. **`config.ts` reads `process.env` at module load**, so tests that flip `AUTH_ENABLED`
 must `vi.resetModules()` and dynamically `import` `app.js` (see `app.test.ts`).
 
-### Photos storage
+### Photos & video storage
 
 `config.photosDir` derives from `path.dirname(config.dbPath) + "/photos"` so it shares the DB's
 persistent volume with no extra mount. `logPhotosService` stores originals under `crypto.randomUUID()`
 filenames plus a `sharp`-generated webp thumbnail (falls back to serving the original if `sharp` can't
-decode the format, e.g. HEIC without libheif). multer uses `memoryStorage`. Limits (enforced
-server-side): 10 photos/log, 10 MB/file, jpeg/png/webp/heic.
+decode the format, e.g. HEIC without libheif). multer uses `memoryStorage`.
+
+Videos are supported alongside photos and appear inline with them in every view. **mp4 only**
+(`video/mp4`) — the file is played back as-is (no transcoding) and mp4/H.264 is the only format that
+plays everywhere; `.mov` / `.webm` are rejected at upload. The `<uuid>_thumb.webp` slot holds a
+**poster frame** decoded by `ffmpeg` (`server/src/lib/videoPoster.ts`: `ffmpeg` → one PNG on stdout →
+the same sharp recipe). If `ffmpeg` is missing or can't decode, a generated placeholder tile is
+written instead — the thumbnail is always a real webp, so the SW offline cache and `<img>` grids keep
+working. `LogPhotoDTO.kind` (`"photo" | "video"`) is derived from the stored MIME type on both ends;
+no DB column was added.
+
+- **ffmpeg is a runtime dependency.** The Docker image installs it (`apk add ffmpeg`). Local dev
+  without it still works — uploads succeed with a placeholder poster. Override the binary with
+  `FFMPEG_PATH`.
+- The single MIME allow-list + size caps live in `shared/src/media.ts` (`MEDIA_ACCEPT_ATTR`,
+  `mediaKindForMime`, `maxBytesForMime`) — imported by both the client forms and the server pipeline.
+- Limits (enforced server-side): 10 photos-or-videos/log, 100/album; 10 MB/photo, 250 MB/video;
+  per upload request ≤ 10 videos and ≤ ~900 MB combined (`rejectOversizeUpload` middleware pre-checks
+  `Content-Length` before multer buffers, since `memoryStorage` holds the whole request in RAM).
+- A photo/video filter is intentionally not implemented yet.
 
 ### Database (SQLite / better-sqlite3)
 

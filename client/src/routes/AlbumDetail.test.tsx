@@ -76,6 +76,7 @@ const photosPayload: GalleryResponse = {
     {
       id: 100,
       logId: 30,
+      kind: "photo",
       url: "/api/photos/full-100.jpg",
       thumbnailUrl: "/api/photos/thumb-100.webp",
       originalName: "event.jpg",
@@ -85,6 +86,7 @@ const photosPayload: GalleryResponse = {
     {
       id: 101,
       logId: null,
+      kind: "photo",
       url: "/api/photos/full-101.jpg",
       thumbnailUrl: "/api/photos/thumb-101.webp",
       originalName: "loose.jpg",

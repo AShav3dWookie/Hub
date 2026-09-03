@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { PlayCircle } from "lucide-react";
 import type { GalleryPhotoDTO } from "@logger/shared";
 import { Lightbox } from "./Lightbox.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
+
+/** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
+function neighbourSrc(photo: GalleryPhotoDTO | undefined): string | undefined {
+  if (!photo) return undefined;
+  return photo.kind === "video" ? photo.thumbnailUrl : photo.url;
+}
 
 /**
  * A paginated photo grid with a click-to-open lightbox. Shared by the main Gallery
@@ -108,7 +115,7 @@ export function PhotoStream({
               key={photo.id}
               type="button"
               onClick={() => setActiveIndex(i)}
-              className="aspect-square overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
+              className="relative aspect-square overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
               <img
                 src={photo.thumbnailUrl}
@@ -116,6 +123,14 @@ export function PhotoStream({
                 loading="lazy"
                 className="h-full w-full object-cover"
               />
+              {photo.kind === "video" && (
+                <span
+                  data-testid="video-badge"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <PlayCircle className="h-8 w-8 text-white drop-shadow" strokeWidth={1.5} />
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -130,8 +145,10 @@ export function PhotoStream({
         <Lightbox
           src={active.url}
           alt={active.originalName}
-          prevSrc={activeIndex != null ? photos[activeIndex - 1]?.url : undefined}
-          nextSrc={activeIndex != null ? photos[activeIndex + 1]?.url : undefined}
+          kind={active.kind}
+          poster={active.thumbnailUrl}
+          prevSrc={activeIndex != null ? neighbourSrc(photos[activeIndex - 1]) : undefined}
+          nextSrc={activeIndex != null ? neighbourSrc(photos[activeIndex + 1]) : undefined}
           onClose={close}
           onPrev={canPrev ? goPrev : undefined}
           onNext={canNext && !advancing ? goNext : undefined}

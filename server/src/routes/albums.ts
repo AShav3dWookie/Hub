@@ -22,7 +22,7 @@ import {
   personTagSchema,
   galleryQuerySchema,
 } from "../lib/validation.js";
-import { upload, toClientError } from "../lib/photoUpload.js";
+import { upload, rejectOversizeUpload, toClientError } from "../lib/photoUpload.js";
 import { BadRequestError } from "../lib/errors.js";
 
 function parseId(raw: string, label: string): number {
@@ -98,7 +98,7 @@ export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosD
     res.json(listGalleryPhotos(db, { albumId: id, cursor, limit }));
   });
 
-  router.post("/:id/photos", (req, res, next) => {
+  router.post("/:id/photos", rejectOversizeUpload, (req, res, next) => {
     upload.array("photos", MAX_PHOTOS_PER_ALBUM)(req, res, (uploadErr) => {
       if (uploadErr) {
         next(toClientError(uploadErr));

@@ -16,6 +16,7 @@
  */
 import {
   matchesTokens,
+  mediaKindForMime,
   normalizeTitle,
   tokenizeQuery,
   type AlbumDTO,
@@ -74,6 +75,7 @@ function toLogPhotoDTO(p: PhotoSyncDTO): LogPhotoDTO {
   return {
     id: p.id,
     logId: p.logId,
+    kind: mediaKindForMime(p.mimeType),
     url: p.url,
     thumbnailUrl: p.thumbnailUrl,
     originalName: p.originalName,

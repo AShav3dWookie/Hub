@@ -35,11 +35,11 @@ describe("LogAddForm photos", () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse([]));
 
     const { unmount } = renderWithProviders(<LogAddForm category="movie" />);
-    expect(screen.getByText("Photos")).toBeInTheDocument();
+    expect(screen.getByText("Photos & videos")).toBeInTheDocument();
     unmount();
 
     renderWithProviders(<LogAddForm category="book" />);
-    expect(screen.queryByText("Photos")).not.toBeInTheDocument();
+    expect(screen.queryByText("Photos & videos")).not.toBeInTheDocument();
   });
 
   it("queues an entity.create + log.create for a new-title movie", async () => {
@@ -94,7 +94,7 @@ describe("LogAddForm event categories", () => {
   it("hang out: people + photos, no rating", () => {
     renderWithProviders(<LogAddForm category="hang_out" />);
     expect(screen.getByText("People")).toBeInTheDocument();
-    expect(screen.getByText("Photos")).toBeInTheDocument();
+    expect(screen.getByText("Photos & videos")).toBeInTheDocument();
     expect(screen.queryByText("Rating")).not.toBeInTheDocument();
     expect(screen.queryByText("Auto-delete once it's passed")).not.toBeInTheDocument();
   });

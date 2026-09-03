@@ -3,7 +3,8 @@ import type { AppDb } from "../db/client.js";
 import { albums, logPhotos } from "../db/schema.js";
 import {
   MAX_PHOTOS_PER_ALBUM,
-  assertPhotoAllowed,
+  assertMediaAllowed,
+  assertUploadBatchWithinBudget,
   deletePhotoById,
   storeOnePhoto,
   toLogPhotoDTO,
@@ -44,12 +45,13 @@ export async function createAlbumPhotos(
 
   if (existingCount + files.length > MAX_PHOTOS_PER_ALBUM) {
     throw new BadRequestError(
-      `An album can have at most ${MAX_PHOTOS_PER_ALBUM} loose photos (currently ${existingCount})`,
+      `An album can have at most ${MAX_PHOTOS_PER_ALBUM} loose photos or videos (currently ${existingCount})`,
     );
   }
 
+  assertUploadBatchWithinBudget(files);
   for (const file of files) {
-    assertPhotoAllowed(file);
+    assertMediaAllowed(file);
   }
 
   const created: LogPhotoDTO[] = [];

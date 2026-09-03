@@ -11,6 +11,7 @@ function photo(id: number, over: Partial<GalleryPhotoDTO> = {}): GalleryPhotoDTO
   return {
     id,
     logId: 1,
+    kind: "photo",
     url: `/api/photos/full-${id}.jpg`,
     thumbnailUrl: `/api/photos/thumb-${id}.webp`,
     originalName: `photo-${id}.jpg`,
@@ -90,6 +91,18 @@ describe("PhotoStream", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-3.jpg");
     expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "/entity/9");
+  });
+
+  it("badges video tiles and plays them in a <video> in the lightbox", async () => {
+    const video = photo(7, { kind: "video", url: "/api/photos/full-7.mp4" });
+    const { container } = renderStream(
+      <PhotoStream {...base} photos={[video, photo(1)]} emptyText="" />,
+    );
+    expect(container.querySelectorAll('[data-testid="video-badge"]')).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "photo-7.jpg" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("video")).toHaveAttribute("src", "/api/photos/full-7.mp4");
   });
 
   it("labels an orphaned photo as not linked to an event", async () => {

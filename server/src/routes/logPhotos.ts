@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
 import { createLogPhotos, deleteLogPhoto, MAX_PHOTOS_PER_LOG } from "../services/logPhotosService.js";
-import { upload, toClientError } from "../lib/photoUpload.js";
+import { upload, rejectOversizeUpload, toClientError } from "../lib/photoUpload.js";
 import { BadRequestError } from "../lib/errors.js";
 
 function parseLogId(raw: string): number {
@@ -16,7 +16,7 @@ function parseLogId(raw: string): number {
 export function createLogPhotosRouter(db: AppDb, photosDir: string = config.photosDir): Router {
   const router = Router();
 
-  router.post("/:logId/photos", (req, res, next) => {
+  router.post("/:logId/photos", rejectOversizeUpload, (req, res, next) => {
     upload.array("photos", MAX_PHOTOS_PER_LOG)(req, res, (uploadErr) => {
       if (uploadErr) {
         next(toClientError(uploadErr));

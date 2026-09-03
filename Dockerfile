@@ -15,7 +15,8 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache tini
+# ffmpeg: decodes a single poster frame from uploaded videos (see server/src/lib/videoPoster.ts).
+RUN apk add --no-cache tini ffmpeg
 WORKDIR /app/server
 ENV NODE_ENV=production
 

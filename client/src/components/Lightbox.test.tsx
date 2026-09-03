@@ -47,6 +47,33 @@ describe("Lightbox", () => {
     expect(track().querySelectorAll("img")).toHaveLength(1);
   });
 
+  it("renders a <video> with poster for a video item, and neighbours stay images", () => {
+    render(
+      <Lightbox
+        src="/api/photos/clip.mp4"
+        alt="clip.mp4"
+        kind="video"
+        poster="/api/photos/clip_thumb.webp"
+        prevSrc="/api/photos/prev_thumb.webp"
+        nextSrc="/api/photos/next.jpg"
+        onClose={() => {}}
+      />,
+    );
+    const video = track().querySelector("video")!;
+    expect(video).toHaveAttribute("src", "/api/photos/clip.mp4");
+    expect(video).toHaveAttribute("poster", "/api/photos/clip_thumb.webp");
+    const srcs = [...track().querySelectorAll("img")].map((n) => n.getAttribute("src"));
+    expect(srcs).toEqual(["/api/photos/prev_thumb.webp", "/api/photos/next.jpg"]);
+  });
+
+  it("falls back to the offline placeholder when the video fails to load", () => {
+    render(
+      <Lightbox src="/api/photos/clip.mp4" alt="clip.mp4" kind="video" onClose={() => {}} />,
+    );
+    fireEvent.error(track().querySelector("video")!);
+    expect(screen.getByText("Video unavailable offline")).toBeInTheDocument();
+  });
+
   it("closes on the X button, backdrop click, and Escape", async () => {
     const onClose = vi.fn();
     render(<Lightbox src="/x.jpg" alt="x" onClose={onClose} />);

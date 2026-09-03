@@ -16,6 +16,7 @@ function photo(id: number): GalleryPhotoDTO {
   return {
     id,
     logId: 3,
+    kind: "photo",
     url: `/api/photos/full-${id}.jpg`,
     thumbnailUrl: `/api/photos/thumb-${id}.webp`,
     originalName: `photo-${id}.jpg`,

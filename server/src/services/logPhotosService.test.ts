@@ -137,11 +137,88 @@ describe("logPhotosService", () => {
 
     await expect(
       createLogPhotos(ctx.db, photosDir, log.id, [{ ...good, mimetype: "image/gif" }]),
-    ).rejects.toThrow(/unsupported image type/i);
+    ).rejects.toThrow(/unsupported file type/i);
 
     await expect(
       createLogPhotos(ctx.db, photosDir, log.id, [{ ...good, size: 11 * 1024 * 1024 }]),
     ).rejects.toThrow(/10MB/i);
+  });
+
+  it("rejects non-mp4 video types", async () => {
+    setup();
+    const log = movieLog();
+    const good = await file();
+    await expect(
+      createLogPhotos(ctx.db, photosDir, log.id, [
+        { ...good, originalname: "clip.mov", mimetype: "video/quicktime" },
+      ]),
+    ).rejects.toThrow(/unsupported file type/i);
+    expect(fs.readdirSync(photosDir)).toHaveLength(0);
+  });
+
+  it("stores an mp4 video with a webp poster and kind:'video'", async () => {
+    setup();
+    const log = movieLog();
+    // A bogus buffer + FFMPEG_PATH override forces the placeholder-poster fallback path;
+    // the invariant we care about is that the thumbnail is always a real webp.
+    const prev = process.env.FFMPEG_PATH;
+    process.env.FFMPEG_PATH = path.join(os.tmpdir(), "definitely-not-ffmpeg");
+    try {
+      const buffer = Buffer.from("not really an mp4");
+      const [video] = await createLogPhotos(ctx.db, photosDir, log.id, [
+        { buffer, originalname: "clip.mp4", mimetype: "video/mp4", size: buffer.length },
+      ]);
+
+      expect(video.kind).toBe("video");
+      expect(video.url).toMatch(/^\/api\/photos\/[\w-]+\.mp4$/);
+      expect(video.thumbnailUrl).toMatch(/^\/api\/photos\/[\w-]+_thumb\.webp$/);
+
+      const onDisk = fs.readdirSync(photosDir).sort();
+      expect(onDisk).toHaveLength(2); // original + poster
+      const posterName = onDisk.find((f) => f.endsWith("_thumb.webp"))!;
+      const meta = await sharp(fs.readFileSync(path.join(photosDir, posterName))).metadata();
+      expect(meta.format).toBe("webp");
+    } finally {
+      if (prev == null) delete process.env.FFMPEG_PATH;
+      else process.env.FFMPEG_PATH = prev;
+    }
+  });
+
+  it("rejects a video over 250MB and reports the video limit", async () => {
+    setup();
+    const log = movieLog();
+    const buffer = Buffer.from("x");
+    await expect(
+      createLogPhotos(ctx.db, photosDir, log.id, [
+        { buffer, originalname: "big.mp4", mimetype: "video/mp4", size: 251 * 1024 * 1024 },
+      ]),
+    ).rejects.toThrow(/video must be 250MB/i);
+  });
+
+  it("rejects an upload whose combined size blows the per-request budget", async () => {
+    setup();
+    const log = movieLog();
+    const fourBigVideos = Array.from({ length: 4 }, (_, i) => ({
+      buffer: Buffer.from("x"),
+      originalname: `v${i}.mp4`,
+      mimetype: "video/mp4",
+      size: 250 * 1024 * 1024, // 1 GB total > 900 MB budget
+    }));
+    await expect(createLogPhotos(ctx.db, photosDir, log.id, fourBigVideos)).rejects.toThrow(
+      /upload is too large/i,
+    );
+    expect(fs.readdirSync(photosDir)).toHaveLength(0);
+  });
+
+  it("assertUploadBatchWithinBudget caps the video count per request", async () => {
+    const { assertUploadBatchWithinBudget } = await import("./logPhotosService.js");
+    const eleven = Array.from({ length: 11 }, (_, i) => ({
+      buffer: Buffer.from("x"),
+      originalname: `v${i}.mp4`,
+      mimetype: "video/mp4",
+      size: 1000,
+    }));
+    expect(() => assertUploadBatchWithinBudget(eleven)).toThrow(/at most 10 videos/i);
   });
 
   it("deletes a photo's row and files", async () => {
