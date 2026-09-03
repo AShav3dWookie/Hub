@@ -29,9 +29,10 @@
   },
 
   // Fresh named volumes mount root-owned -> chown before npm ci (node has passwordless sudo).
-  // `playwright install chromium` is a no-op when the baked build matches the lockfile, and
-  // self-heals if @playwright/test has since drifted.
-  "postCreateCommand": "sudo chown node:node node_modules /home/node/.claude && npm ci && npx playwright install chromium && npm run build --workspace shared && git config --global --add safe.directory /workspaces/Hub",
+  // Both Chromium builds are baked into the image; don't run `playwright install` here — on
+  // Playwright 1.62 it has no --no-remove and would prune the MCP's newer build. If you bump
+  // @playwright/test, rebuild the image (or run `npx playwright install chromium` by hand).
+  "postCreateCommand": "sudo chown node:node node_modules /home/node/.claude && npm ci && npm run build --workspace shared && git config --global --add safe.directory /workspaces/Hub",
 
   "customizations": {
     "vscode": {
