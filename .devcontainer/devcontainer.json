@@ -1,0 +1,51 @@
+{
+  "name": "Logger",
+  "build": { "dockerfile": "Dockerfile" },
+
+  "workspaceFolder": "/workspaces/Hub",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/Hub,type=bind,consistency=cached",
+
+  // node_modules on a named volume, not the bind mount: dodges the Windows bind-mount fs
+  // perf hit and the Windows/Linux native-module mismatch (better-sqlite3, sharp). Everything
+  // hoists to the root node_modules in this repo, so one volume is the whole story.
+  // ~/.claude on a volume so Claude Code login + session history survive an image rebuild.
+  "mounts": [
+    "source=logger-node-modules,target=/workspaces/Hub/node_modules,type=volume",
+    "source=logger-claude,target=/home/node/.claude,type=volume"
+  ],
+
+  "containerEnv": { "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright" },
+
+  "runArgs": ["--init"],
+  "remoteUser": "node",
+
+  // 3000 = API, 5173 = Vite, 3100 = the e2e app. If the host already has :3000 in use
+  // (a `docker compose` instance), VS Code auto-remaps the forward to :3001+.
+  "forwardPorts": [3000, 5173, 3100],
+  "portsAttributes": {
+    "3000": { "label": "dev:server" },
+    "5173": { "label": "dev:client" },
+    "3100": { "label": "e2e app" }
+  },
+
+  // Fresh named volumes mount root-owned -> chown before npm ci (node has passwordless sudo).
+  // Both Chromium builds are baked into the image; don't run `playwright install` here — on
+  // Playwright 1.62 it has no --no-remove and would prune the MCP's newer build. If you bump
+  // @playwright/test, rebuild the image (or run `npx playwright install chromium` by hand).
+  "postCreateCommand": "sudo chown node:node node_modules /home/node/.claude && npm ci && npm run build --workspace shared && git config --global --add safe.directory /workspaces/Hub",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "ms-playwright.playwright",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "files.eol": "\n"
+      }
+    }
+  }
+}

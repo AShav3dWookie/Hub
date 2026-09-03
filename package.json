@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/mcp": "0.0.80",
     "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^2.1.9",
     "drizzle-orm": "^0.45.2",

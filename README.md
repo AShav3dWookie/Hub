@@ -38,9 +38,38 @@ docker run -d \
   logger:local
 ```
 
-## Local development (without Docker)
+## Development — Dev Container (recommended)
 
-Requires Node.js 22 LTS (better-sqlite3's native module does not currently build against newer Node majors).
+The repo ships a VS Code **Dev Container** (`.devcontainer/`) with the whole toolchain baked
+in — Node 22, ffmpeg, `sqlite3`, and a Playwright Chromium — so every machine is identical and
+"X is not installed" can't happen.
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL2
+backend on Windows) + the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+VS Code extension.
+
+1. Open the repo in VS Code → **"Reopen in Container"** (Command Palette, or the toast).
+2. First build takes ~5–10 min (image + `npm ci`); later starts are seconds.
+3. Then everything just works:
+
+```bash
+npm run dev:server     # http://localhost:3000  (forwarded)
+npm run dev:client     # http://localhost:5173  (forwarded, proxies /api to :3000)
+npm test               # backend + frontend
+npm run test:e2e       # Playwright, using the baked Chromium
+npm run lint
+```
+
+`node_modules` lives in a named volume (not the bind mount) for speed and to keep native
+modules Linux-built. **`docker compose` / `npm run docker:*` / `npm run pwa:*` are run from a
+host terminal**, not inside the container.
+
+## Development — native (fallback)
+
+Requires **Node.js 22 LTS exactly** (`better-sqlite3` / `sharp` native modules don't build on
+newer majors — install `OpenJS.NodeJS.22` via winget or the 22.x MSI). For video poster
+frames you also need `ffmpeg` on `PATH` (`winget install Gyan.FFmpeg`); without it uploads
+still work but get a placeholder poster.
 
 ```bash
 npm install

@@ -10,9 +10,27 @@ workspaces monorepo: `shared` (types), `server` (Express API + SPA host), `clien
 
 ## Environment
 
-- **Node.js 22 is required.** `better-sqlite3`'s native module does not build on newer majors, and
-  `OpenJS.NodeJS.LTS` is currently 24 — install `OpenJS.NodeJS.22` (winget) or the 22.x MSI.
-- `npm install` at the repo root installs all workspaces (uses a prebuilt better-sqlite3 binary).
+- **Development happens inside the dev container** (`.devcontainer/`) — Node 22, `ffmpeg`,
+  `sqlite3`, and a Playwright Chromium are baked in, so nothing is "not installed" and the host
+  Node version is irrelevant. Open the repo in VS Code → "Reopen in Container". `node_modules`
+  is a named volume; `npm ci` runs on create.
+- **`docker compose` / `npm run docker:*` / `npm run pwa:*` run from a HOST terminal**, not
+  inside the container — the compose files bind-mount `./test-env` and `./docker/*`, which a
+  host daemon can't resolve to a container path.
+- `.mcp.json` pins `@playwright/mcp` (a root devDependency); the browser is baked into the
+  image, so there's no per-machine `install-browser` step.
+
+### Native (no container) fallback
+
+- **Node.js 22 exactly.** `better-sqlite3` / `sharp` native modules don't build on newer
+  majors, and `OpenJS.NodeJS.LTS` is currently 24 — install `OpenJS.NodeJS.22` (winget) or the
+  22.x MSI. For video poster frames, also `winget install Gyan.FFmpeg` (else uploads get a
+  placeholder poster).
+- `npm install` at the repo root installs all workspaces (prebuilt better-sqlite3 binary).
+- `npm run db:migrate --workspace server` is **broken on Windows** (its
+  `import.meta.url === process.argv[1]` self-run guard never matches backslash paths). It works
+  fine in the dev container. Tests and Docker apply migrations regardless — they call
+  `runMigrations()` directly.
 
 ## Commands
 
@@ -33,11 +51,9 @@ docker compose up --build          # full app on :3000 (SQLite persisted in a vo
 
 Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd client && npx vitest run <substring>`).
 
-- `npm run db:migrate --workspace server` is **broken on Windows** (its `import.meta.url === process.argv[1]`
-  self-run guard never matches backslash paths). Tests and Docker apply migrations fine — they call
-  `runMigrations()` directly.
 - `eslint` and its plugins live only in the **root** `package.json`; each workspace's `lint` script is
   `eslint src` and resolves the config upward.
+- `npm run db:migrate` — see the "Native (no container) fallback" note above.
 
 ## Architecture
 
@@ -174,17 +190,16 @@ don't render CSS, so this is the only way to actually *see* a change.
 
 - `.mcp.json` is read only at Claude Code startup — a session started before it existed won't have the
   `browser_*` tools until it's restarted (and the project MCP server is approved on first load).
-- First use needs the browser: `npx @playwright/mcp@latest install-browser chrome-for-testing`
-  (~115 MB into the OS Playwright cache, not the repo). The config pins `--browser chromium` so it
-  doesn't require a system Chrome install.
+- In the dev container the Chromium is **baked into the image** (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+  — no `install-browser` step, no `cmd /c` shim. Native-Windows fallback: first use may need
+  `npx @playwright/mcp install-browser chromium` (~115 MB into the OS Playwright cache).
 - Screenshots/snapshots land in `.playwright-mcp/` (gitignored).
-- **Port 3000 is usually the user's own `docker compose` instance (`hub-app-1`, image `logger:local`) —
-  do not stop it.** For a live check, build the client, `cp client/dist/* server/public/`, and run a
-  throwaway `DB_PATH=<scratchpad>/x.db PORT=3001 node --import tsx src/index.ts` on another port
-  against a scratch DB; drive Playwright at `:3001`; kill it and remove `server/public/` + the scratch
-  DB afterward.
-- If the server won't start on Windows, change `"command"` to `"cmd"` and prepend `"/c", "npx"` to
-  `args` (npx-launched MCP servers can need the `cmd /c` shim on Windows).
+- **On the host, `:3000` is usually the user's own `docker compose` instance (`hub-app-1`, image
+  `logger:local`) — do not stop it.** Inside the dev container `:3000` is free for `npm run dev:server`
+  (VS Code auto-remaps the forward if the host's `:3000` is taken).
+- For a throwaway live check without disturbing anything on `:3000`: build the client,
+  `cp client/dist/* server/public/`, run `DB_PATH=<scratchpad>/x.db PORT=3001 node --import tsx src/index.ts`,
+  drive Playwright at `:3001`, then kill it and remove `server/public/` + the scratch DB.
 
 ## Git workflow
 

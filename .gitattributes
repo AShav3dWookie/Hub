@@ -1,0 +1,18 @@
+# Store text files with LF in the repo; check out with the platform's native endings.
+* text=auto
+
+# These must stay LF even on a Windows checkout — they run in the Linux dev container
+# (and CI-shaped Docker builds) where CRLF breaks shell scripts, shebang lines, and
+# Dockerfile RUN continuations.
+*.sh        text eol=lf
+*.mjs       text eol=lf
+Dockerfile  text eol=lf
+
+# Binary — never normalise.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico   binary
+*.mp4   binary
+*.woff2 binary
