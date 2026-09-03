@@ -110,6 +110,35 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+/**
+ * An `important_date` note carries the recurrence instead of prose, so it needs a tag and a
+ * date and may have an empty body; every other note needs a body. Create and update state the
+ * same rule, so it is written once here.
+ */
+function refineNoteShape(
+  data: { category?: string; body?: string; tag?: string; eventDate?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.category === "important_date") {
+    if (!data.tag) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "tag is required for important_date notes",
+        path: ["tag"],
+      });
+    }
+    if (!data.eventDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "eventDate is required for important_date notes",
+        path: ["eventDate"],
+      });
+    }
+  } else if (!data.body) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "body is required", path: ["body"] });
+  }
+}
+
 export const createEntityNoteSchema = z
   .object({
     category: noteCategorySchema.optional().default("general"),
@@ -117,22 +146,7 @@ export const createEntityNoteSchema = z
     tag: z.string().trim().min(1).optional(),
     eventDate: z.string().trim().min(1).optional(),
   })
-  .superRefine((data, ctx) => {
-    if (data.category === "important_date") {
-      if (!data.tag) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tag is required for important_date notes", path: ["tag"] });
-      }
-      if (!data.eventDate) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "eventDate is required for important_date notes",
-          path: ["eventDate"],
-        });
-      }
-    } else if (!data.body) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "body is required", path: ["body"] });
-    }
-  });
+  .superRefine(refineNoteShape);
 
 export const updateEntityNoteSchema = z
   .object({
@@ -141,20 +155,5 @@ export const updateEntityNoteSchema = z
     tag: z.string().trim().min(1).optional(),
     eventDate: z.string().trim().min(1).optional(),
   })
-  .superRefine((data, ctx) => {
-    if (data.category === "important_date") {
-      if (!data.tag) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tag is required for important_date notes", path: ["tag"] });
-      }
-      if (!data.eventDate) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "eventDate is required for important_date notes",
-          path: ["eventDate"],
-        });
-      }
-    } else if (!data.body) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "body is required", path: ["body"] });
-    }
-  });
+  .superRefine(refineNoteShape);
 

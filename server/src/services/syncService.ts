@@ -29,6 +29,15 @@ export interface SyncChangesQuery {
   limit?: number;
 }
 
+/** Any table the change-feed reads: one carrying the global `row_seq` watermark column. */
+type SyncableTable =
+  | typeof entities
+  | typeof logs
+  | typeof logPhotos
+  | typeof albums
+  | typeof entityNotes
+  | typeof syncDeletions;
+
 type EntityRow = typeof entities.$inferSelect;
 type LogRow = typeof logs.$inferSelect;
 type PhotoRow = typeof logPhotos.$inferSelect;
@@ -112,48 +121,23 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
 
   // One extra row per source tells us whether a further page exists without a second query.
   const cap = limit + 1;
-  const entityRows = db
-    .select()
-    .from(entities)
-    .where(gt(entities.rowSeq, since))
-    .orderBy(asc(entities.rowSeq))
-    .limit(cap)
-    .all();
-  const logRows = db
-    .select()
-    .from(logs)
-    .where(gt(logs.rowSeq, since))
-    .orderBy(asc(logs.rowSeq))
-    .limit(cap)
-    .all();
-  const photoRows = db
-    .select()
-    .from(logPhotos)
-    .where(gt(logPhotos.rowSeq, since))
-    .orderBy(asc(logPhotos.rowSeq))
-    .limit(cap)
-    .all();
-  const albumRows = db
-    .select()
-    .from(albums)
-    .where(gt(albums.rowSeq, since))
-    .orderBy(asc(albums.rowSeq))
-    .limit(cap)
-    .all();
-  const noteRows = db
-    .select()
-    .from(entityNotes)
-    .where(gt(entityNotes.rowSeq, since))
-    .orderBy(asc(entityNotes.rowSeq))
-    .limit(cap)
-    .all();
-  const deletionRows = db
-    .select()
-    .from(syncDeletions)
-    .where(gt(syncDeletions.rowSeq, since))
-    .orderBy(asc(syncDeletions.rowSeq))
-    .limit(cap)
-    .all();
+
+  /** Rows of one syncable table past the cursor, oldest first, capped. */
+  const readSince = <T extends SyncableTable>(table: T) =>
+    db
+      .select()
+      .from(table)
+      .where(gt(table.rowSeq, since))
+      .orderBy(asc(table.rowSeq))
+      .limit(cap)
+      .all() as T["$inferSelect"][];
+
+  const entityRows = readSince(entities);
+  const logRows = readSince(logs);
+  const photoRows = readSince(logPhotos);
+  const albumRows = readSince(albums);
+  const noteRows = readSince(entityNotes);
+  const deletionRows = readSince(syncDeletions);
 
   type Item =
     | { seq: number; kind: "entity"; row: EntityRow }
