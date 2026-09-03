@@ -17,3 +17,4 @@ export * from "./rules/importantDates.js";
 export * from "./rules/upcomingEvents.js";
 export * from "./rules/gallery.js";
 export * from "./rules/search.js";
+export * from "./rules/personStats.js";
