@@ -1,6 +1,19 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category } from "@logger/shared";
+import type { Category, SyncEntityType } from "@logger/shared";
+
+/**
+ * Delta-sync bookkeeping columns, present on every table the change-feed
+ * (`GET /api/sync/changes`) replicates. `row_seq` is a globally monotonic sequence number
+ * assigned by DB triggers on every insert/update (see migration 0007); the sync cursor is a
+ * `row_seq` high-watermark. `version` bumps on every update — unused by the pull-only lite
+ * tier, kept so the DTO envelope is stable for the future writes tier's conflict checks.
+ * Both are trigger-maintained: application code never sets them.
+ */
+const syncColumns = {
+  rowSeq: integer("row_seq").notNull().default(0),
+  version: integer("version").notNull().default(1),
+};
 
 export const entities = sqliteTable(
   "entities",
@@ -14,12 +27,14 @@ export const entities = sqliteTable(
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
+    ...syncColumns,
   },
   (table) => ({
     categoryNormalizedTitleIdx: index("entities_category_normalized_title_idx").on(
       table.category,
       table.normalizedTitle,
     ),
+    rowSeqIdx: index("entities_row_seq_idx").on(table.rowSeq),
   }),
 );
 
@@ -41,10 +56,12 @@ export const logs = sqliteTable(
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`(current_timestamp)`),
+    ...syncColumns,
   },
   (table) => ({
     entityIdIdx: index("logs_entity_id_idx").on(table.entityId),
     dateIdx: index("logs_date_idx").on(table.date),
+    rowSeqIdx: index("logs_row_seq_idx").on(table.rowSeq),
   }),
 );
 
@@ -85,26 +102,35 @@ export const logPhotos = sqliteTable(
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
+    ...syncColumns,
   },
   (table) => ({
     logIdIdx: index("log_photos_log_id_idx").on(table.logId),
     albumIdIdx: index("log_photos_album_id_idx").on(table.albumId),
+    rowSeqIdx: index("log_photos_row_seq_idx").on(table.rowSeq),
   }),
 );
 
-export const albums = sqliteTable("albums", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
-  notes: text("notes"),
-  dateStart: text("date_start"),
-  dateEnd: text("date_end"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(current_timestamp)`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(current_timestamp)`),
-});
+export const albums = sqliteTable(
+  "albums",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    dateStart: text("date_start"),
+    dateEnd: text("date_end"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+    ...syncColumns,
+  },
+  (table) => ({
+    rowSeqIdx: index("albums_row_seq_idx").on(table.rowSeq),
+  }),
+);
 
 export const albumEvents = sqliteTable(
   "album_events",
@@ -158,8 +184,52 @@ export const entityNotes = sqliteTable(
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`(current_timestamp)`),
+    ...syncColumns,
   },
   (table) => ({
     entityIdIdx: index("entity_notes_entity_id_idx").on(table.entityId),
+    rowSeqIdx: index("entity_notes_row_seq_idx").on(table.rowSeq),
   }),
 );
+
+/**
+ * Single-row global counter backing `row_seq` assignment. Row `id = 1` always exists (seeded
+ * by migration 0007); `next_row_seq` is the value the next trigger-driven write will claim.
+ * Maintained entirely by triggers.
+ */
+export const syncState = sqliteTable("sync_state", {
+  id: integer("id").primaryKey(),
+  nextRowSeq: integer("next_row_seq").notNull(),
+});
+
+/**
+ * Tombstone log. Every hard delete of a syncable row inserts a row here (via an `AFTER DELETE`
+ * trigger) carrying a fresh `row_seq`, so `GET /api/sync/changes` can tell clients which rows
+ * to drop. Deletions caused by `ON DELETE CASCADE` are captured too (`recursive_triggers` is
+ * ON — see db/client.ts).
+ */
+export const syncDeletions = sqliteTable(
+  "sync_deletions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entityType: text("entity_type").$type<SyncEntityType>().notNull(),
+    entityId: integer("entity_id").notNull(),
+    rowSeq: integer("row_seq").notNull(),
+    deletedAt: text("deleted_at").notNull(),
+  },
+  (table) => ({
+    rowSeqIdx: index("sync_deletions_row_seq_idx").on(table.rowSeq),
+  }),
+);
+
+/**
+ * Idempotency log for `POST /api/sync/mutations`. Each replayed `mutation_id` returns its
+ * stored result instead of re-applying — so a client that retries a batch after a network
+ * blip (server applied, client never got the response) can't double-create. Not a syncable
+ * table; no triggers.
+ */
+export const syncAppliedMutations = sqliteTable("sync_applied_mutations", {
+  mutationId: text("mutation_id").primaryKey(),
+  resultJson: text("result_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});

@@ -20,6 +20,7 @@ import { PhotoStream } from "../components/PhotoStream.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
 
@@ -34,6 +35,7 @@ export function AlbumDetail() {
   const { data: album, isLoading } = useAlbum(albumId);
   const photos = useAlbumPhotos(albumId);
   const { showToast } = useToast();
+  const online = useOnlineStatus();
 
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -59,6 +61,8 @@ export function AlbumDetail() {
 
   const photoPages = photos.data?.pages.flatMap((page) => page.photos) ?? [];
   const range = dateRange(album.dateStart, album.dateEnd);
+  // Photos have no offline queue — need a connection and a real (synced) album id.
+  const canEditPhotos = online && albumId > 0;
 
   function startEditing() {
     if (!album) return;
@@ -239,16 +243,24 @@ export function AlbumDetail() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           Photos
         </h2>
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            multiple
-            onChange={(e) => handleUpload(Array.from(e.target.files ?? []))}
-            className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
-          />
-        </div>
+        {canEditPhotos ? (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              multiple
+              onChange={(e) => handleUpload(Array.from(e.target.files ?? []))}
+              className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
+            />
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {albumId < 0
+              ? "Photos can be added once this album has synced."
+              : "Reconnect to add or remove photos."}
+          </p>
+        )}
         <PhotoStream
           photos={photoPages}
           isLoading={photos.isLoading}
@@ -256,14 +268,18 @@ export function AlbumDetail() {
           isFetchingNextPage={photos.isFetchingNextPage}
           fetchNextPage={photos.fetchNextPage}
           emptyText="No photos yet — upload some, or link events that have photos."
-          onDelete={async (photoId) => {
-            try {
-              await deletePhoto.mutateAsync(photoId);
-              showToast("Photo deleted");
-            } catch (err) {
-              showToast(err instanceof Error ? err.message : "Could not delete photo");
-            }
-          }}
+          onDelete={
+            canEditPhotos
+              ? async (photoId) => {
+                  try {
+                    await deletePhoto.mutateAsync(photoId);
+                    showToast("Photo deleted");
+                  } catch (err) {
+                    showToast(err instanceof Error ? err.message : "Could not delete photo");
+                  }
+                }
+              : undefined
+          }
           canDelete={(photo) => photo.log == null}
         />
       </div>

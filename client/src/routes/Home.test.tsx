@@ -1,60 +1,56 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Home } from "./Home.js";
+import {
+  makeEntity,
+  makeLog,
+  makeNote,
+  makePerson,
+  resetFixtureCounters,
+  seedLocalDb,
+} from "../test/seedLocalDb.js";
 
-function jsonResponse(body: unknown) {
-  return { ok: true, status: 200, json: async () => body };
-}
-
-const importantDates = {
-  today: [
-    {
-      noteId: 1,
-      entityId: 5,
-      entityName: "Alice",
-      tag: "Birthday",
-      eventDate: "1990-06-15",
-      nextOccurrence: "2024-06-15",
-      body: "Don't forget the card!",
-    },
-  ],
-  next7Days: [
-    {
-      noteId: 2,
-      entityId: 6,
-      entityName: "Jamie",
-      tag: "Anniversary",
-      eventDate: "2015-06-20",
-      nextOccurrence: "2024-06-20",
-      body: "",
-    },
-  ],
-};
-
-const emptyBuckets = { today: [], next7Days: [] };
-
-function mockFetch(opts: { importantDates?: unknown; events?: unknown } = {}) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((url: string) => {
-      if (url.includes("/important-dates/upcoming")) {
-        return Promise.resolve(jsonResponse(opts.importantDates ?? emptyBuckets));
-      }
-      if (url.includes("/events/upcoming")) {
-        return Promise.resolve(jsonResponse(opts.events ?? emptyBuckets));
-      }
-      throw new Error(`unexpected fetch in Home test: ${url}`);
-    }),
-  );
-}
+const NOW = new Date("2026-06-15T12:00:00.000Z");
 
 describe("Home", () => {
   beforeEach(() => {
-    mockFetch({ importantDates });
+    resetFixtureCounters();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("Home should not hit the network"))));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
+  async function seedUpcoming() {
+    const alice = makePerson("Alice");
+    const jamie = makePerson("Jamie");
+    await seedLocalDb({
+      entities: [alice, jamie],
+      notes: [
+        makeNote({
+          entityId: alice.id,
+          category: "important_date",
+          tag: "Birthday",
+          eventDate: "1990-06-15",
+          body: "Don't forget the card!",
+        }),
+        makeNote({
+          entityId: jamie.id,
+          category: "important_date",
+          tag: "Anniversary",
+          eventDate: "2015-06-20",
+          body: "",
+        }),
+      ],
+    });
+  }
+
   it("shows Today and Next 7 days upcoming widgets", async () => {
+    await seedUpcoming();
     renderWithProviders(<Home />);
 
     await screen.findByText("Alice");
@@ -71,28 +67,26 @@ describe("Home", () => {
   });
 
   it("merges upcoming events into the buckets alongside important dates", async () => {
-    mockFetch({
-      events: {
-        today: [],
-        next7Days: [
-          {
-            logId: 10,
-            entityId: 20,
-            entityTitle: "Bowling",
-            category: "hang_out",
-            date: "2024-06-19",
-            notes: null,
-            people: [{ id: 3, name: "Sam" }],
-          },
-        ],
-      },
+    await seedUpcoming();
+    const bowlingEntity = makeEntity({ title: "Bowling", category: "hang_out" });
+    const sam = makePerson("Sam");
+    await seedLocalDb({
+      entities: [bowlingEntity, sam],
+      logs: [
+        makeLog({
+          entityId: bowlingEntity.id,
+          date: "2026-06-19",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          peopleIds: [sam.id],
+        }),
+      ],
     });
 
     renderWithProviders(<Home />);
 
     const bowling = await screen.findByText("Bowling");
-    expect(bowling.closest("a")).toHaveAttribute("href", "/entity/20");
-    expect(screen.getByText(/Hang Out · 2024-06-19 · with Sam/)).toBeInTheDocument();
+    expect(bowling.closest("a")).toHaveAttribute("href", `/entity/${bowlingEntity.id}`);
+    expect(screen.getByText(/Hang Out · 2026-06-19 · with Sam/)).toBeInTheDocument();
   });
 
   it("shows Add, Search, Calendar, and Gallery action tiles", async () => {
@@ -106,8 +100,6 @@ describe("Home", () => {
   });
 
   it("does not render upcoming widgets when there is nothing upcoming", async () => {
-    mockFetch();
-
     renderWithProviders(<Home />);
 
     await screen.findByText("What would you like to do?");

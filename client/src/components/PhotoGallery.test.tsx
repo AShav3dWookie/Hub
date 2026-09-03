@@ -5,6 +5,13 @@ import { renderWithProviders } from "../test/renderWithProviders.js";
 import { PhotoGallery } from "./PhotoGallery.js";
 import type { LogPhotoDTO } from "@logger/shared";
 
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
+
 const NOW = "2024-05-01T00:00:00.000Z";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -25,8 +32,6 @@ function photo(id: number): LogPhotoDTO {
 describe("PhotoGallery", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
-    // Take the Lightbox's instant (reduced-motion) nav path so these specs don't
-    // have to pump CSS transitions — the slide itself is covered in Lightbox.test.
     vi.stubGlobal(
       "matchMedia",
       vi.fn().mockReturnValue({
@@ -57,9 +62,7 @@ describe("PhotoGallery", () => {
   });
 
   it("steps through photos with the arrow buttons and keys, hiding arrows at the ends", async () => {
-    renderWithProviders(
-      <PhotoGallery logId={7} photos={[photo(1), photo(2), photo(3)]} />,
-    );
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1), photo(2), photo(3)]} />);
 
     await userEvent.click(screen.getByRole("button", { name: "photo-1.jpg" }));
     const dialog = await screen.findByRole("dialog");
@@ -92,6 +95,22 @@ describe("PhotoGallery", () => {
       "/api/logs/7/photos/3",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("hides the photo controls for a not-yet-synced entry (temp id)", () => {
+    renderWithProviders(<PhotoGallery logId={-3} photos={[photo(1)]} allowDelete />);
+
+    expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+    expect(screen.getByText(/once this entry has synced/i)).toBeInTheDocument();
+  });
+
+  it("hides the photo controls while offline", () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} allowDelete />);
+
+    expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
+    expect(screen.getByText(/reconnect to add or remove photos/i)).toBeInTheDocument();
   });
 
   it("has no delete affordance by default", async () => {

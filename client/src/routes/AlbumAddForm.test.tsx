@@ -3,7 +3,15 @@ import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { AlbumAddForm } from "./AlbumAddForm.js";
+
+vi.mock("../api/afterMutation.js", () => ({
+  refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
+    void qc.invalidateQueries();
+    return Promise.resolve();
+  },
+}));
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
@@ -14,42 +22,8 @@ describe("AlbumAddForm", () => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
-  it("creates the album and navigates to its detail page", async () => {
-    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method, body: init?.body });
-      if (url === "/api/albums" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 12, title: "Italy" }, 201));
-      }
-      return Promise.resolve(jsonResponse([]));
-    });
-
-    renderWithProviders(
-      <Routes>
-        <Route path="/add/album" element={<AlbumAddForm />} />
-        <Route path="/album/:id" element={<div>album page 12</div>} />
-      </Routes>,
-      { route: "/add/album" },
-    );
-
-    await userEvent.type(screen.getByLabelText("Title"), "Italy");
-    await userEvent.click(screen.getByRole("button", { name: /create album/i }));
-
-    await screen.findByText("album page 12");
-    const create = calls.find((c) => c.url === "/api/albums" && c.method === "POST")!;
-    expect(JSON.parse(create.body as string)).toMatchObject({ title: "Italy", eventLogIds: [] });
-  });
-
-  it("uploads picked photos in a second step against the new album id", async () => {
-    const calls: Array<{ url: string; method?: string }> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method });
-      if (url === "/api/albums" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ id: 9, title: "Trip" }, 201));
-      }
-      if (url === "/api/albums/9/photos") return Promise.resolve(jsonResponse([], 201));
-      return Promise.resolve(jsonResponse([]));
-    });
+  it("queues an album.create and navigates to its (temp) detail page", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse([]));
 
     renderWithProviders(
       <Routes>
@@ -59,18 +33,12 @@ describe("AlbumAddForm", () => {
       { route: "/add/album" },
     );
 
-    await userEvent.type(screen.getByLabelText("Title"), "Trip");
-    const fileInput = screen
-      .getByText("Photos")
-      .parentElement!.querySelector('input[type="file"]') as HTMLInputElement;
-    await userEvent.upload(fileInput, new File(["x"], "p.png", { type: "image/png" }));
+    await userEvent.type(screen.getByLabelText("Title"), "Italy");
     await userEvent.click(screen.getByRole("button", { name: /create album/i }));
 
     await screen.findByText("album page");
-    const createIdx = calls.findIndex((c) => c.url === "/api/albums" && c.method === "POST");
-    const uploadIdx = calls.findIndex((c) => c.url === "/api/albums/9/photos");
-    expect(createIdx).toBeGreaterThanOrEqual(0);
-    expect(uploadIdx).toBeGreaterThan(createIdx);
+    const [env] = await pendingOutbox();
+    expect(env).toMatchObject({ type: "album.create", payload: { title: "Italy", eventLogIds: [] } });
   });
 
   it("auto-fills a blank end date from the start date (and vice versa)", async () => {

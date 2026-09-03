@@ -3,14 +3,15 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
-import { api } from "../api/client.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
   const fields = CATEGORY_FIELDS[category];
+  const online = useOnlineStatus();
   const [searchParams] = useSearchParams();
   const [title, setTitle] = useState("");
   const debouncedTitle = useDebouncedValue(title, 300);
@@ -55,9 +56,8 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       return;
     }
     const logDate = fields.dateGranularity === "year" ? `${year.trim()}-01-01` : date;
-    let createdLogId: number;
     try {
-      const created = await createLog.mutateAsync(
+      await createLog.mutateAsync(
         selectedEntityId
           ? {
               entityId: selectedEntityId,
@@ -79,27 +79,18 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
               autoDelete: fields.hasAutoDelete ? autoDelete : false,
             },
       );
-      createdLogId = created.id;
     } catch {
       setError("Failed to save entry");
       return;
     }
 
-    // Two-step flow: the log now exists, upload any picked photos against its id.
-    if (fields.hasPeople && photoFiles.length > 0) {
-      try {
-        const formData = new FormData();
-        for (const file of photoFiles) formData.append("photos", file);
-        await api.postForm(`/logs/${createdLogId}/photos`, formData);
-      } catch {
-        navigate(returnTo);
-        showToast("Saved, but photos failed to upload — add them from the entry.");
-        return;
-      }
-    }
-
     navigate(returnTo);
-    showToast("Saved!");
+    if (fields.hasPeople && photoFiles.length > 0) {
+      // The entry only has a temp id until it syncs — photos are uploaded from its page after.
+      showToast("Saved — add the photos from the entry once it has synced.");
+    } else {
+      showToast(online ? "Saved!" : "Saved — will sync when you're back online.");
+    }
   }
 
   return (

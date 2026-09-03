@@ -3,15 +3,16 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { primeRepo } from "../test/mockRepo.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { Calendar } from "./Calendar.js";
 import { LogAddForm } from "./LogAddForm.js";
 import type { CalendarItem } from "@logger/shared";
 
-function jsonResponse(body: unknown, status = 200) {
-  return { ok: status < 400, status, json: async () => body };
-}
+vi.mock("../local/repo.js");
+import { repo } from "../local/repo.js";
 
-/** Items across Jan–Mar 2024, deliberately in server sort order (date, then title). */
+/** Items across Dec 2023 – Mar 2024, deliberately in server sort order (date, then title). */
 const MASTER: CalendarItem[] = [
   { date: "2023-12-27", kind: "log", category: "hang_out", title: "Xmas week", notes: null, entityId: 11, entityCategory: "hang_out", logId: 8 },
   { date: "2024-01-30", kind: "log", category: "hang_out", title: "Late Jan drinks", notes: null, entityId: 1, entityCategory: "hang_out", logId: 1 },
@@ -27,21 +28,18 @@ const MASTER: CalendarItem[] = [
   { date: "2024-03-02", kind: "log", category: "hang_out", title: "Early March hike", notes: null, entityId: 10, entityCategory: "hang_out", logId: 7 },
 ];
 
-let requestedRanges: Array<{ from: string; to: string }>;
 let container: HTMLElement;
 
-function installFetch() {
-  requestedRanges = [];
-  (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-    const params = new URL(`http://x${url}`).searchParams;
-    const from = params.get("from")!;
-    const to = params.get("to")!;
-    requestedRanges.push({ from, to });
-    return Promise.resolve(
-      jsonResponse({ from, to, items: MASTER.filter((i) => i.date >= from && i.date <= to) }),
-    );
-  });
+function installCalendar(items: CalendarItem[] = MASTER) {
+  vi.mocked(repo.getCalendarRange).mockImplementation(async (from: string, to: string) => ({
+    from,
+    to,
+    items: items.filter((i) => i.date >= from && i.date <= to),
+  }));
 }
+
+const requestedRanges = () =>
+  vi.mocked(repo.getCalendarRange).mock.calls.map(([from, to]) => ({ from, to }));
 
 function render(
   props: { initialMonth?: string; today?: string } = { initialMonth: "2024-02", today: "2024-02-15" },
@@ -60,17 +58,16 @@ function render(
   return result;
 }
 
-/** A day cell keyed by ISO date — locale-proof (the label renders as en-GB or en-US). */
 const cell = (iso: string) => container.querySelector<HTMLButtonElement>(`button[data-date="${iso}"]`)!;
 const allDayCells = () => [...container.querySelectorAll("button[data-date]")];
 const selectedHeading = () => screen.queryByRole("heading", { level: 2 });
 const rangeCovers = (start: string, end: string) =>
-  requestedRanges.some((r) => r.from <= start && r.to >= end);
+  requestedRanges().some((r) => r.from <= start && r.to >= end);
 
 describe("Calendar — structure", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-    installFetch();
+    primeRepo(repo);
+    installCalendar();
   });
 
   it("renders Monday-first weekday headers in order", async () => {
@@ -84,7 +81,6 @@ describe("Calendar — structure", () => {
   it("renders every day of the month plus the exact adjacent-month spillover", async () => {
     render();
     await screen.findByText("February 2024");
-    // Feb 2024 (leap, 29 days) starts Thursday → 3 leading (Jan 29-31), 3 trailing (Mar 1-3) = 35 cells
     for (const iso of ["2024-02-01", "2024-02-15", "2024-02-29", "2024-01-29", "2024-01-31", "2024-03-01", "2024-03-03"]) {
       expect(cell(iso)).not.toBeNull();
     }
@@ -112,14 +108,14 @@ describe("Calendar — structure", () => {
   it("fetches exactly the visible grid range", async () => {
     render();
     await screen.findByText("February 2024");
-    expect(requestedRanges).toContainEqual({ from: "2024-01-29", to: "2024-03-03" });
+    expect(requestedRanges()).toContainEqual({ from: "2024-01-29", to: "2024-03-03" });
   });
 });
 
 describe("Calendar — items land on the right days", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-    installFetch();
+    primeRepo(repo);
+    installCalendar();
   });
 
   it("marks only days that have items, and never marks spillover cells", async () => {
@@ -130,7 +126,6 @@ describe("Calendar — items land on the right days", () => {
     );
     expect(cell("2024-02-14").querySelector("span.rounded-full")).not.toBeNull();
     expect(cell("2024-02-05").querySelector("span.rounded-full")).toBeNull();
-    // Jan 30 has an item but it's a spillover cell in the Feb grid — no marker
     expect(cell("2024-01-30").querySelector("span.rounded-full")).toBeNull();
   });
 
@@ -212,8 +207,8 @@ describe("Calendar — items land on the right days", () => {
 
 describe("Calendar — navigation", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-    installFetch();
+    primeRepo(repo);
+    installCalendar();
   });
 
   const next = () => userEvent.click(screen.getByRole("button", { name: "Next month" }));
@@ -289,7 +284,7 @@ describe("Calendar — navigation", () => {
   it("clicking a spillover day jumps to its month and selects it", async () => {
     render();
     await screen.findByText("February 2024");
-    await userEvent.click(cell("2024-01-30")); // leading spillover
+    await userEvent.click(cell("2024-01-30"));
     await screen.findByText("January 2024");
     expect(cell("2024-01-30")).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByRole("link", { name: /Late Jan drinks/ })).toBeInTheDocument();
@@ -299,7 +294,6 @@ describe("Calendar — navigation", () => {
     render();
     await screen.findByText("February 2024");
     await next();
-    // keepPreviousData + the grid coming from `month` means cells never vanish mid-fetch
     expect(allDayCells().length).toBeGreaterThan(27);
     await screen.findByText("March 2024");
     expect(allDayCells().length).toBeGreaterThan(27);
@@ -316,8 +310,8 @@ describe("Calendar — navigation", () => {
 
 describe("Calendar — add-event shortcut", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-    installFetch();
+    primeRepo(repo);
+    installCalendar();
   });
 
   const addLinks = () =>
@@ -385,7 +379,7 @@ describe("Calendar — add-event shortcut", () => {
   it("starts with the chooser collapsed on the auto-selected day", async () => {
     render();
     await screen.findByText("February 2024");
-    expect(selectedHeading()).toBeInTheDocument(); // today is auto-selected
+    expect(selectedHeading()).toBeInTheDocument();
     expect(addLinks()).toHaveLength(0);
     expect(screen.getByRole("button", { name: /add event/i })).toHaveAttribute("aria-expanded", "false");
   });
@@ -402,14 +396,14 @@ describe("Calendar — add-event shortcut", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Next month" }));
     await screen.findByText("June 2024");
-    expect(selectedHeading()).toBeNull(); // June isn't today's month → nothing selected
-    expect(cell("2024-05-20")).toBeNull(); // and we've actually left May
+    expect(selectedHeading()).toBeNull();
+    expect(cell("2024-05-20")).toBeNull();
   });
 
   it("carries the clicked day's date when adding from a spillover cell", async () => {
     render();
     await screen.findByText("February 2024");
-    await userEvent.click(cell("2024-01-30")); // leading spillover → jumps to January
+    await userEvent.click(cell("2024-01-30"));
     await screen.findByText("January 2024");
     await userEvent.click(screen.getByRole("button", { name: /add event/i }));
     expect(addLinks()[0]).toHaveAttribute("href", expect.stringContaining("date=2024-01-30"));
@@ -433,35 +427,43 @@ describe("Calendar — add-and-return round trip", () => {
   const NOW = "2024-02-15";
 
   beforeEach(() => {
+    primeRepo(repo);
     vi.stubGlobal("fetch", vi.fn());
   });
 
   it("select a day → add → save → back on that calendar day with the new event", async () => {
-    const created: Array<Record<string, unknown>> = [];
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      if (url.startsWith("/api/calendar")) {
-        const params = new URL(`http://x${url}`).searchParams;
-        const from = params.get("from")!;
-        const to = params.get("to")!;
-        const items = created
-          .filter((c) => (c.date as string) >= from && (c.date as string) <= to)
-          .map((c) => ({
-            date: c.date,
-            kind: "log",
-            category: "appointment",
-            title: c.title,
-            notes: null,
-            entityId: 1,
-            entityCategory: "appointment",
-            logId: 1,
-          }));
-        return Promise.resolve(jsonResponse({ from, to, items }));
-      }
-      if (url === "/api/logs" && init?.method === "POST") {
-        created.push(JSON.parse(init.body as string));
-        return Promise.resolve(jsonResponse({ id: 1, entityId: 1, photos: [] }, 201));
-      }
-      return Promise.resolve(jsonResponse([]));
+    // The write is local-first: reflect the queued log.create back through the calendar read.
+    vi.mocked(repo.getCalendarRange).mockImplementation(async (from: string, to: string) => {
+      const logCreate = (await pendingOutbox()).find((e) => e.type === "log.create");
+      const date = (logCreate?.payload as { date?: string } | undefined)?.date;
+      const items =
+        logCreate && date && date >= from && date <= to
+          ? [
+              {
+                date,
+                kind: "log" as const,
+                category: "appointment" as const,
+                title: "Blood test",
+                notes: null,
+                entityId: 1,
+                entityCategory: "appointment" as const,
+                logId: 1,
+              },
+            ]
+          : [];
+      return { from, to, items };
+    });
+
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [] },
+        deletions: [],
+        nextCursor: "0",
+        hasMore: false,
+        serverTime: NOW,
+      }),
     });
 
     const { container: c } = renderWithProviders(
@@ -478,17 +480,21 @@ describe("Calendar — add-and-return round trip", () => {
     await userEvent.click(screen.getByRole("button", { name: /add event/i }));
     await userEvent.click(screen.getByRole("link", { name: "Appointment" }));
 
-    // pre-filled date, on the add form
     await screen.findByRole("button", { name: "Save" });
     expect(document.querySelector<HTMLInputElement>('input[type="date"]')).toHaveValue("2024-02-27");
 
     await userEvent.type(screen.getByLabelText("Title"), "Blood test");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    // back on the calendar, February, the 27th selected, showing the new appointment
     await screen.findByText("February 2024");
     expect(cell("2024-02-27")).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByRole("link", { name: /Blood test/ })).toBeInTheDocument();
-    expect(created[0]).toMatchObject({ category: "appointment", title: "Blood test", date: "2024-02-27" });
+
+    const envs = await pendingOutbox();
+    expect(envs.find((e) => e.type === "entity.create")?.payload).toMatchObject({
+      category: "appointment",
+      title: "Blood test",
+    });
+    expect(envs.find((e) => e.type === "log.create")?.payload).toMatchObject({ date: "2024-02-27" });
   });
 });

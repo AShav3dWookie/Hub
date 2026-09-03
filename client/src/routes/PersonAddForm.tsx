@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateEntity } from "../api/hooks.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 
 export function PersonAddForm() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const online = useOnlineStatus();
   const createEntity = useCreateEntity();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -20,7 +22,7 @@ export function PersonAddForm() {
     try {
       await createEntity.mutateAsync({ category: "person", title: name.trim() });
       navigate("/");
-      showToast("Saved!");
+      showToast(online ? "Saved!" : "Saved — will sync when you're back online.");
     } catch {
       setError("Failed to create person");
     }

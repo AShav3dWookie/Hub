@@ -13,10 +13,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { runMigrations } from "../db/migrate.js";
 import { createLog } from "../services/logService.js";
 import { findOrCreateEntity } from "../services/entityService.js";
 import { createEntityNote } from "../services/entityNotesService.js";
+import { createLogPhotos } from "../services/logPhotosService.js";
 import type { AppDb } from "../db/client.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -176,6 +178,52 @@ createLog(db, {
   people: [],
   autoDelete: false,
 });
+
+// --- Photos (on a movie and an eating_out log — the two hasPeople categories) ---
+const photosDir = path.join(path.dirname(dbPath), "photos");
+
+async function solidPng(r: number, g: number, b: number): Promise<Buffer> {
+  return sharp({ create: { width: 800, height: 600, channels: 3, background: { r, g, b } } })
+    .png()
+    .toBuffer();
+}
+
+async function attachPhotos(
+  category: "movie" | "eating_out",
+  title: string,
+  colors: Array<[number, number, number]>,
+) {
+  const log = createLog(db, {
+    category,
+    title,
+    date: category === "movie" ? "2026-07-10" : "2026-07-12",
+    rating: 5,
+    notes: "Has photos for offline testing.",
+    people: [{ name: "Alice" }],
+    releaseYear: category === "movie" ? 2024 : null,
+    author: null,
+  });
+  await createLogPhotos(
+    db,
+    photosDir,
+    log.id,
+    await Promise.all(
+      colors.map(async ([r, g, b], i) => ({
+        buffer: await solidPng(r, g, b),
+        originalname: `${title.toLowerCase().replace(/\W+/g, "-")}-${i + 1}.png`,
+        mimetype: "image/png",
+        size: 0,
+      })),
+    ),
+  );
+}
+
+await attachPhotos("eating_out", "Tartine Bakery", [
+  [220, 120, 80],
+  [90, 150, 200],
+  [140, 200, 120],
+]);
+await attachPhotos("movie", "Past Lives", [[60, 60, 90]]);
 
 // eslint-disable-next-line no-console
 console.log(`Seeded test data into ${dbPath}`);

@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { primeRepo } from "../test/mockRepo.js";
 import { LogPicker } from "./LogPicker.js";
 
-const NOW = "2024-05-01T00:00:00.000Z";
+vi.mock("../local/repo.js");
+import { repo } from "../local/repo.js";
 
-function jsonResponse(body: unknown) {
-  return { ok: true, status: 200, json: async () => body };
-}
+const NOW = "2024-05-01T00:00:00.000Z";
 
 const logRow = (id: number, title: string) => ({
   id,
@@ -22,30 +22,27 @@ const logRow = (id: number, title: string) => ({
   autoDelete: false,
   createdAt: NOW,
   updatedAt: NOW,
-  entity: { id, category: "movie", title, createdAt: NOW, releaseYear: null, author: null },
+  entity: { id, category: "movie" as const, title, createdAt: NOW, releaseYear: null, author: null },
 });
 
 describe("LogPicker", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
+  beforeEach(() => primeRepo(repo));
 
   it("shows nothing until a query is typed, then filters out excluded ids and calls onPick", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse({ groupBy: "log", logs: [logRow(1, "Heat"), logRow(2, "Sicario")] }),
-    );
+    vi.mocked(repo.search).mockResolvedValue({
+      groupBy: "log",
+      logs: [logRow(1, "Heat"), logRow(2, "Sicario")],
+    });
     const onPick = vi.fn();
 
     renderWithProviders(<LogPicker onPick={onPick} excludeIds={[2]} />);
 
-    // nothing rendered before typing
     expect(screen.queryByRole("button", { name: /Heat/ })).not.toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(repo.search).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByPlaceholderText(/find an event to add/i), "hea");
 
     const option = await screen.findByRole("button", { name: /Heat/ });
-    // excluded id 2 (Sicario) is filtered out
     expect(screen.queryByRole("button", { name: /Sicario/ })).not.toBeInTheDocument();
 
     await userEvent.click(option);
@@ -53,18 +50,16 @@ describe("LogPicker", () => {
   });
 
   it("shows only the year for a year-granularity result (book)", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse({
-        groupBy: "log",
-        logs: [
-          {
-            ...logRow(1, "Dune"),
-            date: "2021-01-01",
-            entity: { id: 1, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
-          },
-        ],
-      }),
-    );
+    vi.mocked(repo.search).mockResolvedValue({
+      groupBy: "log",
+      logs: [
+        {
+          ...logRow(1, "Dune"),
+          date: "2021-01-01",
+          entity: { id: 1, category: "book", title: "Dune", createdAt: NOW, releaseYear: null, author: null },
+        },
+      ],
+    });
 
     renderWithProviders(<LogPicker onPick={vi.fn()} excludeIds={[]} />);
     await userEvent.type(screen.getByPlaceholderText(/find an event to add/i), "dun");
@@ -75,7 +70,7 @@ describe("LogPicker", () => {
   });
 
   it("reports when a query matches no events", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse({ groupBy: "log", logs: [] }));
+    vi.mocked(repo.search).mockResolvedValue({ groupBy: "log", logs: [] });
     renderWithProviders(<LogPicker onPick={vi.fn()} excludeIds={[]} />);
 
     await userEvent.type(screen.getByPlaceholderText(/find an event to add/i), "zzz");

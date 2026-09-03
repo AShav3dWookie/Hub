@@ -1,0 +1,122 @@
+# Isolated, production-shaped instance of the app for hands-on PWA testing.
+#
+#   npm run pwa:up        # build + start   → server on :3200, client browser on :3210
+#   npm run pwa:down      # stop, keep the data
+#   npm run pwa:reset     # stop + wipe the data
+#   npm run pwa:client    # recreate ONLY the client → a brand-new browser (fresh install)
+#   npm run pwa:offline   # cut the client's network — server stays up, :3210 stays visible
+#   npm run pwa:online    # reconnect the client
+#
+# Topology mirrors the home-server deployment (Cloudflare → nginx → app container),
+# with a separate "client machine" so you test a clean phone, not your dev browser:
+#
+#   your browser ─▶ http://localhost:3210 ─▶ client container (visible Chromium)
+#                                              │  talks over the compose network to…
+#   your browser ─▶ http://localhost:3200 ─┐   ▼
+#                                          nginx ─▶ app (Express, internal :3000)
+#                                                   ├─ /api/*         the backend
+#                                                   └─ everything else  the built PWA
+#                                                      from server/public
+#
+# There is no "client server": the PWA is a static bundle served by the app
+# container. The *client* here is a browser (Chromium) — the same thing a phone is.
+#
+# Its own compose project name, ports and named volume, so it never touches the
+# :3000 instance or test-env/.
+
+name: logger-pwa
+
+# `edge` carries all client↔server traffic. `client-lan` has only the client on it
+# and exists purely so the client keeps a network interface — and its published
+# :3210 port — when `edge` is disconnected (`npm run pwa:offline`). That's a real
+# network partition: the client can't resolve or reach the server, but the server
+# keeps running and you keep watching the client.
+networks:
+  edge:
+  client-lan:
+
+services:
+  seed:
+    build: { context: ., target: runtime }
+    image: logger-pwa:local
+    working_dir: /app/server
+    networks: [edge]
+    environment:
+      DB_PATH: /data/logger.db
+    volumes:
+      - pwa-data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        test -f /data/logger.db
+        && echo 'DB already present — leaving it alone'
+        || node dist/scripts/seedTestData.js
+
+  app:
+    build: { context: ., target: runtime }
+    image: logger-pwa:local
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    networks: [edge]
+    expose:
+      - "3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DB_PATH: /data/logger.db
+      AUTH_ENABLED: "false"
+    volumes:
+      - pwa-data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      app:
+        condition: service_started
+    networks: [edge]
+    ports:
+      - "3200:80"
+    volumes:
+      - ./docker/nginx.pwa.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+  # A separate "client machine": a real Chromium (same Blink engine as Chrome on
+  # Android) in a KasmVNC desktop. Open http://localhost:3210 in your own browser,
+  # then install the PWA / toggle offline / etc. It reaches the app as `http://nginx`
+  # over the compose network — genuinely over the wire, like a phone hitting the
+  # home server.
+  #
+  # No /config volume on purpose: the whole browser profile (service worker, caches,
+  # IndexedDB, installed apps) lives in the container's writable layer, so
+  # `npm run pwa:client` (a --force-recreate) hands you a brand-new browser.
+  #
+  # `--unsafely-treat-insecure-origin-as-secure` lets the service worker register
+  # over plain HTTP on a non-localhost origin — Chromium's built-in PWA-testing
+  # mechanism. (Your own browser at http://localhost:3200 doesn't need it: localhost
+  # is already a secure context.)
+  client:
+    image: lscr.io/linuxserver/chromium:latest
+    depends_on:
+      nginx:
+        condition: service_started
+    networks: [edge, client-lan]
+    ports:
+      - "3210:3000"              # the browser UI — open this in your own browser
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+      CHROME_CLI: >-
+        --unsafely-treat-insecure-origin-as-secure=http://nginx
+        --no-first-run
+        --disable-fre
+        http://nginx/
+    shm_size: "1gb"
+    security_opt:
+      - seccomp:unconfined
+    restart: unless-stopped
+
+volumes:
+  pwa-data:

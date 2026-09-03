@@ -15,6 +15,7 @@ import { createCalendarRouter } from "./routes/calendar.js";
 import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
+import { createSyncRouter } from "./routes/sync.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -49,12 +50,26 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/calendar", requireAuth, createCalendarRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
+  app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");
   if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
+    app.use(
+      express.static(clientDist, {
+        setHeaders(res, filePath) {
+          // The service worker, its Workbox chunks, the manifest and the HTML entry must
+          // always revalidate or PWA updates never land. Content-hashed assets are immutable.
+          if (/(sw\.js|workbox-[^/\\]+\.js|manifest\.webmanifest|index\.html)$/.test(filePath)) {
+            res.setHeader("Cache-Control", "no-cache");
+          } else if (/[/\\]assets[/\\]/.test(filePath)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        },
+      }),
+    );
     app.get(/^(?!\/api).*/, (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path.join(clientDist, "index.html"));
     });
   }

@@ -4,10 +4,10 @@ import { X } from "lucide-react";
 import type { LogWithEntityDTO, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META } from "@logger/shared";
 import { useCreateAlbum } from "../api/hooks.js";
-import { api } from "../api/client.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
 
 export function AlbumAddForm() {
@@ -21,6 +21,7 @@ export function AlbumAddForm() {
   const [error, setError] = useState<string | null>(null);
 
   const createAlbum = useCreateAlbum();
+  const online = useOnlineStatus();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -58,20 +59,13 @@ export function AlbumAddForm() {
       return;
     }
 
-    if (photoFiles.length > 0) {
-      try {
-        const formData = new FormData();
-        for (const file of photoFiles) formData.append("photos", file);
-        await api.postForm(`/albums/${albumId}/photos`, formData);
-      } catch {
-        navigate(`/album/${albumId}`);
-        showToast("Album created, but photos failed to upload — add them from the album.");
-        return;
-      }
-    }
-
     navigate(`/album/${albumId}`);
-    showToast("Album created!");
+    if (photoFiles.length > 0) {
+      // The album only has a temp id until it syncs — photos are added from its page after.
+      showToast("Album created — add the photos once it has synced.");
+    } else {
+      showToast(online ? "Album created!" : "Album created — will sync when you're back online.");
+    }
   }
 
   return (
