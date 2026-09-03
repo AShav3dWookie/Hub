@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTitle } from "@logger/shared";
+import { normalizeTitle } from "./normalize.js";
 
 describe("normalizeTitle", () => {
   it("lowercases and trims", () => {
@@ -20,5 +20,9 @@ describe("normalizeTitle", () => {
 
   it("returns an empty string for whitespace-only input", () => {
     expect(normalizeTitle("   \t  ")).toBe("");
+  });
+
+  it("collapses newlines and mixed whitespace, not just spaces", () => {
+    expect(normalizeTitle("Blade\nRunner\r\n 2049")).toBe("blade runner 2049");
   });
 });
