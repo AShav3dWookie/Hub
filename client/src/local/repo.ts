@@ -5,12 +5,13 @@
  * Branch 4 swaps the TanStack Query `queryFn`s over to these (the query keys stay the same).
  * Nothing here writes — the lite tier's replica is a pure projection of server state.
  */
-import type { Category, SearchQuery } from "@logger/shared";
+import type { Category, GalleryQuery, SearchQuery } from "@logger/shared";
 import { loadSnapshot } from "./snapshot.js";
 import * as q from "./queries.js";
 
 export { LocalNotFoundError } from "./queries.js";
-export type { EntityDetail, GalleryQuery } from "./queries.js";
+export type { EntityDetail } from "./queries.js";
+export type { GalleryQuery };
 
 export const repo = {
   async searchEntitiesByTitle(category: Category, query: string, limit?: number) {
@@ -25,7 +26,7 @@ export const repo = {
     return q.search(await loadSnapshot(), query);
   },
 
-  async getGallery(query: q.GalleryQuery = {}) {
+  async getGallery(query: GalleryQuery = {}) {
     return q.getGallery(await loadSnapshot(), query);
   },
 

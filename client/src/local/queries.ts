@@ -1,28 +1,49 @@
 /**
- * Offline ports of the server's read services, as pure functions over a {@link LocalSnapshot}.
- * Each returns the exact DTO shape its `/api` counterpart does, so `repo.ts` can stand in for
- * the network behind the existing TanStack Query keys with no component changes.
+ * Offline counterparts of the server's read services, as pure functions over a
+ * {@link LocalSnapshot}. Each returns the exact DTO shape its `/api` counterpart does, so
+ * `repo.ts` can stand in for the network behind the existing TanStack Query keys with no
+ * component changes.
  *
- * Ported 1:1 from (and kept in step with):
- *   server/src/services/entityService.ts      → searchEntitiesByTitle
- *   server/src/services/entityDetailService.ts → getEntityDetail (entity + person)
- *   server/src/services/searchService.ts       → search
- *   server/src/services/galleryService.ts      → getGallery
- *   server/src/services/albumService.ts        → listAlbums / getAlbum
- *   server/src/services/entityNotesService.ts  → listEntityNotes
- *   server/src/services/calendarService.ts     → getCalendarRange
+ * These no longer re-implement the server's rules. Every filtering, ordering, windowing and
+ * paging decision comes from `@logger/shared/rules`, which the matching server service calls
+ * too — so the two cannot drift apart. What stays here is only how rows are read out of the
+ * local replica, which is genuinely different from the server's SQL.
+ *
+ * Counterparts:
+ *   server/src/services/entityService.ts         → searchEntitiesByTitle
+ *   server/src/services/entityDetailService.ts   → getEntityDetail (entity + person)
+ *   server/src/services/searchService.ts         → search
+ *   server/src/services/galleryService.ts        → getGallery
+ *   server/src/services/albumService.ts          → listAlbums / getAlbum
+ *   server/src/services/entityNotesService.ts    → listEntityNotes
+ *   server/src/services/calendarService.ts       → getCalendarRange
  *   server/src/services/importantDatesService.ts → getUpcomingImportantDates
  *   server/src/services/upcomingEventsService.ts → getUpcomingEvents
  */
 import {
-  matchesTokens,
+  DEFAULT_GALLERY_LIMIT,
+  EVENT_CATEGORIES,
+  bucketImportantDates,
+  bucketUpcomingEvents,
+  buildCalendarRange,
+  byAlbumTitle,
+  byPersonName,
+  entityMatchesFilters,
+  isAfterCursor,
+  logMatchesFilters,
+  matchByTitle,
   mediaKindForMime,
   normalizeTitle,
-  tokenizeQuery,
+  paginateByDescendingId,
+  resolveSearchOptions,
+  shouldSearchSideList,
+  sortEntityLogs,
+  sortEntityResults,
+  sortLogResults,
+  summariseEntityLogs,
   type AlbumDTO,
   type AlbumSummary,
   type AlbumSyncDTO,
-  type CalendarItem,
   type CalendarRangeResponse,
   type Category,
   type EntityNoteDTO,
@@ -32,7 +53,6 @@ import {
   type EntityWithLogsDTO,
   type GalleryPhotoDTO,
   type GalleryResponse,
-  type ImportantDateEntry,
   type LoggableCategory,
   type LogDTO,
   type LogPhotoDTO,
@@ -42,13 +62,12 @@ import {
   type PersonRef,
   type PersonStats,
   type PhotoSyncDTO,
+  type GalleryQuery,
   type SearchQuery,
   type SearchResponse,
-  type UpcomingEventEntry,
   type UpcomingEventsResponse,
   type UpcomingImportantDatesResponse,
 } from "@logger/shared";
-import { daysInMonth } from "../lib/calendar.js";
 import type { LocalSnapshot } from "./snapshot.js";
 
 export class LocalNotFoundError extends Error {
@@ -246,29 +265,13 @@ function personStats(personId: number, appearances: LogWithEntityDTO[]): PersonS
 
 // ---- search ----------------------------------------------------------------
 
-function comparator(order: "asc" | "desc" = "desc") {
-  return (a: number | string, b: number | string) => {
-    if (a === b) return 0;
-    const result = a < b ? -1 : 1;
-    return order === "asc" ? result : -result;
-  };
-}
+type SearchOptions = ReturnType<typeof resolveSearchOptions>;
 
-function peopleLabel(people: PersonRef[]): string {
-  return people
-    .map((p) => p.name)
-    .sort((a, b) => a.localeCompare(b))
-    .join(", ");
-}
-
-function searchPeople(snap: LocalSnapshot, query: SearchQuery, tokens: string[]) {
-  if (query.category && query.category !== "person") return [];
-  if (tokens.length === 0 && query.category !== "person") return [];
-  const qMode = query.qMode ?? "all";
+function searchPeople(snap: LocalSnapshot, query: SearchQuery, options: SearchOptions) {
+  if (!shouldSearchSideList(query, options.tokens, "person")) return [];
 
   const people = snap.entities.filter((e) => e.category === "person");
-  const matches =
-    tokens.length > 0 ? people.filter((p) => matchesTokens(p.title, tokens, qMode)) : people;
+  const matches = matchByTitle(people, (p) => p.title, options);
   if (matches.length === 0) return [];
 
   const appearanceCount = new Map<number, number>();
@@ -280,76 +283,55 @@ function searchPeople(snap: LocalSnapshot, query: SearchQuery, tokens: string[])
 
   return matches
     .map((p) => ({ id: p.id, name: p.title, appearanceCount: appearanceCount.get(p.id) ?? 0 }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byPersonName);
 }
 
-function searchAlbums(snap: LocalSnapshot, query: SearchQuery, tokens: string[]) {
-  if (query.category && query.category !== "album") return [];
-  if (tokens.length === 0 && query.category !== "album") return [];
-  const qMode = query.qMode ?? "all";
+function searchAlbums(snap: LocalSnapshot, query: SearchQuery, options: SearchOptions) {
+  if (!shouldSearchSideList(query, options.tokens, "album")) return [];
 
-  const matches =
-    tokens.length > 0
-      ? snap.albums.filter((a) => matchesTokens(a.title, tokens, qMode))
-      : snap.albums;
+  const matches = matchByTitle(snap.albums, (a) => a.title, options);
   if (matches.length === 0) return [];
 
   return matches
     .map((a) => ({ id: a.id, title: a.title, eventCount: a.eventLogIds.length }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort(byAlbumTitle);
 }
 
 export function search(snap: LocalSnapshot, query: SearchQuery): SearchResponse {
-  const groupBy = query.groupBy ?? "entity";
-  const sortBy = query.sortBy ?? "date";
-  const sortOrder = query.sortOrder ?? "desc";
-  const visitSortBy = query.visitSortBy ?? "date";
-  const visitSortOrder = query.visitSortOrder ?? "desc";
-  const qMode = query.qMode ?? "all";
-  const tokens = query.q ? tokenizeQuery(query.q) : [];
-  const people = searchPeople(snap, query, tokens);
-  const albums = searchAlbums(snap, query, tokens);
+  const options = resolveSearchOptions(query);
+  const { groupBy } = options;
+  const people = searchPeople(snap, query, options);
+  const albums = searchAlbums(snap, query, options);
 
-  if (query.category === "album") {
-    return groupBy === "log"
+  const emptyResults = (): SearchResponse =>
+    groupBy === "log"
       ? { groupBy, logs: [], people, albums }
       : { groupBy, entities: [], people, albums };
-  }
+
+  // The "album" filter tab is not a real category — it selects albums only.
+  if (query.category === "album") return emptyResults();
 
   const entityById = new Map<number, EntitySyncDTO>();
-  for (const e of snap.entities) {
-    if (query.category ? e.category !== query.category : e.category === "person") continue;
-    if (query.authorContains && !(e.author ?? "").toLowerCase().includes(query.authorContains.toLowerCase()))
-      continue;
-    if (query.releaseYearMin != null && (e.releaseYear == null || e.releaseYear < query.releaseYearMin))
-      continue;
-    if (query.releaseYearMax != null && (e.releaseYear == null || e.releaseYear > query.releaseYearMax))
-      continue;
-    entityById.set(e.id, e);
+  for (const entity of snap.entities) {
+    if (entityMatchesFilters(entity, query)) entityById.set(entity.id, entity);
   }
+  if (entityById.size === 0) return emptyResults();
 
-  if (entityById.size === 0) {
-    return groupBy === "log"
-      ? { groupBy, logs: [], people, albums }
-      : { groupBy, entities: [], people, albums };
-  }
-
-  const candidateLogs = snap.logs.filter((l) => entityById.has(l.entityId));
-
-  const filteredLogs = candidateLogs.filter((log) => {
-    if (query.dateFrom && log.date < query.dateFrom) return false;
-    if (query.dateTo && log.date > query.dateTo) return false;
-    if (query.ratingMin != null && (log.rating == null || log.rating < query.ratingMin)) return false;
-    if (query.ratingMax != null && (log.rating == null || log.rating > query.ratingMax)) return false;
-    if (tokens.length > 0) {
-      const entity = entityById.get(log.entityId);
-      const names = peopleRefs(snap, log.peopleIds).map((p) => p.name);
-      const haystack = [entity?.title ?? "", log.notes ?? "", ...names].join(" ");
-      if (!matchesTokens(haystack, tokens, qMode)) return false;
-    }
-    return true;
+  const filteredLogs = snap.logs.filter((log) => {
+    const entity = entityById.get(log.entityId);
+    if (!entity) return false;
+    return logMatchesFilters(
+      log,
+      {
+        entityTitle: entity.title,
+        peopleNames: peopleRefs(snap, log.peopleIds).map((p) => p.name),
+      },
+      query,
+      options,
+    );
   });
 
+  // An entity with no surviving log drops out of the results entirely.
   const survivingEntityIds = new Set(filteredLogs.map((l) => l.entityId));
   for (const id of [...entityById.keys()]) {
     if (!survivingEntityIds.has(id)) entityById.delete(id);
@@ -360,22 +342,12 @@ export function search(snap: LocalSnapshot, query: SearchQuery): SearchResponse 
       ...toLogDTO(snap, log, false),
       entity: toEntitySummary(entityById.get(log.entityId)!),
     }));
-    flat.sort((a, b) => {
-      switch (sortBy) {
-        case "title":
-          return comparator(sortOrder)(a.entity.title.toLowerCase(), b.entity.title.toLowerCase());
-        case "rating":
-          return comparator(sortOrder)(a.rating ?? 0, b.rating ?? 0);
-        case "person":
-          return comparator(sortOrder)(
-            peopleLabel(a.people).toLowerCase(),
-            peopleLabel(b.people).toLowerCase(),
-          );
-        default:
-          return comparator(sortOrder)(a.date, b.date);
-      }
-    });
-    return { groupBy, logs: flat, people, albums };
+    return {
+      groupBy,
+      logs: sortLogResults(flat, options.sortBy, options.sortOrder),
+      people,
+      albums,
+    };
   }
 
   const logsByEntity = new Map<number, LogDTO[]>();
@@ -386,66 +358,33 @@ export function search(snap: LocalSnapshot, query: SearchQuery): SearchResponse 
   }
 
   const entityResults: EntityWithLogsDTO[] = [...entityById.values()].map((entity) => {
-    const entityLogs = logsByEntity.get(entity.id) ?? [];
-    entityLogs.sort((a, b) => {
-      switch (visitSortBy) {
-        case "rating":
-          return comparator(visitSortOrder)(a.rating ?? 0, b.rating ?? 0);
-        case "person":
-          return comparator(visitSortOrder)(
-            peopleLabel(a.people).toLowerCase(),
-            peopleLabel(b.people).toLowerCase(),
-          );
-        default:
-          return comparator(visitSortOrder)(a.date, b.date);
-      }
-    });
-    const rated = entityLogs.filter((l) => l.rating != null);
-    const averageRating =
-      rated.length > 0 ? rated.reduce((s, l) => s + (l.rating ?? 0), 0) / rated.length : null;
-    const latestDate = entityLogs.reduce<string | null>(
-      (max, l) => (max === null || l.date > max ? l.date : max),
-      null,
+    const entityLogs = sortEntityLogs(
+      logsByEntity.get(entity.id) ?? [],
+      options.visitSortBy,
+      options.visitSortOrder,
     );
     return {
       ...toEntitySummary(entity),
       logs: entityLogs,
-      visitCount: entityLogs.length,
-      averageRating,
-      latestDate,
+      ...summariseEntityLogs(entityLogs),
     };
   });
 
-  entityResults.sort((a, b) => {
-    switch (sortBy) {
-      case "title":
-        return comparator(sortOrder)(a.title.toLowerCase(), b.title.toLowerCase());
-      case "rating":
-        return comparator(sortOrder)(a.averageRating ?? 0, b.averageRating ?? 0);
-      default:
-        return comparator(sortOrder)(a.latestDate ?? "", b.latestDate ?? "");
-    }
-  });
-
-  return { groupBy, entities: entityResults, people, albums };
+  return {
+    groupBy,
+    entities: sortEntityResults(entityResults, options.sortBy, options.sortOrder),
+    people,
+    albums,
+  };
 }
 
 // ---- gallery --------------------------------------------------------------
-
-export const DEFAULT_GALLERY_LIMIT = 50;
-
-export interface GalleryQuery {
-  cursor?: number;
-  limit?: number;
-  personId?: number;
-  albumId?: number;
-}
 
 export function getGallery(snap: LocalSnapshot, query: GalleryQuery = {}): GalleryResponse {
   const limit = query.limit ?? DEFAULT_GALLERY_LIMIT;
 
   let photos = [...snap.photos].sort((a, b) => b.id - a.id);
-  if (query.cursor != null) photos = photos.filter((p) => p.id < query.cursor!);
+  photos = photos.filter((p) => isAfterCursor(p.id, query.cursor));
 
   if (query.personId != null) {
     const person = query.personId;
@@ -463,8 +402,7 @@ export function getGallery(snap: LocalSnapshot, query: GalleryQuery = {}): Galle
     );
   }
 
-  const hasMore = photos.length > limit;
-  const page = hasMore ? photos.slice(0, limit) : photos;
+  const { page, nextCursor } = paginateByDescendingId(photos, limit, (p) => p.id);
 
   const dtos: GalleryPhotoDTO[] = page.map((p) => {
     const log = p.logId != null ? snap.logById.get(p.logId) : undefined;
@@ -484,7 +422,7 @@ export function getGallery(snap: LocalSnapshot, query: GalleryQuery = {}): Galle
     };
   });
 
-  return { photos: dtos, nextCursor: hasMore ? dtos[dtos.length - 1].id : null };
+  return { photos: dtos, nextCursor };
 }
 
 // ---- albums -------------------------------------------------------------
@@ -561,169 +499,85 @@ export function listEntityNotes(snap: LocalSnapshot, entityId: number): EntityNo
 
 // ---- calendar -------------------------------------------------------
 
-const CALENDAR_LOG_CATEGORIES: Category[] = ["eating_out", "hang_out", "appointment"];
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
 export function getCalendarRange(
   snap: LocalSnapshot,
   from: string,
   to: string,
 ): CalendarRangeResponse {
-  const items: CalendarItem[] = [];
-
+  const logRows = [];
   for (const log of snap.logs) {
-    if (log.date < from || log.date > to) continue;
     const entity = snap.entityById.get(log.entityId);
-    if (!entity || !CALENDAR_LOG_CATEGORIES.includes(entity.category)) continue;
-    items.push({
+    if (!entity) continue;
+    logRows.push({
+      logId: log.id,
       date: log.date,
-      kind: "log",
-      category: entity.category as CalendarItem["category"],
-      title: entity.title,
       notes: log.notes,
       entityId: entity.id,
-      entityCategory: entity.category,
-      logId: log.id,
+      title: entity.title,
+      category: entity.category,
     });
   }
 
-  const fromYear = Number(from.slice(0, 4));
-  const toYear = Number(to.slice(0, 4));
+  const noteRows = [];
   for (const note of snap.notes) {
-    if (note.category !== "important_date" || !note.tag || !note.eventDate) continue;
     const entity = snap.entityById.get(note.entityId);
     if (!entity) continue;
-    const [, mm, dd] = note.eventDate.slice(0, 10).split("-").map(Number);
-    if (!mm || !dd) continue;
-    for (let year = fromYear; year <= toYear; year++) {
-      if (dd > daysInMonth(year, mm)) continue;
-      const iso = `${year}-${pad2(mm)}-${pad2(dd)}`;
-      if (iso < from || iso > to) continue;
-      items.push({
-        date: iso,
-        kind: "important_date",
-        category: "important_date",
-        title: entity.title,
-        notes: note.body || null,
-        entityId: entity.id,
-        entityCategory: entity.category,
-        tag: note.tag,
-        noteId: note.id,
-      });
-    }
+    noteRows.push({
+      noteId: note.id,
+      category: note.category,
+      tag: note.tag,
+      eventDate: note.eventDate,
+      body: note.body,
+      entityId: entity.id,
+      entityName: entity.title,
+      entityCategory: entity.category,
+    });
   }
 
-  items.sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      a.title.localeCompare(b.title) ||
-      a.kind.localeCompare(b.kind) ||
-      (a.logId ?? a.noteId ?? 0) - (b.logId ?? b.noteId ?? 0),
-  );
-
-  return { from, to, items };
+  return buildCalendarRange(logRows, noteRows, from, to);
 }
 
 // ---- home widgets --------------------------------------------------
-
-function atMidnightUTC(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function nextOccurrence(eventDate: string, today: Date): Date {
-  const [, month, day] = eventDate.split("-").map(Number);
-  const candidate = new Date(Date.UTC(today.getUTCFullYear(), month - 1, day));
-  if (candidate.getTime() < today.getTime()) {
-    return new Date(Date.UTC(today.getUTCFullYear() + 1, month - 1, day));
-  }
-  return candidate;
-}
 
 export function getUpcomingImportantDates(
   snap: LocalSnapshot,
   today: Date = new Date(),
 ): UpcomingImportantDatesResponse {
-  const todayUTC = atMidnightUTC(today);
-  const todayStr = toISODate(todayUTC);
-  const weekEnd = new Date(todayUTC);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
-
-  const todayEntries: ImportantDateEntry[] = [];
-  const next7: ImportantDateEntry[] = [];
-
+  const rows = [];
   for (const note of snap.notes) {
-    if (note.category !== "important_date" || !note.tag || !note.eventDate) continue;
     const entity = snap.entityById.get(note.entityId);
     if (!entity) continue;
-    const occurrence = nextOccurrence(note.eventDate, todayUTC);
-    const occurrenceISO = toISODate(occurrence);
-    const entry: ImportantDateEntry = {
+    rows.push({
       noteId: note.id,
       entityId: note.entityId,
       entityName: entity.title,
       tag: note.tag,
       eventDate: note.eventDate,
-      nextOccurrence: occurrenceISO,
       body: note.body,
-    };
-    if (occurrenceISO === todayStr) todayEntries.push(entry);
-    else if (occurrence.getTime() > todayUTC.getTime() && occurrence.getTime() <= weekEnd.getTime())
-      next7.push(entry);
+      category: note.category,
+    });
   }
-
-  todayEntries.sort((a, b) => a.entityName.localeCompare(b.entityName));
-  next7.sort(
-    (a, b) =>
-      a.nextOccurrence.localeCompare(b.nextOccurrence) || a.entityName.localeCompare(b.entityName),
-  );
-  return { today: todayEntries, next7Days: next7 };
+  return bucketImportantDates(rows, today);
 }
-
-const EVENT_CATEGORIES: Category[] = ["hang_out", "appointment"];
 
 export function getUpcomingEvents(
   snap: LocalSnapshot,
   today: Date = new Date(),
 ): UpcomingEventsResponse {
-  const todayStr = toISODate(atMidnightUTC(today));
-  const weekEndStr = toISODate(
-    (() => {
-      const d = atMidnightUTC(today);
-      d.setUTCDate(d.getUTCDate() + 7);
-      return d;
-    })(),
-  );
-
-  const todayEntries: UpcomingEventEntry[] = [];
-  const next7: UpcomingEventEntry[] = [];
-
+  const rows = [];
   for (const log of snap.logs) {
     const entity = snap.entityById.get(log.entityId);
     if (!entity || !EVENT_CATEGORIES.includes(entity.category)) continue;
-    if (log.createdAt.slice(0, 10) >= log.date) continue; // logged after the fact → history
-    const entry: UpcomingEventEntry = {
+    rows.push({
       logId: log.id,
       entityId: log.entityId,
       entityTitle: entity.title,
-      category: entity.category as UpcomingEventEntry["category"],
+      category: entity.category,
       date: log.date,
       notes: log.notes,
+      createdAt: log.createdAt,
       people: peopleRefs(snap, log.peopleIds),
-    };
-    if (log.date === todayStr) todayEntries.push(entry);
-    else if (log.date > todayStr && log.date <= weekEndStr) next7.push(entry);
+    });
   }
-
-  const byDateThenTitle = (a: UpcomingEventEntry, b: UpcomingEventEntry) =>
-    a.date.localeCompare(b.date) || a.entityTitle.localeCompare(b.entityTitle);
-  todayEntries.sort(byDateThenTitle);
-  next7.sort(byDateThenTitle);
-  return { today: todayEntries, next7Days: next7 };
+  return bucketUpcomingEvents(rows, today);
 }

@@ -2,24 +2,14 @@ import { and, eq, lt, or, desc, isNotNull, inArray, type SQL } from "drizzle-orm
 import type { AppDb } from "../db/client.js";
 import { logs, logPhotos, logPeople, entities, albumEvents, albumPeople } from "../db/schema.js";
 import { toLogPhotoDTO } from "./logPhotosService.js";
-import type { GalleryPhotoDTO, GalleryResponse, LoggableCategory } from "@logger/shared";
-
-export const DEFAULT_GALLERY_LIMIT = 50;
-
-export interface GalleryQuery {
-  cursor?: number;
-  limit?: number;
-  /**
-   * When set, restrict to photos credited to this person: photos whose parent log tags them
-   * (via log_people) OR loose photos of an album they were added to directly (via album_people).
-   */
-  personId?: number;
-  /**
-   * When set, restrict to an album's photos: loose photos (album_id) plus every photo of a linked
-   * event's log. Pass at most one of personId / albumId.
-   */
-  albumId?: number;
-}
+import {
+  DEFAULT_GALLERY_LIMIT,
+  paginateByDescendingId,
+  type GalleryPhotoDTO,
+  type GalleryQuery,
+  type GalleryResponse,
+  type LoggableCategory,
+} from "@logger/shared";
 
 /**
  * Uploaded photos, newest first. Ordered by log_photos.id DESC (monotonic with upload
@@ -84,10 +74,9 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
     .limit(limit + 1)
     .all();
 
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const { page, nextCursor } = paginateByDescendingId(rows, limit, (row) => row.photo.id);
 
-  const photos: GalleryPhotoDTO[] = pageRows.map((row) => ({
+  const photos: GalleryPhotoDTO[] = page.map((row) => ({
     ...toLogPhotoDTO(row.photo),
     log:
       row.logId != null
@@ -100,8 +89,6 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
           }
         : null,
   }));
-
-  const nextCursor = hasMore ? photos[photos.length - 1].id : null;
 
   return { photos, nextCursor };
 }

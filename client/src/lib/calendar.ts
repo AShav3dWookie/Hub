@@ -1,24 +1,14 @@
 /**
- * Pure UTC month math for the calendar screen. Dates are `YYYY-MM-DD`, months are `YYYY-MM`.
- * Everything goes through `Date.UTC` so there's no local-timezone drift (matches the server's
- * `lib/dates.ts` and the UTC formatting in `EntityNotes.tsx`).
+ * Grid and label helpers for the calendar screen. Dates are `YYYY-MM-DD`, months are `YYYY-MM`.
+ * Everything goes through `Date.UTC` so there's no local-timezone drift.
+ *
+ * The underlying date arithmetic lives in `@logger/shared/dates`, shared with the server. Only
+ * the presentation-side helpers — the month grid, the labels, the weekday headers — are here.
+ * `daysInMonth` and `addMonths` are re-exported so the calendar screen has one import.
  */
+import { addMonths, daysInMonth } from "@logger/shared";
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** Days in a month. `month` is 1-12. */
-export function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-/** Shift a `YYYY-MM` month by `delta` months, rolling the year. */
-export function addMonths(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const total = y * 12 + (m - 1) + delta;
-  return `${Math.floor(total / 12)}-${pad2((total % 12) + 1)}`;
-}
+export { addMonths, daysInMonth };
 
 /** "August 2026" for a `YYYY-MM`. */
 export function monthLabel(month: string): string {
