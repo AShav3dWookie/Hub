@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
-import { daysInMonth, daysBetween } from "./dates.js";
+import { daysInMonth, daysBetween } from "@logger/shared";
 
 export const categorySchema = z.enum(CATEGORIES);
 export const loggableCategorySchema = z.enum(LOGGABLE_CATEGORIES);

@@ -2,23 +2,22 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs } from "../db/schema.js";
 import { getPeopleForLogs } from "./logService.js";
-import { toISODate, atMidnightUTC } from "../lib/dates.js";
-import type { UpcomingEventEntry, UpcomingEventsResponse } from "@logger/shared";
-
-const EVENT_CATEGORIES = ["hang_out", "appointment"] as const;
+import {
+  EVENT_CATEGORIES,
+  atMidnightUTC,
+  bucketUpcomingEvents,
+  toISODate,
+  type UpcomingEventsResponse,
+} from "@logger/shared";
 
 /**
  * Future-dated hang-outs and appointments, bucketed into ones landing today and ones landing
- * within the next 7 days (tomorrow..+7 days inclusive). One-off — no annual recurrence.
+ * within the next 7 days. One-off — no annual recurrence.
  *
- * Only events *planned ahead* are surfaced: a log whose `createdAt` date is on or after its event
- * date is treated as an after-the-fact record (you logged the bowling night when you got home), not
- * an upcoming plan, and is excluded.
+ * Which rows qualify, how they are windowed and how they are ordered all live in
+ * `@logger/shared`, so the offline client's query layer agrees with this exactly.
  */
-export function getUpcomingEvents(
-  db: AppDb,
-  today: Date = new Date(),
-): UpcomingEventsResponse {
+export function getUpcomingEvents(db: AppDb, today: Date = new Date()): UpcomingEventsResponse {
   const rows = db
     .select({
       logId: logs.id,
@@ -34,49 +33,15 @@ export function getUpcomingEvents(
     .where(inArray(entities.category, [...EVENT_CATEGORIES]))
     .all();
 
-  const todayISO = toISODate(atMidnightUTC(today));
-  const weekEndISO = toISODate(
-    (() => {
-      const d = atMidnightUTC(today);
-      d.setUTCDate(d.getUTCDate() + 7);
-      return d;
-    })(),
-  );
-
   const peopleByLog = getPeopleForLogs(
     db,
     rows.map((r) => r.logId),
   );
 
-  const todayEntries: UpcomingEventEntry[] = [];
-  const next7Entries: UpcomingEventEntry[] = [];
-
-  for (const row of rows) {
-    // Logged on or after the day it happened → history, not an upcoming plan.
-    if (row.createdAt.slice(0, 10) >= row.date) continue;
-
-    const entry: UpcomingEventEntry = {
-      logId: row.logId,
-      entityId: row.entityId,
-      entityTitle: row.entityTitle,
-      category: row.category as UpcomingEventEntry["category"],
-      date: row.date,
-      notes: row.notes,
-      people: peopleByLog.get(row.logId) ?? [],
-    };
-    if (row.date === todayISO) {
-      todayEntries.push(entry);
-    } else if (row.date > todayISO && row.date <= weekEndISO) {
-      next7Entries.push(entry);
-    }
-  }
-
-  const byDateThenTitle = (a: UpcomingEventEntry, b: UpcomingEventEntry) =>
-    a.date.localeCompare(b.date) || a.entityTitle.localeCompare(b.entityTitle);
-  todayEntries.sort(byDateThenTitle);
-  next7Entries.sort(byDateThenTitle);
-
-  return { today: todayEntries, next7Days: next7Entries };
+  return bucketUpcomingEvents(
+    rows.map((row) => ({ ...row, people: peopleByLog.get(row.logId) ?? [] })),
+    today,
+  );
 }
 
 /**

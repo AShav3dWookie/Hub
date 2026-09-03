@@ -1,8 +1,22 @@
-import { ne, eq, inArray, and, like, gte, lte, sql } from "drizzle-orm";
+import { ne, eq, inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs, logPeople, albums, albumEvents } from "../db/schema.js";
-import { tokenizeQuery, matchesTokens } from "@logger/shared";
-import { toLogWithEntity } from "./logService.js";
+import { toLogDTO, toLogWithEntity } from "./logService.js";
+import { toEntitySummary } from "./entityService.js";
+import {
+  byAlbumTitle,
+  byPersonName,
+  entityMatchesFilters,
+  logMatchesFilters,
+  matchByTitle,
+  resolveSearchOptions,
+  shouldSearchSideList,
+  sortEntityLogs,
+  sortEntityResults,
+  sortLogResults,
+  summariseEntityLogs,
+  type ResolvedSearchOptions,
+} from "@logger/shared";
 import type {
   SearchQuery,
   SearchResponse,
@@ -14,34 +28,30 @@ import type {
   AlbumSearchResult,
 } from "@logger/shared";
 
-function comparator(order: "asc" | "desc" = "desc") {
-  return (a: number | string, b: number | string) => {
-    if (a === b) return 0;
-    const result = a < b ? -1 : 1;
-    return order === "asc" ? result : -result;
-  };
-}
-
-function peopleLabel(people: PersonRef[]): string {
-  return people
-    .map((p) => p.name)
-    .sort((a, b) => a.localeCompare(b))
-    .join(", ");
-}
+type EntityRow = typeof entities.$inferSelect;
+type LogRow = typeof logs.$inferSelect;
 
 /**
- * Person entities matched directly by name (or listed in full when browsing the "person" category
- * with no keyword). Suppressed when a specific non-person category filter is active.
+ * Keyword and filter search over entities, their logs, and the people/album side-lists.
+ *
+ * Every filtering and ordering decision is made by the shared rules in `@logger/shared`, so the
+ * offline client's query layer produces byte-identical results from its local replica. The SQL
+ * here only decides what has to be read.
  */
-function searchPeople(db: AppDb, query: SearchQuery, queryTokens: string[]): PersonSearchResult[] {
-  if (query.category && query.category !== "person") return [];
-  if (queryTokens.length === 0 && query.category !== "person") return [];
 
-  const qMode = query.qMode ?? "all";
+/**
+ * Person entities matched directly by name (or listed in full when browsing the "person"
+ * category with no keyword). Suppressed when a specific non-person category filter is active.
+ */
+function searchPeople(
+  db: AppDb,
+  query: SearchQuery,
+  options: ResolvedSearchOptions,
+): PersonSearchResult[] {
+  if (!shouldSearchSideList(query, options.tokens, "person")) return [];
+
   const personRows = db.select().from(entities).where(eq(entities.category, "person")).all();
-  const matches =
-    queryTokens.length > 0 ? personRows.filter((row) => matchesTokens(row.title, queryTokens, qMode)) : personRows;
-
+  const matches = matchByTitle(personRows, (row) => row.title, options);
   if (matches.length === 0) return [];
 
   const personIds = matches.map((p) => p.id);
@@ -50,6 +60,7 @@ function searchPeople(db: AppDb, query: SearchQuery, queryTokens: string[]): Per
     .from(logPeople)
     .where(inArray(logPeople.personEntityId, personIds))
     .all();
+
   const appearanceCounts = new Map<number, number>();
   for (const row of appearanceRows) {
     appearanceCounts.set(row.personEntityId, (appearanceCounts.get(row.personEntityId) ?? 0) + 1);
@@ -61,24 +72,22 @@ function searchPeople(db: AppDb, query: SearchQuery, queryTokens: string[]): Per
       name: row.title,
       appearanceCount: appearanceCounts.get(row.id) ?? 0,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byPersonName);
 }
 
 /**
- * Albums matched directly by title (or listed in full when the "album" filter tab is active with no
- * keyword). Suppressed when a specific non-album category filter is set — mirrors searchPeople.
+ * Albums matched directly by title (or listed in full when the "album" filter tab is active with
+ * no keyword). Suppressed when a specific non-album category filter is set — mirrors searchPeople.
  */
-function searchAlbums(db: AppDb, query: SearchQuery, queryTokens: string[]): AlbumSearchResult[] {
-  if (query.category && query.category !== "album") return [];
-  if (queryTokens.length === 0 && query.category !== "album") return [];
+function searchAlbums(
+  db: AppDb,
+  query: SearchQuery,
+  options: ResolvedSearchOptions,
+): AlbumSearchResult[] {
+  if (!shouldSearchSideList(query, options.tokens, "album")) return [];
 
-  const qMode = query.qMode ?? "all";
   const albumRows = db.select().from(albums).all();
-  const matches =
-    queryTokens.length > 0
-      ? albumRows.filter((row) => matchesTokens(row.title, queryTokens, qMode))
-      : albumRows;
-
+  const matches = matchByTitle(albumRows, (row) => row.title, options);
   if (matches.length === 0) return [];
 
   const albumIds = matches.map((a) => a.id);
@@ -96,55 +105,39 @@ function searchAlbums(db: AppDb, query: SearchQuery, queryTokens: string[]): Alb
       title: row.title,
       eventCount: eventCounts.get(row.id) ?? 0,
     }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort(byAlbumTitle);
 }
 
-export function search(db: AppDb, query: SearchQuery): SearchResponse {
-  const groupBy = query.groupBy ?? "entity";
-  const sortBy = query.sortBy ?? "date";
-  const sortOrder = query.sortOrder ?? "desc";
-  const visitSortBy = query.visitSortBy ?? "date";
-  const visitSortOrder = query.visitSortOrder ?? "desc";
-  const qMode = query.qMode ?? "all";
-  const queryTokens = query.q ? tokenizeQuery(query.q) : [];
-  const people = searchPeople(db, query, queryTokens);
-  const albumResults = searchAlbums(db, query, queryTokens);
+/**
+ * Entities that survive the entity-level filters.
+ *
+ * Only the category is narrowed in SQL. The author and release-year tests are applied by the
+ * shared predicate instead: SQL `LIKE` is case-insensitive for ASCII only, so narrowing the
+ * author here would return fewer rows than the offline client for an accented name.
+ */
+function loadCandidateEntities(db: AppDb, query: SearchQuery): Map<number, EntityRow> {
+  // "album" is a filter tab, not an entity category, and callers return early for it. Excluding
+  // it here keeps this function correct on its own rather than relying on that.
+  const category = query.category && query.category !== "album" ? query.category : undefined;
 
-  // The "album" filter tab is not a real category — it selects albums only, no entity/log results.
-  if (query.category === "album") {
-    return groupBy === "log"
-      ? { groupBy, logs: [], people, albums: albumResults }
-      : { groupBy, entities: [], people, albums: albumResults };
-  }
-
-  // 1. Candidate entities (loggable categories only; person entities aren't logged directly).
-  const entityConditions = [
-    query.category ? eq(entities.category, query.category) : ne(entities.category, "person"),
-  ];
-  if (query.authorContains) {
-    entityConditions.push(like(entities.author, `%${query.authorContains}%`));
-  }
-  if (query.releaseYearMin != null) {
-    entityConditions.push(gte(entities.releaseYear, query.releaseYearMin));
-  }
-  if (query.releaseYearMax != null) {
-    entityConditions.push(lte(entities.releaseYear, query.releaseYearMax));
-  }
-  const entityRows = db
+  const rows = db
     .select()
     .from(entities)
-    .where(and(...entityConditions))
+    .where(category ? eq(entities.category, category) : ne(entities.category, "person"))
     .all();
-  const entityById = new Map(entityRows.map((e) => [e.id, e]));
 
-  if (entityById.size === 0) {
-    return groupBy === "log"
-      ? { groupBy, logs: [], people, albums: albumResults }
-      : { groupBy, entities: [], people, albums: albumResults };
+  const byId = new Map<number, EntityRow>();
+  for (const row of rows) {
+    if (entityMatchesFilters(row, query)) byId.set(row.id, row);
   }
+  return byId;
+}
 
-  // 2. Load logs for those entities + their tagged people.
-  const entityIds = [...entityById.keys()];
+/** Every log belonging to the candidate entities, with each log's tagged people. */
+function loadLogsWithPeople(
+  db: AppDb,
+  entityIds: number[],
+): { logRows: LogRow[]; peopleByLog: Map<number, PersonRef[]> } {
   const logRows = db.select().from(logs).where(inArray(logs.entityId, entityIds)).all();
   const logIds = logRows.map((l) => l.id);
 
@@ -163,126 +156,103 @@ export function search(db: AppDb, query: SearchQuery): SearchResponse {
     }
   }
 
-  // 3. Apply log-level filters: date range, rating range, keyword (title + notes + tagged people).
-  const filteredLogs = logRows.filter((row) => {
-    if (query.dateFrom && row.date < query.dateFrom) return false;
-    if (query.dateTo && row.date > query.dateTo) return false;
-    if (query.ratingMin != null && (row.rating == null || row.rating < query.ratingMin))
-      return false;
-    if (query.ratingMax != null && (row.rating == null || row.rating > query.ratingMax))
-      return false;
-    if (queryTokens.length > 0) {
-      const entity = entityById.get(row.entityId);
-      const people = peopleByLog.get(row.id) ?? [];
-      const haystack = [entity?.title ?? "", row.notes ?? "", ...people.map((p) => p.name)].join(" ");
-      if (!matchesTokens(haystack, queryTokens, qMode)) return false;
-    }
-    return true;
-  });
+  return { logRows, peopleByLog };
+}
 
-  const survivingEntityIds = new Set(filteredLogs.map((l) => l.entityId));
-  for (const id of entityIds) {
-    if (!survivingEntityIds.has(id)) entityById.delete(id);
-  }
+/**
+ * Search results are built with `photos: []` and `albums: []` on purpose: a list view must never
+ * trigger a per-log photo or album lookup. Only the entity-detail log list and the dedicated
+ * gallery endpoint carry real ones.
+ */
+function buildLogGrouped(
+  logRows: LogRow[],
+  peopleByLog: Map<number, PersonRef[]>,
+  entityById: Map<number, EntityRow>,
+  options: ResolvedSearchOptions,
+): LogWithEntityDTO[] {
+  const flat = logRows.map((row) =>
+    toLogWithEntity(row, peopleByLog.get(row.id) ?? [], entityById.get(row.entityId)!),
+  );
+  return sortLogResults(flat, options.sortBy, options.sortOrder);
+}
 
-  if (groupBy === "log") {
-    const flat: LogWithEntityDTO[] = filteredLogs.map((row) => {
-      const entity = entityById.get(row.entityId)!;
-      return toLogWithEntity(row, peopleByLog.get(row.id) ?? [], entity);
-    });
-
-    flat.sort((a, b) => {
-      switch (sortBy) {
-        case "title":
-          return comparator(sortOrder)(a.entity.title.toLowerCase(), b.entity.title.toLowerCase());
-        case "rating":
-          return comparator(sortOrder)(a.rating ?? 0, b.rating ?? 0);
-        case "person":
-          return comparator(sortOrder)(peopleLabel(a.people).toLowerCase(), peopleLabel(b.people).toLowerCase());
-        case "date":
-        default:
-          return comparator(sortOrder)(a.date, b.date);
-      }
-    });
-
-    return { groupBy, logs: flat, people, albums: albumResults };
-  }
-
-  // groupBy === "entity"
+function buildEntityGrouped(
+  logRows: LogRow[],
+  peopleByLog: Map<number, PersonRef[]>,
+  entityById: Map<number, EntityRow>,
+  options: ResolvedSearchOptions,
+): EntityWithLogsDTO[] {
   const logsByEntity = new Map<number, LogDTO[]>();
-  for (const row of filteredLogs) {
-    const dto: LogDTO = {
-      id: row.id,
-      entityId: row.entityId,
-      rating: row.rating,
-      date: row.date,
-      notes: row.notes,
-      people: peopleByLog.get(row.id) ?? [],
-      // Search results deliberately omit real photos + album refs to avoid N+1 lookups;
-      // those are only loaded for the entity-detail log list.
-      photos: [],
-      albums: [],
-      autoDelete: row.autoDelete,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+  for (const row of logRows) {
     const list = logsByEntity.get(row.entityId) ?? [];
-    list.push(dto);
+    list.push(toLogDTO(row, peopleByLog.get(row.id) ?? []));
     logsByEntity.set(row.entityId, list);
   }
 
-  const entityResults: EntityWithLogsDTO[] = [...entityById.values()].map((entity) => {
-    const entityLogs = logsByEntity.get(entity.id) ?? [];
-    entityLogs.sort((a, b) => {
-      switch (visitSortBy) {
-        case "rating":
-          return comparator(visitSortOrder)(a.rating ?? 0, b.rating ?? 0);
-        case "person":
-          return comparator(visitSortOrder)(
-            peopleLabel(a.people).toLowerCase(),
-            peopleLabel(b.people).toLowerCase(),
-          );
-        case "date":
-        default:
-          return comparator(visitSortOrder)(a.date, b.date);
-      }
-    });
-
-    const ratedLogs = entityLogs.filter((l) => l.rating != null);
-    const averageRating =
-      ratedLogs.length > 0
-        ? ratedLogs.reduce((sum, l) => sum + (l.rating ?? 0), 0) / ratedLogs.length
-        : null;
-    const latestDate = entityLogs.reduce<string | null>(
-      (max, l) => (max === null || l.date > max ? l.date : max),
-      null,
+  const results = [...entityById.values()].map((entity) => {
+    const entityLogs = sortEntityLogs(
+      logsByEntity.get(entity.id) ?? [],
+      options.visitSortBy,
+      options.visitSortOrder,
     );
-
     return {
-      id: entity.id,
-      category: entity.category,
-      title: entity.title,
-      createdAt: entity.createdAt,
-      releaseYear: entity.releaseYear,
-      author: entity.author,
+      ...toEntitySummary(entity),
       logs: entityLogs,
-      visitCount: entityLogs.length,
-      averageRating,
-      latestDate,
+      ...summariseEntityLogs(entityLogs),
     };
   });
 
-  entityResults.sort((a, b) => {
-    switch (sortBy) {
-      case "title":
-        return comparator(sortOrder)(a.title.toLowerCase(), b.title.toLowerCase());
-      case "rating":
-        return comparator(sortOrder)(a.averageRating ?? 0, b.averageRating ?? 0);
-      case "date":
-      default:
-        return comparator(sortOrder)(a.latestDate ?? "", b.latestDate ?? "");
-    }
-  });
+  return sortEntityResults(results, options.sortBy, options.sortOrder);
+}
 
-  return { groupBy, entities: entityResults, people, albums: albumResults };
+export function search(db: AppDb, query: SearchQuery): SearchResponse {
+  const options = resolveSearchOptions(query);
+  const { groupBy } = options;
+  const people = searchPeople(db, query, options);
+  const albumResults = searchAlbums(db, query, options);
+
+  const emptyResults = (): SearchResponse =>
+    groupBy === "log"
+      ? { groupBy, logs: [], people, albums: albumResults }
+      : { groupBy, entities: [], people, albums: albumResults };
+
+  // The "album" filter tab is not a real category — it selects albums only, no entity/log results.
+  if (query.category === "album") return emptyResults();
+
+  const entityById = loadCandidateEntities(db, query);
+  if (entityById.size === 0) return emptyResults();
+
+  const { logRows, peopleByLog } = loadLogsWithPeople(db, [...entityById.keys()]);
+
+  const filteredLogs = logRows.filter((row) =>
+    logMatchesFilters(
+      row,
+      {
+        entityTitle: entityById.get(row.entityId)?.title ?? "",
+        peopleNames: (peopleByLog.get(row.id) ?? []).map((p) => p.name),
+      },
+      query,
+      options,
+    ),
+  );
+
+  // An entity with no surviving log drops out of the results entirely.
+  const survivingEntityIds = new Set(filteredLogs.map((l) => l.entityId));
+  for (const id of [...entityById.keys()]) {
+    if (!survivingEntityIds.has(id)) entityById.delete(id);
+  }
+
+  return groupBy === "log"
+    ? {
+        groupBy,
+        logs: buildLogGrouped(filteredLogs, peopleByLog, entityById, options),
+        people,
+        albums: albumResults,
+      }
+    : {
+        groupBy,
+        entities: buildEntityGrouped(filteredLogs, peopleByLog, entityById, options),
+        people,
+        albums: albumResults,
+      };
 }

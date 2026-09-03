@@ -9,7 +9,8 @@ import { findOrCreateEntity } from "./entityService.js";
 import { createLogPhotos, type UploadedPhoto } from "./logPhotosService.js";
 import { createAlbumPhotos } from "./albumPhotosService.js";
 import { createAlbum, addAlbumEvent, addAlbumPerson } from "./albumService.js";
-import { listGalleryPhotos, type GalleryQuery } from "./galleryService.js";
+import { listGalleryPhotos } from "./galleryService.js";
+import type { GalleryQuery } from "@logger/shared";
 
 async function file(name: string): Promise<UploadedPhoto> {
   const buffer = await sharp({
