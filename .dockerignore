@@ -8,3 +8,7 @@ node_modules
 *.log
 .DS_Store
 coverage
+.devcontainer
+.vscode
+.playwright-mcp
+e2e/.artifacts
