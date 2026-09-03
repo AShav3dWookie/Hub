@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { X } from "lucide-react";
 import type { PersonTagInput } from "@logger/shared";
-import { CATEGORY_META, categoryHasRating } from "@logger/shared";
+import { CATEGORY_META, MEDIA_ACCEPT_ATTR, categoryHasRating } from "@logger/shared";
 import {
   useAlbum,
   useAlbumPhotos,
@@ -248,7 +248,7 @@ export function AlbumDetail() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              accept={MEDIA_ACCEPT_ATTR}
               multiple
               onChange={(e) => handleUpload(Array.from(e.target.files ?? []))}
               className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"

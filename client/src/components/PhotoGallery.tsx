@@ -1,13 +1,24 @@
 import { useRef, useState } from "react";
-import { X } from "lucide-react";
-import type { LogPhotoDTO } from "@logger/shared";
+import { PlayCircle, X } from "lucide-react";
+import {
+  MEDIA_ACCEPT_ATTR,
+  isAllowedMediaMime,
+  maxBytesForMime,
+  mediaKindForMime,
+  type LogPhotoDTO,
+} from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { Lightbox } from "./Lightbox.js";
 import { useToast } from "./ToastProvider.js";
 
 const MAX_PHOTOS = 10;
-const ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif";
+
+/** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
+function neighbourSrc(photo: LogPhotoDTO | undefined): string | undefined {
+  if (!photo) return undefined;
+  return photo.kind === "video" ? photo.thumbnailUrl : photo.url;
+}
 
 export function PhotoGallery({
   logId,
@@ -40,12 +51,26 @@ export function PhotoGallery({
     e.target.value = "";
     if (files.length === 0) return;
     if (photos.length + files.length > MAX_PHOTOS) {
-      showToast(`A log can have at most ${MAX_PHOTOS} photos`);
+      showToast(`A log can have at most ${MAX_PHOTOS} photos or videos`);
+      return;
+    }
+    const bad = files.find((f) => !isAllowedMediaMime(f.type));
+    if (bad) {
+      showToast("Only images and mp4 videos can be uploaded");
+      return;
+    }
+    const tooBig = files.find((f) => f.size > maxBytesForMime(f.type));
+    if (tooBig) {
+      showToast(
+        mediaKindForMime(tooBig.type) === "video"
+          ? "Videos must be 250MB or smaller"
+          : "Photos must be 10MB or smaller",
+      );
       return;
     }
     try {
       await upload.mutateAsync(files);
-      showToast(files.length === 1 ? "Photo added" : `${files.length} photos added`);
+      showToast(files.length === 1 ? "Added" : `${files.length} added`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Upload failed");
     }
@@ -77,6 +102,14 @@ export function PhotoGallery({
                 loading="lazy"
                 className="h-full w-full object-cover"
               />
+              {photo.kind === "video" && (
+                <span
+                  data-testid="video-badge"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <PlayCircle className="h-7 w-7 text-white drop-shadow" strokeWidth={1.5} />
+                </span>
+              )}
             </button>
             {allowDelete && canEditPhotos && (
               <button
@@ -114,7 +147,7 @@ export function PhotoGallery({
       <input
         ref={fileInputRef}
         type="file"
-        accept={ACCEPT}
+        accept={MEDIA_ACCEPT_ATTR}
         multiple
         onChange={handleFiles}
         className="hidden"
@@ -145,8 +178,10 @@ export function PhotoGallery({
         <Lightbox
           src={lightbox.url}
           alt={lightbox.originalName}
-          prevSrc={photos[lightboxIndex - 1]?.url}
-          nextSrc={photos[lightboxIndex + 1]?.url}
+          kind={lightbox.kind}
+          poster={lightbox.thumbnailUrl}
+          prevSrc={neighbourSrc(photos[lightboxIndex - 1])}
+          nextSrc={neighbourSrc(photos[lightboxIndex + 1])}
           onClose={() => setLightboxIndex(null)}
           onPrev={
             lightboxIndex > 0 ? () => setLightboxIndex(lightboxIndex - 1) : undefined

@@ -39,7 +39,9 @@ registerRoute(
 // The sync engine handles offline for the change-feed itself.
 registerRoute(({ url }) => url.pathname.startsWith("/api/sync/"), new NetworkOnly());
 
-// Thumbnails: permanent offline data. Cache on first fetch, keep forever (no expiration).
+// Thumbnails (and video poster frames — also `_thumb.webp`): permanent offline data.
+// Cache on first fetch, keep forever (no expiration). The video/photo originals themselves
+// fall through to the NetworkOnly catch-all below.
 registerRoute(
   ({ url }) => url.pathname.startsWith("/api/photos/") && url.pathname.endsWith("_thumb.webp"),
   new CacheFirst({ cacheName: THUMB_CACHE }),

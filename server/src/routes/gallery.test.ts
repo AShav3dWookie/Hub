@@ -71,6 +71,22 @@ describe("gallery routes", () => {
     expect(new Set(seen).size).toBe(5);
   });
 
+  it("lists photos and videos mixed together, newest first", async () => {
+    const app = setup();
+    const logId = movieLogId();
+    await upload(app, logId, 2);
+    await request(app)
+      .post(`/api/logs/${logId}/photos`)
+      .attach("photos", Buffer.from("mp4 bytes"), { filename: "clip.mp4", contentType: "video/mp4" });
+
+    const list = await request(app).get("/api/gallery");
+    expect(list.status).toBe(200);
+    expect(list.body.photos).toHaveLength(3);
+    // Newest first — the video was uploaded last.
+    expect(list.body.photos[0].kind).toBe("video");
+    expect(list.body.photos.filter((p: { kind: string }) => p.kind === "photo")).toHaveLength(2);
+  });
+
   it("deletes a photo via the gallery and it disappears from the list", async () => {
     const app = setup();
     const logId = movieLogId();

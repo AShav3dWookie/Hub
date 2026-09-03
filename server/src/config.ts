@@ -9,6 +9,10 @@ export const config = {
   // persistent Docker volume (logger-data mounted at /app/data) with no extra
   // mount. Overridable for tests / non-standard layouts.
   photosDir: process.env.PHOTOS_DIR ?? path.join(path.dirname(dbPath), "photos"),
+  // ffmpeg is used only to decode a single poster frame from uploaded videos. The Docker
+  // image installs it (apk add ffmpeg); local dev without it falls back to a generated
+  // placeholder poster. Override the resolved binary with FFMPEG_PATH.
+  ffmpegPath: process.env.FFMPEG_PATH ?? "ffmpeg",
   authEnabled: process.env.AUTH_ENABLED === "true",
   authPasswordHash: process.env.AUTH_PASSWORD_HASH ?? "",
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me",

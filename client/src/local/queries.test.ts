@@ -84,6 +84,20 @@ describe("getEntityDetail", () => {
     expect(detail.logs[1].photos[0].thumbnailUrl).toContain("_thumb");
   });
 
+  it("derives photo.kind from the stored mime type", () => {
+    const movie = makeEntity({ title: "Heat", category: "movie" });
+    const img = makePhoto({ logId: 0, mimeType: "image/jpeg" });
+    const vid = makePhoto({ logId: 0, mimeType: "video/mp4" });
+    const log = makeLog({ entityId: movie.id, date: "2024-01-01", photoIds: [img.id, vid.id] });
+    img.logId = log.id;
+    vid.logId = log.id;
+    const s = snap({ entities: [movie], logs: [log], photos: [img, vid] });
+
+    const detail = q.getEntityDetail(s, movie.id);
+    if (detail.type !== "entity") throw new Error("expected entity");
+    expect(detail.logs[0].photos.map((p) => p.kind)).toEqual(["photo", "video"]);
+  });
+
   it("returns a person profile with appearances and stats (photos omitted)", () => {
     const alice = makePerson("Alice");
     const bob = makePerson("Bob");

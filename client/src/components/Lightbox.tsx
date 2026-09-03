@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import type { MediaKind } from "@logger/shared";
 
 const SWIPE_THRESHOLD = 60; // px of horizontal travel to commit a swipe
 const AXIS_LOCK = 8; // px of travel before we decide the gesture is horizontal / vertical
@@ -17,10 +18,16 @@ type Settling = "prev" | "next" | "back" | null;
  * keys and horizontal swipes for that direction; `prevSrc` / `nextSrc` supply the
  * neighbouring frames so navigation slides instead of hard-cutting.
  * `children` renders as a caption / toolbar strip under the image.
+ *
+ * When `kind === "video"` the centre panel is a `<video controls>` (with `poster` as the
+ * still frame); navigation (swipe / arrows) still works. Neighbour panels are always images —
+ * callers pass a poster URL as `prevSrc` / `nextSrc` for a video neighbour.
  */
 export function Lightbox({
   src,
   alt,
+  kind = "photo",
+  poster,
   onClose,
   onPrev,
   onNext,
@@ -30,6 +37,8 @@ export function Lightbox({
 }: {
   src: string;
   alt: string;
+  kind?: MediaKind;
+  poster?: string;
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -238,9 +247,22 @@ export function Lightbox({
                 className="flex flex-col items-center gap-2 px-6 text-center text-slate-300"
               >
                 <ImageOff size={48} strokeWidth={1.5} />
-                <p className="text-sm">Full photo unavailable offline</p>
+                <p className="text-sm">
+                  {kind === "video" ? "Video unavailable offline" : "Full photo unavailable offline"}
+                </p>
                 <p className="text-xs text-slate-500">Reconnect to download it</p>
               </div>
+            ) : kind === "video" ? (
+              <video
+                src={src}
+                poster={poster}
+                controls
+                playsInline
+                preload="metadata"
+                onClick={(e) => e.stopPropagation()}
+                onError={() => setSrcFailed(true)}
+                className="max-h-full max-w-full rounded-md object-contain"
+              />
             ) : (
               <img
                 src={src}

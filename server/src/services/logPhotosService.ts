@@ -6,23 +6,30 @@ import { eq, inArray, asc } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { logs, logPhotos } from "../db/schema.js";
 import { getEntityById } from "./entityService.js";
+import { extractPosterFrame } from "../lib/videoPoster.js";
 import { NotFoundError, BadRequestError } from "../lib/errors.js";
-import { categorySupportsPhotos } from "@logger/shared";
+import {
+  ALLOWED_IMAGE_MIME_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_UPLOAD_BATCH_BYTES,
+  MAX_VIDEOS_PER_UPLOAD,
+  categorySupportsPhotos,
+  extForMime,
+  isAllowedMediaMime,
+  maxBytesForMime,
+  mediaKindForMime,
+} from "@logger/shared";
 import type { LogPhotoDTO } from "@logger/shared";
 
 export const MAX_PHOTOS_PER_LOG = 10;
 export const MAX_PHOTOS_PER_ALBUM = 100;
-export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const THUMBNAIL_SIZE = 400;
 
-/** Allowed upload MIME types → on-disk extension for the stored original. */
-export const ALLOWED_PHOTO_MIME_TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-  "image/heif": "heif",
-};
+/**
+ * Back-compat re-exports — the media allow-list and image size cap now live in
+ * `@logger/shared` so the client shares them. Prefer importing from there directly.
+ */
+export { ALLOWED_IMAGE_MIME_TYPES as ALLOWED_PHOTO_MIME_TYPES, MAX_IMAGE_BYTES as MAX_PHOTO_BYTES };
 
 /** The subset of a multer file we actually use — kept minimal so the service is easy to call from tests. */
 export interface UploadedPhoto {
@@ -36,6 +43,7 @@ export function toLogPhotoDTO(row: typeof logPhotos.$inferSelect): LogPhotoDTO {
   return {
     id: row.id,
     logId: row.logId,
+    kind: mediaKindForMime(row.mimeType),
     url: `/api/photos/${row.filename}`,
     thumbnailUrl: `/api/photos/${row.thumbnailFilename}`,
     originalName: row.originalName,
@@ -69,8 +77,8 @@ export function listLogPhotos(db: AppDb, logId: number): LogPhotoDTO[] {
 }
 
 /**
- * Guard: the log must exist and its parent entity's category must support photos
- * (see categorySupportsPhotos — currently Movie / Eating Out). This is the
+ * Guard: the log must exist and its parent entity's category must support photos/videos
+ * (see categorySupportsPhotos — currently Movie / Eating Out / Hang Out). This is the
  * server-side enforcement of the feature's scope, independent of the UI.
  */
 export function assertLogSupportsPhotos(db: AppDb, logId: number): void {
@@ -84,20 +92,72 @@ export function assertLogSupportsPhotos(db: AppDb, logId: number): void {
   }
 }
 
-/** Validate one upload against the MIME + size limits. */
-export function assertPhotoAllowed(file: UploadedPhoto): void {
-  if (!ALLOWED_PHOTO_MIME_TYPES[file.mimetype]) {
-    throw new BadRequestError(`Unsupported image type: ${file.mimetype}`);
+/** Validate one upload against the MIME allow-list + the per-type size cap. */
+export function assertMediaAllowed(file: UploadedPhoto): void {
+  if (!isAllowedMediaMime(file.mimetype)) {
+    throw new BadRequestError(`Unsupported file type: ${file.mimetype}`);
   }
-  if (file.size > MAX_PHOTO_BYTES) {
-    throw new BadRequestError("Each photo must be 10MB or smaller");
+  if (file.size > maxBytesForMime(file.mimetype)) {
+    const limit = mediaKindForMime(file.mimetype) === "video" ? "Each video must be 250MB" : "Each photo must be 10MB";
+    throw new BadRequestError(`${limit} or smaller`);
   }
 }
 
 /**
+ * Bound the in-RAM cost of one upload request (multer buffers every part before we run).
+ * A `Content-Length` gate in the route rejects the worst case earlier; this is the
+ * authoritative check once the bytes are parsed.
+ */
+export function assertUploadBatchWithinBudget(files: UploadedPhoto[]): void {
+  const videoCount = files.filter((f) => mediaKindForMime(f.mimetype) === "video").length;
+  if (videoCount > MAX_VIDEOS_PER_UPLOAD) {
+    throw new BadRequestError(`At most ${MAX_VIDEOS_PER_UPLOAD} videos per upload`);
+  }
+  const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+  if (totalBytes > MAX_UPLOAD_BATCH_BYTES) {
+    throw new BadRequestError("That upload is too large — send fewer or smaller files");
+  }
+}
+
+/** Resize an image buffer to the thumbnail box and write it as webp. */
+async function writeWebpThumbnail(source: Buffer, outPath: string): Promise<void> {
+  await sharp(source)
+    .rotate()
+    .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toFile(outPath);
+}
+
+/**
+ * A generic dark "play" tile, used as a video's poster when ffmpeg is unavailable or can't
+ * decode the file. Keeps the invariant that a video's thumbnailFilename is always a real webp
+ * (never the video itself, which the client would try to render in an <img>).
+ */
+async function writePlaceholderPoster(outPath: string): Promise<void> {
+  const w = THUMBNAIL_SIZE;
+  const h = Math.round((THUMBNAIL_SIZE * 3) / 4);
+  const triangle = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+      `<polygon points="${w / 2 - 28},${h / 2 - 34} ${w / 2 - 28},${h / 2 + 34} ${w / 2 + 34},${h / 2}" ` +
+      `fill="#ffffff" fill-opacity="0.85"/></svg>`,
+  );
+  await sharp({ create: { width: w, height: h, channels: 4, background: "#1e293b" } })
+    .composite([{ input: triangle }])
+    .webp({ quality: 80 })
+    .toFile(outPath);
+}
+
+/**
  * Write one uploaded file to `photosDir`: the original under a random filename, plus a
- * best-effort resized webp thumbnail (falls back to the original if sharp can't decode
- * the format). Shared by the log-photo and album-photo upload paths.
+ * `<uuid>_thumb.webp` thumbnail.
+ *
+ * - Images: a best-effort resized webp (falls back to serving the original if sharp can't
+ *   decode the format, e.g. HEIC without libheif).
+ * - Videos: a poster frame decoded by ffmpeg and run through the same resize recipe, or a
+ *   generated placeholder tile if ffmpeg is missing / fails. A video's thumbnail is always a
+ *   real webp.
+ *
+ * Shared by the log-photo and album-photo upload paths.
  */
 export async function storeOnePhoto(
   photosDir: string,
@@ -105,25 +165,31 @@ export async function storeOnePhoto(
 ): Promise<{ filename: string; thumbnailFilename: string }> {
   fs.mkdirSync(photosDir, { recursive: true });
 
-  const ext = ALLOWED_PHOTO_MIME_TYPES[file.mimetype];
+  const ext = extForMime(file.mimetype);
   const base = randomUUID();
   const filename = `${base}.${ext}`;
-  fs.writeFileSync(path.join(photosDir, filename), file.buffer);
+  const originalPath = path.join(photosDir, filename);
+  fs.writeFileSync(originalPath, file.buffer);
 
-  let thumbnailFilename = filename;
-  try {
-    const generated = `${base}_thumb.webp`;
-    await sharp(file.buffer)
-      .rotate()
-      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toFile(path.join(photosDir, generated));
-    thumbnailFilename = generated;
-  } catch {
-    // keep thumbnailFilename === filename
+  const generated = `${base}_thumb.webp`;
+  const thumbPath = path.join(photosDir, generated);
+
+  if (mediaKindForMime(file.mimetype) === "video") {
+    try {
+      const frame = await extractPosterFrame(originalPath);
+      await writeWebpThumbnail(frame, thumbPath);
+    } catch {
+      await writePlaceholderPoster(thumbPath);
+    }
+    return { filename, thumbnailFilename: generated };
   }
 
-  return { filename, thumbnailFilename };
+  try {
+    await writeWebpThumbnail(file.buffer, thumbPath);
+    return { filename, thumbnailFilename: generated };
+  } catch {
+    return { filename, thumbnailFilename: filename };
+  }
 }
 
 /** Delete every photo belonging to an album (rows + files). Mirrors deletePhotosForLog. */
@@ -139,8 +205,8 @@ export function deletePhotosForAlbum(db: AppDb, photosDir: string, albumId: numb
 
 /**
  * Store uploaded files for a log: original on disk under a random filename, plus a
- * resized thumbnail, plus a DB row per photo. Enforces the per-log count, per-file
- * size, and MIME-type limits. Returns the created photos as DTOs.
+ * resized thumbnail, plus a DB row per photo/video. Enforces the per-log count, per-file
+ * size, per-request budget, and MIME-type limits. Returns the created attachments as DTOs.
  */
 export async function createLogPhotos(
   db: AppDb,
@@ -162,12 +228,13 @@ export async function createLogPhotos(
 
   if (existingCount + files.length > MAX_PHOTOS_PER_LOG) {
     throw new BadRequestError(
-      `A log can have at most ${MAX_PHOTOS_PER_LOG} photos (currently ${existingCount})`,
+      `A log can have at most ${MAX_PHOTOS_PER_LOG} photos or videos (currently ${existingCount})`,
     );
   }
 
+  assertUploadBatchWithinBudget(files);
   for (const file of files) {
-    assertPhotoAllowed(file);
+    assertMediaAllowed(file);
   }
 
   const created: LogPhotoDTO[] = [];

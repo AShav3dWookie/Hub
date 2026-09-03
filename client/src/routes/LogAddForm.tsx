@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
-import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
+import { CATEGORY_META, CATEGORY_FIELDS, MEDIA_ACCEPT_ATTR } from "@logger/shared";
 import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
@@ -87,7 +87,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
     navigate(returnTo);
     if (fields.hasPeople && photoFiles.length > 0) {
       // The entry only has a temp id until it syncs — photos are uploaded from its page after.
-      showToast("Saved — add the photos from the entry once it has synced.");
+      showToast("Saved — add the photos or videos from the entry once it has synced.");
     } else {
       showToast(online ? "Saved!" : "Saved — will sync when you're back online.");
     }
@@ -208,17 +208,17 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
 
       {fields.hasPeople && (
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">Photos</span>
+          <span className="text-sm font-medium">Photos &amp; videos</span>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            accept={MEDIA_ACCEPT_ATTR}
             multiple
             onChange={(e) => setPhotoFiles(Array.from(e.target.files ?? []).slice(0, 10))}
             className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
           />
           {photoFiles.length > 0 && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {photoFiles.length} photo{photoFiles.length === 1 ? "" : "s"} selected
+              {photoFiles.length} file{photoFiles.length === 1 ? "" : "s"} selected
             </p>
           )}
         </div>

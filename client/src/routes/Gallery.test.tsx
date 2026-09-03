@@ -25,6 +25,7 @@ function photo(id: number, over: Partial<GalleryPhotoDTO> = {}): GalleryPhotoDTO
   return {
     id,
     logId: 1,
+    kind: "photo",
     url: `/api/photos/full-${id}.jpg`,
     thumbnailUrl: `/api/photos/thumb-${id}.webp`,
     originalName: `photo-${id}.jpg`,

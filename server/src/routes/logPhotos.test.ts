@@ -72,6 +72,46 @@ describe("log photos routes", () => {
     expect(afterDel.body.photos).toHaveLength(1);
   });
 
+  it("uploads an mp4 video, tags it kind:'video', and serves both the file and a webp poster", async () => {
+    const app = setup();
+    const logId = movieLogId();
+
+    const uploadRes = await request(app)
+      .post(`/api/logs/${logId}/photos`)
+      .attach("photos", Buffer.from("pretend mp4 bytes"), {
+        filename: "clip.mp4",
+        contentType: "video/mp4",
+      });
+
+    expect(uploadRes.status).toBe(201);
+    expect(uploadRes.body).toHaveLength(1);
+    const [video] = uploadRes.body;
+    expect(video.kind).toBe("video");
+    expect(video.url).toMatch(/\.mp4$/);
+    expect(video.thumbnailUrl).toMatch(/_thumb\.webp$/);
+
+    const fileRes = await request(app).get(video.url);
+    expect(fileRes.status).toBe(200);
+
+    const posterRes = await request(app).get(video.thumbnailUrl);
+    expect(posterRes.status).toBe(200);
+    expect(posterRes.headers["content-type"]).toContain("image/webp");
+  });
+
+  it("rejects a non-mp4 video (e.g. quicktime) with 400", async () => {
+    const app = setup();
+    const logId = movieLogId();
+
+    const res = await request(app)
+      .post(`/api/logs/${logId}/photos`)
+      .attach("photos", Buffer.from("mov bytes"), {
+        filename: "clip.mov",
+        contentType: "video/quicktime",
+      });
+
+    expect(res.status).toBe(400);
+  });
+
   it("rejects photos for a non-people category with 400", async () => {
     const app = setup();
     const logId = createLog(ctx.db, {

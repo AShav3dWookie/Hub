@@ -18,14 +18,16 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
 
-function photo(id: number): LogPhotoDTO {
+function photo(id: number, over: Partial<LogPhotoDTO> = {}): LogPhotoDTO {
   return {
     id,
     logId: 7,
+    kind: "photo",
     url: `/api/photos/full-${id}.jpg`,
     thumbnailUrl: `/api/photos/thumb-${id}.webp`,
     originalName: `photo-${id}.jpg`,
     createdAt: NOW,
+    ...over,
   };
 }
 
@@ -59,6 +61,23 @@ describe("PhotoGallery", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows a play badge on video tiles and opens a <video> in the lightbox", async () => {
+    const video = photo(2, {
+      kind: "video",
+      url: "/api/photos/clip-2.mp4",
+      originalName: "clip-2.mp4",
+    });
+    const { container } = renderWithProviders(
+      <PhotoGallery logId={7} photos={[photo(1), video]} />,
+    );
+
+    expect(container.querySelectorAll('[data-testid="video-badge"]')).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "clip-2.mp4" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("video")).toHaveAttribute("src", "/api/photos/clip-2.mp4");
   });
 
   it("steps through photos with the arrow buttons and keys, hiding arrows at the ends", async () => {
