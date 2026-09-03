@@ -24,6 +24,7 @@ import {
   DEFAULT_GALLERY_LIMIT,
   EVENT_CATEGORIES,
   bucketImportantDates,
+  computePersonStats,
   bucketUpcomingEvents,
   buildCalendarRange,
   byAlbumTitle,
@@ -60,7 +61,6 @@ import {
   type LogWithEntityDTO,
   type PersonProfileDTO,
   type PersonRef,
-  type PersonStats,
   type PhotoSyncDTO,
   type GalleryQuery,
   type SearchQuery,
@@ -224,43 +224,11 @@ function getPersonProfile(snap: LocalSnapshot, entity: EntitySyncDTO): PersonPro
     .filter((x): x is LogWithEntityDTO => x !== null)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  return { entity: toEntitySummary(entity), appearances, stats: personStats(entity.id, appearances) };
-}
-
-function personStats(personId: number, appearances: LogWithEntityDTO[]): PersonStats {
-  const categoryCounts = new Map<LoggableCategory, number>();
-  for (const log of appearances) {
-    if (log.entity.category === "person") continue;
-    const c = log.entity.category as LoggableCategory;
-    categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
-  }
-  let favoriteCategory: LoggableCategory | null = null;
-  let maxCount = 0;
-  for (const [c, n] of categoryCounts) {
-    if (n > maxCount) {
-      maxCount = n;
-      favoriteCategory = c;
-    }
-  }
-
-  const coCounts = new Map<number, { name: string; count: number }>();
-  for (const log of appearances) {
-    for (const p of log.people) {
-      if (p.id === personId) continue;
-      const existing = coCounts.get(p.id);
-      coCounts.set(p.id, { name: p.name, count: (existing?.count ?? 0) + 1 });
-    }
-  }
-  let mostFrequentCoPerson: PersonRef | null = null;
-  let maxCo = 0;
-  for (const [id, { name, count }] of coCounts) {
-    if (count > maxCo) {
-      maxCo = count;
-      mostFrequentCoPerson = { id, name };
-    }
-  }
-
-  return { totalLogs: appearances.length, favoriteCategory, mostFrequentCoPerson };
+  return {
+    entity: toEntitySummary(entity),
+    appearances,
+    stats: computePersonStats(entity.id, appearances),
+  };
 }
 
 // ---- search ----------------------------------------------------------------

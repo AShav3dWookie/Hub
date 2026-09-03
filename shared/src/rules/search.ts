@@ -122,6 +122,15 @@ export function logMatchesFilters(
 
 // ---- ordering ---------------------------------------------------------------
 
+/**
+ * Every sort below ends with an ascending id tie-break.
+ *
+ * Without one the order of tied rows falls back to the order they arrived in, and the server
+ * (SQL row order) and the offline client (snapshot order) do not arrive in the same order. That
+ * made "sort by person" return a different arrangement online and offline whenever several logs
+ * shared a sort key, which is common — every log with nobody tagged has the same empty label.
+ */
+
 /** Sort flat log results in place, by the top-level sort selection. */
 export function sortLogResults(
   logs: LogWithEntityDTO[],
@@ -132,14 +141,17 @@ export function sortLogResults(
   return logs.sort((a, b) => {
     switch (sortBy) {
       case "title":
-        return cmp(a.entity.title.toLowerCase(), b.entity.title.toLowerCase());
+        return cmp(a.entity.title.toLowerCase(), b.entity.title.toLowerCase()) || a.id - b.id;
       case "rating":
-        return cmp(a.rating ?? 0, b.rating ?? 0);
+        return cmp(a.rating ?? 0, b.rating ?? 0) || a.id - b.id;
       case "person":
-        return cmp(peopleLabel(a.people).toLowerCase(), peopleLabel(b.people).toLowerCase());
+        return (
+          cmp(peopleLabel(a.people).toLowerCase(), peopleLabel(b.people).toLowerCase()) ||
+          a.id - b.id
+        );
       case "date":
       default:
-        return cmp(a.date, b.date);
+        return cmp(a.date, b.date) || a.id - b.id;
     }
   });
 }
@@ -154,12 +166,15 @@ export function sortEntityLogs(
   return logs.sort((a, b) => {
     switch (visitSortBy) {
       case "rating":
-        return cmp(a.rating ?? 0, b.rating ?? 0);
+        return cmp(a.rating ?? 0, b.rating ?? 0) || a.id - b.id;
       case "person":
-        return cmp(peopleLabel(a.people).toLowerCase(), peopleLabel(b.people).toLowerCase());
+        return (
+          cmp(peopleLabel(a.people).toLowerCase(), peopleLabel(b.people).toLowerCase()) ||
+          a.id - b.id
+        );
       case "date":
       default:
-        return cmp(a.date, b.date);
+        return cmp(a.date, b.date) || a.id - b.id;
     }
   });
 }
@@ -174,12 +189,12 @@ export function sortEntityResults(
   return entities.sort((a, b) => {
     switch (sortBy) {
       case "title":
-        return cmp(a.title.toLowerCase(), b.title.toLowerCase());
+        return cmp(a.title.toLowerCase(), b.title.toLowerCase()) || a.id - b.id;
       case "rating":
-        return cmp(a.averageRating ?? 0, b.averageRating ?? 0);
+        return cmp(a.averageRating ?? 0, b.averageRating ?? 0) || a.id - b.id;
       case "date":
       default:
-        return cmp(a.latestDate ?? "", b.latestDate ?? "");
+        return cmp(a.latestDate ?? "", b.latestDate ?? "") || a.id - b.id;
     }
   });
 }
