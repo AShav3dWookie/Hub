@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FIELD_CLASS } from "../components/ui.js";
+import { FIELD_CLASS, PRIMARY_BUTTON_SM_CLASS, SECONDARY_BUTTON_CLASS, SECONDARY_BUTTON_SM_CLASS, DANGER_BUTTON_CLASS } from "../components/ui.js";
 import { useParams } from "react-router-dom";
 import { MEDIA_ACCEPT_ATTR } from "@logger/shared";
 import {
@@ -147,14 +147,14 @@ export function AlbumDetail() {
             <button
               type="button"
               onClick={handleSave}
-              className="min-h-[44px] rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white dark:bg-slate-700"
+              className={PRIMARY_BUTTON_SM_CLASS}
             >
               Save
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="min-h-[44px] rounded-md border border-slate-300 px-4 py-1.5 text-sm dark:border-slate-600 dark:text-slate-200"
+              className={SECONDARY_BUTTON_CLASS}
             >
               Cancel
             </button>
@@ -193,14 +193,14 @@ export function AlbumDetail() {
                   <button
                     type="button"
                     onClick={() => handleDelete(true)}
-                    className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+                    className={DANGER_BUTTON_CLASS}
                   >
                     Delete album &amp; its loose photos
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(false)}
-                    className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+                    className={SECONDARY_BUTTON_SM_CLASS}
                   >
                     Delete album, keep photos
                   </button>
@@ -209,7 +209,7 @@ export function AlbumDetail() {
                 <button
                   type="button"
                   onClick={() => handleDelete(false)}
-                  className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+                  className={DANGER_BUTTON_CLASS}
                 >
                   Delete
                 </button>
@@ -217,7 +217,7 @@ export function AlbumDetail() {
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(false)}
-                className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+                className={SECONDARY_BUTTON_SM_CLASS}
               >
                 Cancel
               </button>

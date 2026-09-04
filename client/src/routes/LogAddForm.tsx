@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FIELD_CLASS } from "../components/ui.js";
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS, MEDIA_ACCEPT_ATTR } from "@logger/shared";
@@ -274,7 +274,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       <button
         type="submit"
         disabled={createLog.isPending}
-        className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+        className={PRIMARY_BUTTON_CLASS}
       >
         Save
       </button>

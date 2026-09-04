@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CARD_CLASS } from "./ui.js";
 import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import type { AlbumDTO, LogWithEntityDTO, PersonRef, PersonTagInput } from "@logger/shared";
@@ -7,7 +8,6 @@ import { StarRating } from "./StarRating.js";
 import { PersonLinks } from "./PersonLinks.js";
 import { PeopleTagInput } from "./PeopleTagInput.js";
 import { LogPicker } from "./LogPicker.js";
-import { CARD_CLASS } from "./ui.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
 
 /**

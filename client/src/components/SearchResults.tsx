@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { CARD_CLASS } from "./ui.js";
 import type {
   AlbumSearchResult,
   EntityWithLogsDTO,
@@ -8,7 +9,6 @@ import type {
 import { CATEGORY_META, categoryHasRating } from "@logger/shared";
 import { StarRating } from "./StarRating.js";
 import { PersonLinks } from "./PersonLinks.js";
-import { CARD_CLASS } from "./ui.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
 import { highlightMatches } from "../lib/highlight.js";
 
