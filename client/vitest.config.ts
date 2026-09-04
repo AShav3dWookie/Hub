@@ -18,6 +18,9 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/test/**", "src/vite-env.d.ts", "src/sw/**"],
+      // Set a couple of points below what the suite currently reaches, so a real regression
+      // fails the run without ordinary refactoring tripping it on rounding.
+      thresholds: { statements: 87, branches: 83, functions: 82, lines: 87 },
     },
   },
 });
