@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { Link } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 import type {
@@ -20,6 +21,7 @@ import {
 } from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+import { PersonLinks } from "../components/PersonLinks.js";
 import { DateFilter, type DateMode } from "../components/DateFilter.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
@@ -131,7 +133,7 @@ export function Search() {
             placeholder="Keyword… (matches title, notes, and people)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="min-w-[16rem] flex-1 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={`min-w-[16rem] flex-1 ${FIELD_CLASS}`}
           />
           <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
             Match:
@@ -216,7 +218,7 @@ export function Search() {
                     <select
                       value={ratingMin}
                       onChange={(e) => setRatingMin(e.target.value)}
-                      className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      className={FIELD_CLASS}
                     >
                       <option value="">Any rating</option>
                       {[1, 2, 3, 4, 5].map((r) => (
@@ -233,7 +235,7 @@ export function Search() {
                       placeholder="Author contains…"
                       value={authorContains}
                       onChange={(e) => setAuthorContains(e.target.value)}
-                      className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      className={FIELD_CLASS}
                     />
                   )}
 
@@ -244,14 +246,14 @@ export function Search() {
                         placeholder="Release year from"
                         value={releaseYearMin}
                         onChange={(e) => setReleaseYearMin(e.target.value)}
-                        className="w-40 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        className={`w-40 ${FIELD_CLASS}`}
                       />
                       <input
                         type="number"
                         placeholder="Release year to"
                         value={releaseYearMax}
                         onChange={(e) => setReleaseYearMax(e.target.value)}
-                        className="w-40 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        className={`w-40 ${FIELD_CLASS}`}
                       />
                     </>
                   )}
@@ -428,19 +430,7 @@ export function Search() {
                         <StarRating value={log.rating} readOnly />
                       )}
                     </div>
-                    {log.people.length > 0 && (
-                      <p className="text-slate-500 dark:text-slate-400">
-                        with{" "}
-                        {log.people.map((p, i) => (
-                          <span key={p.id}>
-                            <Link to={`/person/${p.id}`} className="hover:underline">
-                              {p.name}
-                            </Link>
-                            {i < log.people.length - 1 ? ", " : ""}
-                          </span>
-                        ))}
-                      </p>
-                    )}
+                    <PersonLinks people={log.people} className="text-slate-500 dark:text-slate-400" />
                     {log.notes && (
                       <p className="mt-1 text-slate-700 dark:text-slate-300">
                         {highlightMatches(log.notes, queryTokens)}
@@ -473,19 +463,7 @@ export function Search() {
               {categoryHasRating(log.entity.category) && (
                 <StarRating value={log.rating} readOnly />
               )}
-              {log.people.length > 0 && (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  with{" "}
-                  {log.people.map((p, i) => (
-                    <span key={p.id}>
-                      <Link to={`/person/${p.id}`} className="hover:underline">
-                        {p.name}
-                      </Link>
-                      {i < log.people.length - 1 ? ", " : ""}
-                    </span>
-                  ))}
-                </p>
-              )}
+              <PersonLinks people={log.people} />
               {log.notes && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                   {highlightMatches(log.notes, queryTokens)}

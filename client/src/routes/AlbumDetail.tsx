@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { useParams, Link } from "react-router-dom";
 import { X } from "lucide-react";
 import type { PersonTagInput } from "@logger/shared";
@@ -16,6 +17,7 @@ import {
   useDeleteAlbumPhoto,
 } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
+import { PersonLinks } from "../components/PersonLinks.js";
 import { PhotoStream } from "../components/PhotoStream.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
@@ -139,13 +141,13 @@ export function AlbumDetail() {
               type="date"
               value={dateStart}
               onChange={(e) => applyRange("start", e.target.value)}
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`flex-1 ${FIELD_CLASS}`}
             />
             <input
               type="date"
               value={dateEnd}
               onChange={(e) => applyRange("end", e.target.value)}
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`flex-1 ${FIELD_CLASS}`}
             />
           </div>
           <textarea
@@ -153,7 +155,7 @@ export function AlbumDetail() {
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Notes"
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
           <div className="flex gap-2">
             <button
@@ -368,19 +370,7 @@ export function AlbumDetail() {
                 </span>
               </div>
               {categoryHasRating(log.entity.category) && <StarRating value={log.rating} readOnly />}
-              {log.people.length > 0 && (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  with{" "}
-                  {log.people.map((p, i) => (
-                    <span key={p.id}>
-                      <Link to={`/person/${p.id}`} className="hover:underline">
-                        {p.name}
-                      </Link>
-                      {i < log.people.length - 1 ? ", " : ""}
-                    </span>
-                  ))}
-                </p>
-              )}
+              <PersonLinks people={log.people} />
               {log.notes && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{log.notes}</p>
               )}

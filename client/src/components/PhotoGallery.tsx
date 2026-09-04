@@ -1,19 +1,14 @@
 import { useRef, useState } from "react";
-import { PlayCircle, X } from "lucide-react";
+import { X } from "lucide-react";
 import { MEDIA_ACCEPT_ATTR, type LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { Lightbox } from "./Lightbox.js";
+import { MediaThumb, neighbourSrc } from "./MediaThumb.js";
 import { useToast } from "./ToastProvider.js";
 import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
 
 const MAX_PHOTOS = MAX_MEDIA_PER_LOG;
-
-/** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
-function neighbourSrc(photo: LogPhotoDTO | undefined): string | undefined {
-  if (!photo) return undefined;
-  return photo.kind === "video" ? photo.thumbnailUrl : photo.url;
-}
 
 export function PhotoGallery({
   logId,
@@ -78,20 +73,7 @@ export function PhotoGallery({
               onClick={() => setLightboxIndex(i)}
               className="block h-20 w-20 overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
-              <img
-                src={photo.thumbnailUrl}
-                alt={photo.originalName}
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-              {photo.kind === "video" && (
-                <span
-                  data-testid="video-badge"
-                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                >
-                  <PlayCircle className="h-7 w-7 text-white drop-shadow" strokeWidth={1.5} />
-                </span>
-              )}
+              <MediaThumb photo={photo} />
             </button>
             {allowDelete && canEditPhotos && (
               <button

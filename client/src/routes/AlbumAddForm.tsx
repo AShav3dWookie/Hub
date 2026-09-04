@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import type { LogWithEntityDTO, PersonTagInput } from "@logger/shared";
@@ -101,7 +102,7 @@ export function AlbumAddForm() {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
           autoFocus
         />
       </label>
@@ -113,7 +114,7 @@ export function AlbumAddForm() {
             type="date"
             value={dateStart}
             onChange={(e) => applyRange("start", e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
         <label className="flex flex-1 flex-col gap-1">
@@ -122,7 +123,7 @@ export function AlbumAddForm() {
             type="date"
             value={dateEnd}
             onChange={(e) => applyRange("end", e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       </div>
@@ -196,7 +197,7 @@ export function AlbumAddForm() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
         />
       </label>
 

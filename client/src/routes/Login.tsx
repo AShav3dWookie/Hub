@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { useNavigate } from "react-router-dom";
 import { useLogin } from "../api/auth.js";
 
@@ -29,7 +30,7 @@ export function Login() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           autoFocus
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
         />
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button
