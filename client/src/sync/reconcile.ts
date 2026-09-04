@@ -15,8 +15,44 @@ import { deepRemapIds } from "../local/outbox.js";
  *  3. **Rewrite still-pending outbox envelopes** so a later queued mutation that referenced an
  *     earlier create now points at the real id.
  */
+/**
+ * The most recent temp→real answers, so a caller that has just created something can find out
+ * what id the server gave it.
+ *
+ * The add forms need this: they create a record through the outbox, which hands back a
+ * temporary negative id, and then have to upload media against the real one. The row itself has
+ * been re-keyed by the time they look, so the temp id is the only handle they still hold.
+ *
+ * It is a small bounded cache, not a source of truth. Ask straight after a sync or not at all.
+ */
+const RESOLVED_CACHE_LIMIT = 200;
+const recentlyResolved = new Map<number, number>();
+
+/** The real id a temp id was resolved to in a recent sync, if it is still remembered. */
+export function resolvedRealId(tempId: number): number | undefined {
+  return recentlyResolved.get(tempId);
+}
+
+/** Test seam: forget every remembered resolution. */
+export function clearResolvedIds(): void {
+  recentlyResolved.clear();
+}
+
+function rememberResolved(map: Map<number, number>): void {
+  for (const [temp, real] of map) {
+    recentlyResolved.set(temp, real);
+  }
+  // Keep it bounded; insertion order means the oldest go first.
+  while (recentlyResolved.size > RESOLVED_CACHE_LIMIT) {
+    const oldest = recentlyResolved.keys().next();
+    if (oldest.done) break;
+    recentlyResolved.delete(oldest.value);
+  }
+}
+
 export async function reconcileIds(map: Map<number, number>): Promise<void> {
   if (map.size === 0) return;
+  rememberResolved(map);
   const db = await getDB();
   const tx = db.transaction([...SYNC_STORES, "outbox"], "readwrite");
 

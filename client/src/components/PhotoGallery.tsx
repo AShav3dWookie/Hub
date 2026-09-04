@@ -1,18 +1,13 @@
 import { useRef, useState } from "react";
 import { PlayCircle, X } from "lucide-react";
-import {
-  MEDIA_ACCEPT_ATTR,
-  isAllowedMediaMime,
-  maxBytesForMime,
-  mediaKindForMime,
-  type LogPhotoDTO,
-} from "@logger/shared";
+import { MEDIA_ACCEPT_ATTR, type LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { Lightbox } from "./Lightbox.js";
 import { useToast } from "./ToastProvider.js";
+import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
 
-const MAX_PHOTOS = 10;
+const MAX_PHOTOS = MAX_MEDIA_PER_LOG;
 
 /** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
 function neighbourSrc(photo: LogPhotoDTO | undefined): string | undefined {
@@ -50,22 +45,9 @@ export function PhotoGallery({
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
-    if (photos.length + files.length > MAX_PHOTOS) {
-      showToast(`A log can have at most ${MAX_PHOTOS} photos or videos`);
-      return;
-    }
-    const bad = files.find((f) => !isAllowedMediaMime(f.type));
-    if (bad) {
-      showToast("Only images and mp4 videos can be uploaded");
-      return;
-    }
-    const tooBig = files.find((f) => f.size > maxBytesForMime(f.type));
-    if (tooBig) {
-      showToast(
-        mediaKindForMime(tooBig.type) === "video"
-          ? "Videos must be 250MB or smaller"
-          : "Photos must be 10MB or smaller",
-      );
+    const problem = rejectMediaSelection(files, { existingCount: photos.length });
+    if (problem) {
+      showToast(problem);
       return;
     }
     try {

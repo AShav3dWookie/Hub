@@ -259,6 +259,22 @@ export function useUploadLogPhotos(logId: number) {
   return useRefreshingMutation((files: File[]) => uploadMedia(`/logs/${logId}/photos`, files));
 }
 
+/**
+ * Upload against a record whose id is only known once the form has been submitted and the
+ * create has synced. The bound-id hooks above suit a page that already has its record.
+ */
+export function useUploadLogPhotosById() {
+  return useRefreshingMutation(({ logId, files }: { logId: number; files: File[] }) =>
+    uploadMedia(`/logs/${logId}/photos`, files),
+  );
+}
+
+export function useUploadAlbumPhotosById() {
+  return useRefreshingMutation(({ albumId, files }: { albumId: number; files: File[] }) =>
+    uploadMedia(`/albums/${albumId}/photos`, files),
+  );
+}
+
 export function useDeleteLogPhoto(logId: number) {
   return useRefreshingMutation((photoId: number) =>
     api.delete(`/logs/${logId}/photos/${photoId}`),

@@ -2,13 +2,15 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import type { LogWithEntityDTO, PersonTagInput } from "@logger/shared";
-import { CATEGORY_META } from "@logger/shared";
-import { useCreateAlbum } from "../api/hooks.js";
+import { CATEGORY_META, MEDIA_ACCEPT_ATTR } from "@logger/shared";
+import { useCreateAlbum, useUploadAlbumPhotosById } from "../api/hooks.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { LogPicker } from "../components/LogPicker.js";
 import { useToast } from "../components/ToastProvider.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
+import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
+import { resolveServerId } from "../sync/resolveServerId.js";
 
 export function AlbumAddForm() {
   const [title, setTitle] = useState("");
@@ -21,9 +23,14 @@ export function AlbumAddForm() {
   const [error, setError] = useState<string | null>(null);
 
   const createAlbum = useCreateAlbum();
+  const uploadPhotos = useUploadAlbumPhotosById();
   const online = useOnlineStatus();
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  // Media has no offline queue, and an album created offline has no real id to attach it to
+  // until it syncs, so the picker is only offered when an upload could actually happen.
+  const canPickMedia = online;
 
   function applyRange(edited: "start" | "end", value: string) {
     const next = updateDateRange(edited, value, { start: dateStart, end: dateEnd });
@@ -43,6 +50,12 @@ export function AlbumAddForm() {
       return;
     }
 
+    const mediaProblem = rejectMediaSelection(photoFiles, { subject: "An album" });
+    if (mediaProblem) {
+      setError(mediaProblem);
+      return;
+    }
+
     let albumId: number;
     try {
       const created = await createAlbum.mutateAsync({
@@ -59,10 +72,20 @@ export function AlbumAddForm() {
       return;
     }
 
-    navigate(`/album/${albumId}`);
+    let destinationId = albumId;
+    let mediaFailed = false;
     if (photoFiles.length > 0) {
-      // The album only has a temp id until it syncs — photos are added from its page after.
-      showToast("Album created — add the photos once it has synced.");
+      try {
+        destinationId = await resolveServerId(albumId);
+        await uploadPhotos.mutateAsync({ albumId: destinationId, files: photoFiles });
+      } catch {
+        mediaFailed = true;
+      }
+    }
+
+    navigate(`/album/${destinationId}`);
+    if (mediaFailed) {
+      showToast("Album created, but the photos didn't upload — add them from the album.");
     } else {
       showToast(online ? "Album created!" : "Album created — will sync when you're back online.");
     }
@@ -143,17 +166,26 @@ export function AlbumAddForm() {
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Photos</span>
+        <span className="text-sm font-medium">Photos &amp; videos</span>
         <input
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+          accept={MEDIA_ACCEPT_ATTR}
           multiple
-          onChange={(e) => setPhotoFiles(Array.from(e.target.files ?? []))}
-          className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
+          disabled={!canPickMedia}
+          onChange={(e) =>
+            setPhotoFiles(Array.from(e.target.files ?? []).slice(0, MAX_MEDIA_PER_LOG))
+          }
+          className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
         />
+        {!canPickMedia && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Photos and videos need a connection. Create the album now and add them once
+            you&rsquo;re back online.
+          </p>
+        )}
         {photoFiles.length > 0 && (
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {photoFiles.length} photo{photoFiles.length === 1 ? "" : "s"} selected
+            {photoFiles.length} file{photoFiles.length === 1 ? "" : "s"} selected
           </p>
         )}
       </div>
