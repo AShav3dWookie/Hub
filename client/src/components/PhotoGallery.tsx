@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { SECONDARY_BUTTON_SM_CLASS, DANGER_BUTTON_CLASS } from "./ui.js";
 import { X } from "lucide-react";
 import { MEDIA_ACCEPT_ATTR, type LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
@@ -124,14 +125,14 @@ export function PhotoGallery({
           <button
             type="button"
             onClick={() => handleDelete(confirmingDelete)}
-            className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+            className={DANGER_BUTTON_CLASS}
           >
             Delete
           </button>
           <button
             type="button"
             onClick={() => setConfirmingDelete(null)}
-            className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+            className={SECONDARY_BUTTON_SM_CLASS}
           >
             Cancel
           </button>

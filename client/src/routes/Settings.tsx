@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DANGER_BUTTON_CLASS } from "../components/ui.js";
 import { AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   useOnlineStatus,
@@ -162,7 +163,7 @@ export function Settings() {
                       discardDead.mutate();
                       setConfirmingDiscard(false);
                     }}
-                    className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+                    className={DANGER_BUTTON_CLASS}
                   >
                     Discard
                   </button>
