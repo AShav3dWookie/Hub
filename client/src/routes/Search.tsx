@@ -1,6 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { FIELD_CLASS } from "../components/ui.js";
-import { Link } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 import type {
   GroupBy,
@@ -15,49 +14,21 @@ import {
   CATEGORIES,
   CATEGORY_META,
   CATEGORY_FIELDS,
-  categoryHasRating,
   isLoggableCategory,
   tokenizeQuery,
 } from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
-import { StarRating } from "../components/StarRating.js";
-import { PersonLinks } from "../components/PersonLinks.js";
 import { DateFilter, type DateMode } from "../components/DateFilter.js";
+import {
+  AlbumResults,
+  EntityResults,
+  LogResults,
+  PeopleResults,
+  SearchSkeleton,
+} from "../components/SearchResults.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
-import { formatLogDate } from "../lib/formatLogDate.js";
 
 
-function SkeletonCard() {
-  return (
-    <div className="animate-pulse rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex items-center justify-between">
-        <div className="h-5 w-1/3 rounded bg-slate-200 dark:bg-slate-700" />
-        <div className="h-4 w-1/4 rounded bg-slate-200 dark:bg-slate-700" />
-      </div>
-      <div className="mt-3 h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
-    </div>
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Wrap any occurrences of the given keyword tokens in `text` with <mark> highlighting. */
-function highlightMatches(text: string, tokens: string[]): ReactNode {
-  if (tokens.length === 0) return text;
-  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join("|")})`, "gi");
-  const parts = text.split(pattern);
-  return parts.map((part, i) =>
-    tokens.some((t) => t.toLowerCase() === part.toLowerCase()) ? (
-      <mark key={i} className="rounded bg-yellow-200 px-0.5">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  );
-}
 
 export function Search() {
   const [q, setQ] = useState("");
@@ -335,13 +306,7 @@ export function Search() {
         )}
       </div>
 
-      {isLoading && (
-        <div className="flex flex-col gap-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      )}
+      {isLoading && <SearchSkeleton />}
       {!isLoading && isFetching && <p className="text-sm text-slate-400 dark:text-slate-500">Updating…</p>}
 
       {!isLoading &&
@@ -351,127 +316,15 @@ export function Search() {
         (data.entities?.length ?? 0) === 0 &&
         (data.logs?.length ?? 0) === 0 && <p className="text-slate-500 dark:text-slate-400">No results.</p>}
 
-      {!isLoading && data?.albums && data.albums.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Albums
-          </h2>
-          <div className="flex flex-col gap-2">
-            {data.albums.map((album) => (
-              <Link
-                key={album.id}
-                to={`/album/${album.id}`}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              >
-                <span className="text-lg font-medium dark:text-white">
-                  {highlightMatches(album.title, queryTokens)}
-                </span>
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {album.eventCount} event{album.eventCount === 1 ? "" : "s"}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!isLoading && data?.people && data.people.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            People
-          </h2>
-          <div className="flex flex-col gap-2">
-            {data.people.map((person) => (
-              <Link
-                key={person.id}
-                to={`/person/${person.id}`}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              >
-                <span className="text-lg font-medium dark:text-white">
-                  {highlightMatches(person.name, queryTokens)}
-                </span>
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {person.appearanceCount} log{person.appearanceCount === 1 ? "" : "s"}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!isLoading && data?.groupBy === "entity" && data.entities && data.entities.length > 0 && (
-        <div className="flex flex-col gap-4">
-          {data.entities.map((entity) => (
-            <div
-              key={entity.id}
-              className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
-            >
-              <div className="flex items-center justify-between">
-                <Link
-                  to={`/entity/${entity.id}`}
-                  className="text-lg font-medium hover:underline dark:text-white"
-                >
-                  {highlightMatches(entity.title, queryTokens)}
-                </Link>
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {CATEGORY_META[entity.category].label} · {entity.visitCount} log
-                  {entity.visitCount === 1 ? "" : "s"}
-                  {entity.averageRating != null && ` · avg ${entity.averageRating.toFixed(1)}★`}
-                </span>
-              </div>
-              <ul className="mt-3 flex flex-col gap-2">
-                {entity.logs.map((log) => (
-                  <li key={log.id} className="border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <span className="dark:text-slate-200">
-                        {formatLogDate(log.date, entity.category)}
-                      </span>
-                      {categoryHasRating(entity.category) && (
-                        <StarRating value={log.rating} readOnly />
-                      )}
-                    </div>
-                    <PersonLinks people={log.people} className="text-slate-500 dark:text-slate-400" />
-                    {log.notes && (
-                      <p className="mt-1 text-slate-700 dark:text-slate-300">
-                        {highlightMatches(log.notes, queryTokens)}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!isLoading && data?.groupBy === "log" && data.logs && data.logs.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {data.logs.map((log) => (
-            <div
-              key={log.id}
-              className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
-            >
-              <div className="flex items-center justify-between">
-                <Link to={`/entity/${log.entity.id}`} className="font-medium hover:underline dark:text-white">
-                  {highlightMatches(log.entity.title, queryTokens)}
-                </Link>
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {CATEGORY_META[log.entity.category].label} ·{" "}
-                  {formatLogDate(log.date, log.entity.category)}
-                </span>
-              </div>
-              {categoryHasRating(log.entity.category) && (
-                <StarRating value={log.rating} readOnly />
-              )}
-              <PersonLinks people={log.people} />
-              {log.notes && (
-                <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                  {highlightMatches(log.notes, queryTokens)}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
+      {!isLoading && data && (
+        <>
+          <AlbumResults albums={data.albums ?? []} tokens={queryTokens} />
+          <PeopleResults people={data.people ?? []} tokens={queryTokens} />
+          {data.groupBy === "entity" && (
+            <EntityResults entities={data.entities ?? []} tokens={queryTokens} />
+          )}
+          {data.groupBy === "log" && <LogResults logs={data.logs ?? []} tokens={queryTokens} />}
+        </>
       )}
     </div>
   );
