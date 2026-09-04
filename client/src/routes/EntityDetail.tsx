@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { useParams, Navigate, Link } from "react-router-dom";
 import type { PersonTagInput, LogDTO, LoggableCategory } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
 import { useEntityDetail, useUpdateLog, useDeleteLog } from "../api/hooks.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
 import { StarRating } from "../components/StarRating.js";
+import { PersonLinks } from "../components/PersonLinks.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { PhotoGallery } from "../components/PhotoGallery.js";
 import { useToast } from "../components/ToastProvider.js";
@@ -100,14 +102,14 @@ function LogRow({
             type="number"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="mt-2 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={`mt-2 ${FIELD_CLASS}`}
           />
         ) : (
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="mt-2 rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={`mt-2 ${FIELD_CLASS}`}
           />
         )}
         {fields.hasPeople && (
@@ -132,7 +134,7 @@ function LogRow({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={`mt-2 w-full ${FIELD_CLASS}`}
         />
         <div className="mt-2 flex gap-2">
           <button
@@ -162,19 +164,7 @@ function LogRow({
         </span>
         {fields.hasRating && <StarRating value={log.rating} readOnly />}
       </div>
-      {fields.hasPeople && log.people.length > 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          with{" "}
-          {log.people.map((p, i) => (
-            <span key={p.id}>
-              <Link to={`/person/${p.id}`} className="hover:underline">
-                {p.name}
-              </Link>
-              {i < log.people.length - 1 ? ", " : ""}
-            </span>
-          ))}
-        </p>
-      )}
+      {fields.hasPeople && <PersonLinks people={log.people} />}
       {log.notes && <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{log.notes}</p>}
       {log.albums.length > 0 && (
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">

@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { PlayCircle } from "lucide-react";
 import type { GalleryPhotoDTO } from "@logger/shared";
 import { Lightbox } from "./Lightbox.js";
+import { MediaThumb, neighbourSrc } from "./MediaThumb.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
-
-/** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
-function neighbourSrc(photo: GalleryPhotoDTO | undefined): string | undefined {
-  if (!photo) return undefined;
-  return photo.kind === "video" ? photo.thumbnailUrl : photo.url;
-}
 
 /**
  * A paginated photo grid with a click-to-open lightbox. Shared by the main Gallery
@@ -117,20 +111,7 @@ export function PhotoStream({
               onClick={() => setActiveIndex(i)}
               className="relative aspect-square overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
-              <img
-                src={photo.thumbnailUrl}
-                alt={photo.originalName}
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-              {photo.kind === "video" && (
-                <span
-                  data-testid="video-badge"
-                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                >
-                  <PlayCircle className="h-8 w-8 text-white drop-shadow" strokeWidth={1.5} />
-                </span>
-              )}
+              <MediaThumb photo={photo} badgeSize="h-8 w-8" />
             </button>
           ))}
         </div>

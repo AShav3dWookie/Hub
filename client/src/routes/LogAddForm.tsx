@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "../components/ui.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS, MEDIA_ACCEPT_ATTR } from "@logger/shared";
@@ -131,7 +132,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             setTitle(e.target.value);
             setSelectedEntityId(null);
           }}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
           autoFocus
         />
         {suggestions && suggestions.length > 0 && !selectedEntityId && (
@@ -161,7 +162,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="number"
             value={releaseYear}
             onChange={(e) => setReleaseYear(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -173,7 +174,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="text"
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -192,7 +193,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="number"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       ) : (
@@ -202,7 +203,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -264,7 +265,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
         />
       </label>
 

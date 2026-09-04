@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "./ui.js";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { EntityNoteDTO, NoteCategory } from "@logger/shared";
 import { NOTE_CATEGORIES, NOTE_CATEGORY_META } from "@logger/shared";
@@ -114,7 +115,7 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
           onChange={(e) => setBody(e.target.value)}
           placeholder={isImportantDate ? "Optional notes" : undefined}
           rows={3}
-          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={`mt-2 w-full ${FIELD_CLASS}`}
         />
         <div className="mt-2 flex gap-2">
           <button
