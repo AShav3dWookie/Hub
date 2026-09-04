@@ -37,9 +37,10 @@ workspaces monorepo: `shared` (types), `server` (Express API + SPA host), `clien
 ```bash
 npm run build --workspace shared   # MUST run before server/client will typecheck (they import @logger/shared/dist)
 npm run build                      # shared -> server -> client
-npm test                           # server vitest + client vitest
-npm run test:coverage              # both workspaces, v8 coverage report
+npm test                           # shared + server + client + parity (builds shared first)
+npm run test:coverage              # all three workspaces, v8, with enforced thresholds
 npm run lint                       # eslint (flat config at repo root) per workspace
+npm run typecheck:parity           # the parity suite is not in a workspace, so tsc it separately
 
 npm run db:generate                # regenerate migrations after editing server/src/db/schema.ts (ROOT script only)
 npm run seed:test-data             # writes a realistic sample DB to test-env/logger.db
@@ -49,19 +50,23 @@ npm run dev:client                 # Vite on :5173, proxies /api -> :3000
 docker compose up --build          # full app on :3000 (SQLite persisted in a volume)
 ```
 
-Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd client && npx vitest run <substring>`).
+Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd client && ...`, or
+`npx vitest run --root parity`).
 
 - `eslint` and its plugins live only in the **root** `package.json`; each workspace's `lint` script is
   `eslint src` and resolves the config upward.
 - `npm run db:migrate` — see the "Native (no container) fallback" note above.
+- `npm test` builds `shared` first via a `pretest` hook. Without it a stale `shared/dist` makes the
+  server suite fail at runtime with something unhelpful like "mediaKindForMime is not a function".
 
 ## Architecture
 
 ### Data model (`server/src/db/schema.ts`)
 
 - **`entities`** — one row per unique `(category, normalizedTitle)`. Categories: movie, tv, eating_out,
-  book, game, **person**. People are just entities; they have no logs of their own and are tagged onto
-  other logs. Dedup is by `normalizeTitle()` (`lib/normalize.ts`: lowercase + collapse whitespace).
+  book, game, hang_out, appointment, **person**. People are just entities; they have no logs of their
+  own and are tagged onto other logs. Dedup is by `normalizeTitle()` (`shared/src/normalize.ts`:
+  lowercase + collapse whitespace).
 - **`logs`** — a dated entry against an entity (`rating`, `date`, `notes`). `entityId` cascades.
 - **`log_people`** — join table; which person-entities are tagged on a log.
 - **`entity_notes`** — freeform notes on any entity. The `important_date` category (with `tag` +
@@ -74,10 +79,28 @@ Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd c
 ### Category configuration is the single source of truth
 
 `shared/src/categories.ts` → `CATEGORY_FIELDS` declares, per loggable category, which fields apply
-(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `dateGranularity: "day" | "year"`). Both the client add
-forms and server services branch on this. `hasPeople` is true only for **movie** and **eating_out**,
-and also gates photo support via `categorySupportsPhotos()` — enforced server-side in
-`logPhotosService.assertLogSupportsPhotos`, not just hidden in the UI.
+(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `hasRating`, `hasAutoDelete`, `dateGranularity`,
+`dateLabel`). Both the client add forms and server services branch on this. `hasPeople` is true for
+**movie**, **eating_out** and **hang_out**, and also gates photo support via
+`categorySupportsPhotos()` — enforced server-side in `logPhotosService.assertLogSupportsPhotos`, not
+just hidden in the UI. `categories.test.ts` asserts every category has a config and metadata entry,
+so adding one without wiring it up fails the suite.
+
+### Shared business rules
+
+`shared/src/rules/*` holds every filtering, ordering, windowing and paging decision the app makes:
+search, calendar placement, the home-screen today/next-7-days split, gallery cursor paging and
+person stats. `shared/src/dates.ts` holds the UTC date maths.
+
+This exists because the app has **two implementations of every read** — the server over SQL and the
+offline client over its snapshot. They cannot share data access, so they share the rules instead.
+Neither side should re-implement a comparator, a filter or a date calculation locally; if one is
+missing, add it here so both get it.
+
+Two deliberate asymmetries, both covered by tests: `nextAnnualOccurrence` rolls a Feb 29 date to
+Mar 1 in a non-leap year, while calendar range placement *skips* a day that does not exist. And every
+sort ends with an id tie-break, because tied rows otherwise come back in whatever order the storage
+produced, which differs between the two sides.
 
 ### `shared` is a build dependency
 
@@ -87,20 +110,24 @@ has a project reference to it.
 
 ### DTO construction / the N+1 rule
 
-`logService.toLogDTO(row, people, photos)` is the one real place a `LogDTO` is built — used by
-`getLogsForEntity` / `getLogById`, which join in real photos. `searchService` (two sites) and
-`entityDetailService.getPersonProfile` build `LogDTO` / `LogWithEntityDTO` **by hand with
-`photos: []`** — deliberate, so list/summary/search views never trigger per-log photo lookups. Only
-the entity-detail log list and the dedicated `/api/gallery` endpoint return real photos.
+`logService.toLogDTO(row, people, photos, albumRefs)` and `toLogWithEntity` are the **only** places a
+`LogDTO` is built. Both default `photos` and `albumRefs` to `[]`, so a list or summary view calls them
+with just `(row, people)` and never triggers a per-log photo lookup. Only the entity-detail log list
+and the dedicated `/api/gallery` endpoint pass real photos.
+
+Do not hand-build a `LogDTO`. `searchService` and `entityDetailService.getPersonProfile` used to, and
+it meant every new field had to be added in three places.
 
 ### Server layering
 
 `routes/*` are thin: `schema.parse(req.body)` (Zod, in `lib/validation.ts`) → call a service → set a
-status code. Path params are validated inline with `Number()` + `Number.isInteger` throwing
-`BadRequestError`. `services/*` hold all logic and take `db: AppDb` as the first argument (plus
-`photosDir` for photo/gallery services — passed explicitly for testability, never imported from
-config). `middleware/errorHandler` maps `ZodError` → 400 `{error, details}`, `AppError` subclasses
-(`NotFoundError` 404 / `BadRequestError` 400) → their status, anything else → 500.
+status code. Path params go through `idParam(req, name, label)` from `lib/params.ts` — don't write the
+`Number()` + `Number.isInteger` guard inline, which used to appear thirteen times in three different
+forms. `services/*` hold all logic and take `db: AppDb` as the first argument (plus `photosDir` for
+photo/gallery services — passed explicitly for testability, never imported from config).
+`middleware/errorHandler` maps `ZodError` → 400 `{error, details}`, `AppError` subclasses
+(`NotFoundError` 404 / `BadRequestError` 400) → their status, anything else → 500. The upload pipeline
+(multer config, the `Content-Length` pre-check, multer error translation) is `middleware/upload.ts`.
 
 `app.ts` `createApp(db, photosDir?)` mounts: `/api/health` + `/api/auth` (open) → the rest of `/api/*`
 behind `requireAuth` → `express.static` for `/api/photos/<file>` → the built SPA from `public/` with a
@@ -111,6 +138,12 @@ catch-all that excludes `/api`. `errorHandler` is last.
 `cookie-session` + `AUTH_ENABLED` env toggle (default off, LAN use). `requireAuth` is a pass-through
 when disabled. **`config.ts` reads `process.env` at module load**, so tests that flip `AUTH_ENABLED`
 must `vi.resetModules()` and dynamically `import` `app.js` (see `app.test.ts`).
+
+`assertSecureConfig()` runs from the entrypoint (not at module load, so tests can build the app
+freely) and refuses to start when auth is on but `SESSION_SECRET` is still the built-in development
+value — that constant is in this repository, so signing real sessions with it would let anyone forge
+a logged-in cookie. It also refuses auth-on with no `AUTH_PASSWORD_HASH`, which previously failed
+every login with a 500 at request time instead of at boot.
 
 ### Photos & video storage
 
@@ -169,17 +202,50 @@ React Router v7 with nested `<Routes>` in `App.tsx` — every real route is wrap
 always sends `Content-Type: application/json` + `credentials: "include"`; `postForm()` omits the
 content-type for multipart `FormData` uploads. Query keys in use: `["entity", id]`,
 `["search", query]`, `["entity-notes", id]`, `["gallery"]` (a `useInfiniteQuery`, id-cursor paging),
-`["auth-status"]`. Forms are hand-rolled `useState` — no form library. Tailwind with `dark:` variants
-throughout; icons from `lucide-react`. Reusable: `Lightbox` (full-screen image + caption slot),
-`PhotoGallery` (per-log grid + upload), `PeopleTagInput`.
+`["auth-status"]`. Forms are hand-rolled `useState` — no form library.
+
+Every write hook goes through `useRefreshingMutation`, which queues the outbox envelope and then
+invalidates and syncs. Add a write by writing that one expression, not the five-line wiring.
+
+Tailwind with `dark:` variants throughout; icons from `lucide-react`. The repeated class strings live
+in `components/ui.tsx` (`FIELD_CLASS`, `CARD_CLASS`, the button shapes) — use them rather than pasting
+the string again. Reusable components: `Lightbox` (full-screen image + caption slot), `PhotoGallery`
+(per-log grid + upload), `PhotoStream` (paged gallery grid), `PeopleTagInput`, `PersonLinks`
+(the "with Ada, Zoe" line), `MediaThumb` (thumbnail + video badge), `SearchResults`, `AlbumSections`.
+
+**Media is online-only.** It has no offline queue, and a record created offline holds a temporary
+negative id the photo routes reject. The add forms call `sync/resolveServerId.ts`, which flushes the
+outbox and returns the real id, and disable the picker when offline rather than accepting files they
+would drop. Do not attach media to an unresolved id.
 
 ### Tests
 
-Vitest. **Server** (`environment: node`): a real temp SQLite file per test via `createTestDb()` — no
-DB mocks; migrations run for real. Route tests use `supertest` against `createApp()`, with a
-`fs.mkdtempSync` temp `photosDir`. **Client** (`environment: jsdom`): `renderWithProviders()` wraps in
-QueryClient + MemoryRouter + ToastProvider; the global `fetch` is stubbed with `vi.fn()` (no MSW).
-Test files are colocated as `*.test.ts(x)`.
+Vitest, in four suites. **shared** (`environment: node`): pure unit tests of the rules. **Server**
+(`environment: node`): a real temp SQLite file per test via `createTestDb()` — no DB mocks; migrations
+run for real. Route tests use `supertest` against `createApp()`, with a `fs.mkdtempSync` temp
+`photosDir`. **Client** (`environment: jsdom`): `renderWithProviders()` wraps in QueryClient +
+MemoryRouter + ToastProvider; the global `fetch` is stubbed with `vi.fn()` (no MSW). Test files are
+colocated as `*.test.ts(x)`.
+
+**parity/** is the fourth, and spans both workspaces at once. It seeds a real database, drains the
+server's own change-feed into `buildSnapshot`, then asserts the server service and the offline client
+query return identical output for every read path. It lives outside both workspaces because it
+imports from both, with its own vitest config and `npm run typecheck:parity`. When you change a read
+on either side, this is what proves the other still agrees — it found two real tie-break bugs on its
+first run.
+
+All three workspaces enforce coverage thresholds set just below what they currently reach, so a
+regression fails `npm run test:coverage`.
+
+**Two rules learned the hard way.** Write tests against user-visible outcomes, not transport: a test
+naming a URL and a body type cannot survive a change of mechanism and gets deleted instead of
+translated. And when refactoring, diff the test titles against your branch point and account for
+every removal by name — a capability once lost its only test that way, and the code it protected was
+removed a commit later with nothing left to fail:
+
+```bash
+git diff <branch-point>...HEAD -- '*.test.ts' '*.test.tsx' | grep "^-.*\bit("
+```
 
 ### Visual verification
 
