@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { idParam } from "../lib/params.js";
 import { z } from "zod";
 import type { AppDb } from "../db/client.js";
 import {
@@ -37,10 +38,7 @@ export function createEntitiesRouter(db: AppDb): Router {
   });
 
   router.get("/:id", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid entity id");
-    }
+    const id = idParam(req, "id", "entity id");
     const entity = getEntityById(db, id);
     if (entity.category === "person") {
       res.json({ type: "person" as const, ...getPersonProfile(db, id) });
@@ -56,19 +54,13 @@ export function createEntitiesRouter(db: AppDb): Router {
   });
 
   router.get("/:id/notes", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid entity id");
-    }
+    const id = idParam(req, "id", "entity id");
     res.json(listEntityNotes(db, id));
   });
 
   // Every photo from an event this person is tagged in (see galleryService personId filter).
   router.get("/:id/photos", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid entity id");
-    }
+    const id = idParam(req, "id", "entity id");
     const entity = getEntityById(db, id);
     if (entity.category !== "person") {
       throw new BadRequestError("Entity is not a person");
@@ -78,30 +70,21 @@ export function createEntitiesRouter(db: AppDb): Router {
   });
 
   router.post("/:id/notes", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid entity id");
-    }
+    const id = idParam(req, "id", "entity id");
     const input = createEntityNoteSchema.parse(req.body);
     const note = createEntityNote(db, id, input);
     res.status(201).json(note);
   });
 
   router.put("/:id/notes/:noteId", (req, res) => {
-    const noteId = Number(req.params.noteId);
-    if (!Number.isInteger(noteId)) {
-      throw new BadRequestError("Invalid note id");
-    }
+    const noteId = idParam(req, "noteId", "note id");
     const input = updateEntityNoteSchema.parse(req.body);
     const note = updateEntityNote(db, noteId, input);
     res.json(note);
   });
 
   router.delete("/:id/notes/:noteId", (req, res) => {
-    const noteId = Number(req.params.noteId);
-    if (!Number.isInteger(noteId)) {
-      throw new BadRequestError("Invalid note id");
-    }
+    const noteId = idParam(req, "noteId", "note id");
     deleteEntityNote(db, noteId);
     res.status(204).send();
   });

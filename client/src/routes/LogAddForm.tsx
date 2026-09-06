@@ -1,13 +1,16 @@
 import { useState } from "react";
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LoggableCategory, PersonTagInput } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS, MEDIA_ACCEPT_ATTR } from "@logger/shared";
-import { useEntityAutocomplete, useCreateLog } from "../api/hooks.js";
+import { useEntityAutocomplete, useCreateLog, useUploadLogPhotosById } from "../api/hooks.js";
 import { StarRating } from "../components/StarRating.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 import { useToast } from "../components/ToastProvider.js";
 import { useOnlineStatus } from "../api/localHooks.js";
+import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
+import { resolveServerId } from "../sync/resolveServerId.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
   const fields = CATEGORY_FIELDS[category];
@@ -36,8 +39,14 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
 
   const { data: suggestions } = useEntityAutocomplete(category, debouncedTitle);
   const createLog = useCreateLog();
+  const uploadPhotos = useUploadLogPhotosById();
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  // Media goes straight to the server; there is no offline queue for it, and a record created
+  // offline has no real id to attach it to until it syncs. So the picker is only offered when
+  // an upload could actually happen.
+  const canPickMedia = fields.hasPeople && online;
 
   // Where to go after saving — an in-app path from the calendar shortcut, else home.
   const returnParam = searchParams.get("returnTo");
@@ -56,8 +65,16 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       return;
     }
     const logDate = fields.dateGranularity === "year" ? `${year.trim()}-01-01` : date;
+
+    const mediaProblem = rejectMediaSelection(photoFiles);
+    if (mediaProblem) {
+      setError(mediaProblem);
+      return;
+    }
+
+    let created;
     try {
-      await createLog.mutateAsync(
+      created = await createLog.mutateAsync(
         selectedEntityId
           ? {
               entityId: selectedEntityId,
@@ -84,10 +101,19 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       return;
     }
 
+    let mediaFailed = false;
+    if (photoFiles.length > 0) {
+      try {
+        const logId = await resolveServerId(created.id);
+        await uploadPhotos.mutateAsync({ logId, files: photoFiles });
+      } catch {
+        mediaFailed = true;
+      }
+    }
+
     navigate(returnTo);
-    if (fields.hasPeople && photoFiles.length > 0) {
-      // The entry only has a temp id until it syncs — photos are uploaded from its page after.
-      showToast("Saved — add the photos or videos from the entry once it has synced.");
+    if (mediaFailed) {
+      showToast("Saved, but the photos didn't upload — add them from the entry.");
     } else {
       showToast(online ? "Saved!" : "Saved — will sync when you're back online.");
     }
@@ -106,7 +132,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             setTitle(e.target.value);
             setSelectedEntityId(null);
           }}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
           autoFocus
         />
         {suggestions && suggestions.length > 0 && !selectedEntityId && (
@@ -136,7 +162,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="number"
             value={releaseYear}
             onChange={(e) => setReleaseYear(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -148,7 +174,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="text"
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -167,7 +193,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="number"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       ) : (
@@ -177,7 +203,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={FIELD_CLASS}
           />
         </label>
       )}
@@ -213,9 +239,18 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             type="file"
             accept={MEDIA_ACCEPT_ATTR}
             multiple
-            onChange={(e) => setPhotoFiles(Array.from(e.target.files ?? []).slice(0, 10))}
-            className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
+            disabled={!canPickMedia}
+            onChange={(e) =>
+              setPhotoFiles(Array.from(e.target.files ?? []).slice(0, MAX_MEDIA_PER_LOG))
+            }
+            className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
           />
+          {!canPickMedia && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Photos and videos need a connection. Save now and add them from the entry once
+              you&rsquo;re back online.
+            </p>
+          )}
           {photoFiles.length > 0 && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {photoFiles.length} file{photoFiles.length === 1 ? "" : "s"} selected
@@ -230,7 +265,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
         />
       </label>
 
@@ -239,7 +274,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
       <button
         type="submit"
         disabled={createLog.isPending}
-        className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+        className={PRIMARY_BUTTON_CLASS}
       >
         Save
       </button>

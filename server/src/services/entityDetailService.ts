@@ -2,17 +2,14 @@ import { eq, inArray } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entities, logs, logPeople } from "../db/schema.js";
 import { getEntityById, toEntitySummary } from "./entityService.js";
-import { getLogsForEntity } from "./logService.js";
+import { getLogsForEntity, toLogWithEntity } from "./logService.js";
 import { BadRequestError } from "../lib/errors.js";
+import { computePersonStats } from "@logger/shared";
 import type {
   EntityWithLogsDTO,
   PersonProfileDTO,
   LogWithEntityDTO,
-  LogPhotoDTO,
-  AlbumRef,
-  PersonStats,
   PersonRef,
-  LoggableCategory,
 } from "@logger/shared";
 
 export function getEntityWithLogs(db: AppDb, id: number): EntityWithLogsDTO {
@@ -71,86 +68,22 @@ export function getPersonProfile(db: AppDb, id: number): PersonProfileDTO {
       peopleByLog.set(row.logId, list);
     }
 
+    // Person-profile appearances are a summary list, like search results, not a detail view.
+    // `toLogWithEntity` defaults photos and album refs to [], which is exactly what is wanted
+    // here: no per-log photo lookup is triggered.
     appearances = logRows
       .map((row) => {
         const parentEntity = entityById.get(row.entityId);
         if (!parentEntity) return null;
-        return {
-          id: row.id,
-          entityId: row.entityId,
-          rating: row.rating,
-          date: row.date,
-          notes: row.notes,
-          people: peopleByLog.get(row.id) ?? [],
-          // Person-profile appearances are a summary list (like search results),
-          // not a detail view — photos + album refs are only surfaced on the entity page.
-          photos: [] as LogPhotoDTO[],
-          albums: [] as AlbumRef[],
-          autoDelete: row.autoDelete,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          entity: toEntitySummary(parentEntity),
-        } satisfies LogWithEntityDTO;
+        return toLogWithEntity(row, peopleByLog.get(row.id) ?? [], parentEntity);
       })
       .filter((x): x is LogWithEntityDTO => x !== null)
       .sort((a, b) => b.date.localeCompare(a.date));
   }
 
-  const stats = computePersonStats(db, id, appearances);
-
   return {
     entity: toEntitySummary(entity),
     appearances,
-    stats,
+    stats: computePersonStats(id, appearances),
   };
-}
-
-function computePersonStats(
-  db: AppDb,
-  personId: number,
-  appearances: LogWithEntityDTO[],
-): PersonStats {
-  const totalLogs = appearances.length;
-
-  const categoryCounts = new Map<LoggableCategory, number>();
-  for (const log of appearances) {
-    if (log.entity.category === "person") continue;
-    const category = log.entity.category as LoggableCategory;
-    categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
-  }
-  let favoriteCategory: LoggableCategory | null = null;
-  let maxCount = 0;
-  for (const [category, count] of categoryCounts) {
-    if (count > maxCount) {
-      maxCount = count;
-      favoriteCategory = category;
-    }
-  }
-
-  let mostFrequentCoPerson: PersonRef | null = null;
-  if (appearances.length > 0) {
-    const logIds = appearances.map((a) => a.id);
-    const coPersonRows = db
-      .select({ id: entities.id, name: entities.title })
-      .from(logPeople)
-      .innerJoin(entities, eq(logPeople.personEntityId, entities.id))
-      .where(inArray(logPeople.logId, logIds))
-      .all();
-
-    const coCounts = new Map<number, { name: string; count: number }>();
-    for (const row of coPersonRows) {
-      if (row.id === personId) continue;
-      const existing = coCounts.get(row.id);
-      coCounts.set(row.id, { name: row.name, count: (existing?.count ?? 0) + 1 });
-    }
-    let maxCoCount = 0;
-    for (const [id, { name, count }] of coCounts) {
-      if (count > maxCoCount) {
-        maxCoCount = count;
-        mostFrequentCoPerson = { id, name };
-      }
-    }
-  }
-
-  return { totalLogs, favoriteCategory, mostFrequentCoPerson };
 }

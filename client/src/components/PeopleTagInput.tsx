@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "./ui.js";
 import type { PersonTagInput } from "@logger/shared";
 import { usePersonAutocomplete } from "../api/hooks.js";
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
@@ -72,7 +73,7 @@ export function PeopleTagInput({
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Add a person (press Enter to create new)"
-        className="w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+        className={`w-full ${FIELD_CLASS}`}
       />
       {suggestions && suggestions.length > 0 && query.trim() && (
         <ul className="mt-1 rounded-md border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">

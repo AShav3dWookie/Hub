@@ -114,17 +114,70 @@ function rewriteNegIds(
   return p;
 }
 
-function versionOf(
-  db: AppDb,
-  table: typeof logs | typeof albums | typeof entityNotes,
-  id: number,
-): number | null {
+type VersionedTable = typeof logs | typeof albums | typeof entityNotes;
+
+/** A dispatch outcome before the mutation id is attached. */
+type Outcome = Omit<MutationResult, "mutationId">;
+
+function versionOf(db: AppDb, table: VersionedTable, id: number): number | null {
   const row = db
     .select({ version: table.version })
     .from(table)
     .where(eq(table.id, id))
     .get();
   return row?.version ?? null;
+}
+
+/**
+ * The outbox replays, so a delete can arrive for a row that is already gone — a retry after a
+ * response was lost, or two devices deleting the same thing. That is the delete succeeding, not
+ * failing, so a missing row reports "applied" and the envelope leaves the queue.
+ */
+function runOrTreatMissingAsDone(run: () => void): Outcome {
+  try {
+    run();
+  } catch (e) {
+    if (e instanceof NotFoundError) return { status: "applied" };
+    throw e;
+  }
+  return { status: "applied" };
+}
+
+/**
+ * Link and unlink operations against a row that has since been deleted, or an edge that already
+ * exists, are reported as "skipped": nothing was written, but nothing is wrong either, and the
+ * client should stop retrying.
+ */
+function runOrSkip(run: () => void): Outcome {
+  try {
+    run();
+  } catch (e) {
+    if (e instanceof AppError) return { status: "skipped" };
+    throw e;
+  }
+  return { status: "applied" };
+}
+
+/**
+ * An update against a versioned row. A row that has vanished is skipped. Otherwise the write
+ * goes through regardless, and the result is flagged "conflict" when the client edited an older
+ * version than the one on the server — last write wins, but the client is told it raced.
+ */
+function applyVersionedUpdate(
+  db: AppDb,
+  table: VersionedTable,
+  id: number,
+  baseVersion: number | undefined,
+  apply: () => void,
+): Outcome {
+  const pre = versionOf(db, table, id);
+  if (pre == null) return { status: "skipped" };
+  apply();
+  const post = versionOf(db, table, id);
+  return {
+    status: baseVersion != null && baseVersion < pre ? "conflict" : "applied",
+    serverVersion: post ?? undefined,
+  };
 }
 
 /** Apply one already-id-resolved envelope. May throw — the caller turns that into `status:"error"`. */
@@ -159,23 +212,20 @@ function dispatchOne(
     }
     case "log.update": {
       const p = mutationPayloadSchemas["log.update"].parse(raw);
-      const pre = versionOf(db, logs, p.logId);
-      if (pre == null) return { ...base, status: "skipped" };
-      updateLog(db, p.logId, p);
-      const post = versionOf(db, logs, p.logId);
-      const conflict = env.baseVersion != null && env.baseVersion < pre;
-      return { ...base, status: conflict ? "conflict" : "applied", serverVersion: post ?? undefined };
+      return {
+        ...base,
+        ...applyVersionedUpdate(db, logs, p.logId, env.baseVersion, () => updateLog(db, p.logId, p)),
+      };
     }
     case "log.delete": {
       const p = mutationPayloadSchemas["log.delete"].parse(raw);
-      try {
-        if (p.deletePhotos) deletePhotosForLog(db, photosDir, p.logId);
-        deleteLog(db, p.logId);
-      } catch (e) {
-        if (e instanceof NotFoundError) return { ...base, status: "applied" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return {
+        ...base,
+        ...runOrTreatMissingAsDone(() => {
+          if (p.deletePhotos) deletePhotosForLog(db, photosDir, p.logId);
+          deleteLog(db, p.logId);
+        }),
+      };
     }
     case "album.create": {
       const p = mutationPayloadSchemas["album.create"].parse(raw);
@@ -185,63 +235,38 @@ function dispatchOne(
     }
     case "album.update": {
       const p = mutationPayloadSchemas["album.update"].parse(raw);
-      const pre = versionOf(db, albums, p.albumId);
-      if (pre == null) return { ...base, status: "skipped" };
-      updateAlbum(db, p.albumId, p);
-      const post = versionOf(db, albums, p.albumId);
-      const conflict = env.baseVersion != null && env.baseVersion < pre;
-      return { ...base, status: conflict ? "conflict" : "applied", serverVersion: post ?? undefined };
+      return {
+        ...base,
+        ...applyVersionedUpdate(db, albums, p.albumId, env.baseVersion, () =>
+          updateAlbum(db, p.albumId, p),
+        ),
+      };
     }
     case "album.delete": {
       const p = mutationPayloadSchemas["album.delete"].parse(raw);
-      try {
-        if (p.deletePhotos) deletePhotosForAlbum(db, photosDir, p.albumId);
-        deleteAlbum(db, p.albumId);
-      } catch (e) {
-        if (e instanceof NotFoundError) return { ...base, status: "applied" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return {
+        ...base,
+        ...runOrTreatMissingAsDone(() => {
+          if (p.deletePhotos) deletePhotosForAlbum(db, photosDir, p.albumId);
+          deleteAlbum(db, p.albumId);
+        }),
+      };
     }
     case "album.addEvent": {
       const p = mutationPayloadSchemas["album.addEvent"].parse(raw);
-      try {
-        addAlbumEvent(db, p.albumId, p.logId);
-      } catch (e) {
-        if (e instanceof AppError) return { ...base, status: "skipped" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return { ...base, ...runOrSkip(() => addAlbumEvent(db, p.albumId, p.logId)) };
     }
     case "album.removeEvent": {
       const p = mutationPayloadSchemas["album.removeEvent"].parse(raw);
-      try {
-        removeAlbumEvent(db, p.albumId, p.logId);
-      } catch (e) {
-        if (e instanceof AppError) return { ...base, status: "skipped" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return { ...base, ...runOrSkip(() => removeAlbumEvent(db, p.albumId, p.logId)) };
     }
     case "album.addPerson": {
       const p = mutationPayloadSchemas["album.addPerson"].parse(raw);
-      try {
-        addAlbumPerson(db, p.albumId, p.person);
-      } catch (e) {
-        if (e instanceof AppError) return { ...base, status: "skipped" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return { ...base, ...runOrSkip(() => addAlbumPerson(db, p.albumId, p.person)) };
     }
     case "album.removePerson": {
       const p = mutationPayloadSchemas["album.removePerson"].parse(raw);
-      try {
-        removeAlbumPerson(db, p.albumId, p.personId);
-      } catch (e) {
-        if (e instanceof AppError) return { ...base, status: "skipped" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return { ...base, ...runOrSkip(() => removeAlbumPerson(db, p.albumId, p.personId)) };
     }
     case "note.create": {
       const p = mutationPayloadSchemas["note.create"].parse(raw);
@@ -251,22 +276,16 @@ function dispatchOne(
     }
     case "note.update": {
       const p = mutationPayloadSchemas["note.update"].parse(raw);
-      const pre = versionOf(db, entityNotes, p.noteId);
-      if (pre == null) return { ...base, status: "skipped" };
-      updateEntityNote(db, p.noteId, p);
-      const post = versionOf(db, entityNotes, p.noteId);
-      const conflict = env.baseVersion != null && env.baseVersion < pre;
-      return { ...base, status: conflict ? "conflict" : "applied", serverVersion: post ?? undefined };
+      return {
+        ...base,
+        ...applyVersionedUpdate(db, entityNotes, p.noteId, env.baseVersion, () =>
+          updateEntityNote(db, p.noteId, p),
+        ),
+      };
     }
     case "note.delete": {
       const p = mutationPayloadSchemas["note.delete"].parse(raw);
-      try {
-        deleteEntityNote(db, p.noteId);
-      } catch (e) {
-        if (e instanceof NotFoundError) return { ...base, status: "applied" };
-        throw e;
-      }
-      return { ...base, status: "applied" };
+      return { ...base, ...runOrTreatMissingAsDone(() => deleteEntityNote(db, p.noteId)) };
     }
   }
 }

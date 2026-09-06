@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { useNavigate } from "react-router-dom";
 import { useCreateEntity } from "../api/hooks.js";
 import { useToast } from "../components/ToastProvider.js";
@@ -36,7 +37,7 @@ export function PersonAddForm() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
           autoFocus
         />
       </label>
@@ -44,7 +45,7 @@ export function PersonAddForm() {
       <button
         type="submit"
         disabled={createEntity.isPending}
-        className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+        className={PRIMARY_BUTTON_CLASS}
       >
         Create person
       </button>

@@ -1,10 +1,10 @@
 import { Router } from "express";
+import { idParam } from "../lib/params.js";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
 import { createLog, updateLog, deleteLog, getLogById } from "../services/logService.js";
 import { deletePhotosForLog } from "../services/logPhotosService.js";
 import { createLogSchema, updateLogSchema } from "../lib/validation.js";
-import { BadRequestError } from "../lib/errors.js";
 
 export function createLogsRouter(db: AppDb, photosDir: string = config.photosDir): Router {
   const router = Router();
@@ -16,28 +16,19 @@ export function createLogsRouter(db: AppDb, photosDir: string = config.photosDir
   });
 
   router.get("/:id", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid log id");
-    }
+    const id = idParam(req, "id", "log id");
     res.json(getLogById(db, id));
   });
 
   router.put("/:id", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid log id");
-    }
+    const id = idParam(req, "id", "log id");
     const input = updateLogSchema.parse(req.body);
     const log = updateLog(db, id, input);
     res.json(log);
   });
 
   router.delete("/:id", (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      throw new BadRequestError("Invalid log id");
-    }
+    const id = idParam(req, "id", "log id");
     // By default the log's photos are kept as gallery orphans (FK ON DELETE SET NULL).
     // ?deletePhotos=true removes them (rows + files) first.
     if (req.query.deletePhotos === "true") {

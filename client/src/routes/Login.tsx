@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { useNavigate } from "react-router-dom";
 import { useLogin } from "../api/auth.js";
 
@@ -29,13 +30,13 @@ export function Login() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           autoFocus
-          className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={FIELD_CLASS}
         />
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={login.isPending}
-          className="min-h-[44px] rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+          className={PRIMARY_BUTTON_CLASS}
         >
           Log in
         </button>

@@ -1,24 +1,15 @@
 import { useRef, useState } from "react";
-import { PlayCircle, X } from "lucide-react";
-import {
-  MEDIA_ACCEPT_ATTR,
-  isAllowedMediaMime,
-  maxBytesForMime,
-  mediaKindForMime,
-  type LogPhotoDTO,
-} from "@logger/shared";
+import { SECONDARY_BUTTON_SM_CLASS, DANGER_BUTTON_CLASS } from "./ui.js";
+import { X } from "lucide-react";
+import { MEDIA_ACCEPT_ATTR, type LogPhotoDTO } from "@logger/shared";
 import { useUploadLogPhotos, useDeleteLogPhoto } from "../api/hooks.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { Lightbox } from "./Lightbox.js";
+import { MediaThumb, neighbourSrc } from "./MediaThumb.js";
 import { useToast } from "./ToastProvider.js";
+import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
 
-const MAX_PHOTOS = 10;
-
-/** The full-size URL for a lightbox neighbour — a webp poster for videos, the image otherwise. */
-function neighbourSrc(photo: LogPhotoDTO | undefined): string | undefined {
-  if (!photo) return undefined;
-  return photo.kind === "video" ? photo.thumbnailUrl : photo.url;
-}
+const MAX_PHOTOS = MAX_MEDIA_PER_LOG;
 
 export function PhotoGallery({
   logId,
@@ -50,22 +41,9 @@ export function PhotoGallery({
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
-    if (photos.length + files.length > MAX_PHOTOS) {
-      showToast(`A log can have at most ${MAX_PHOTOS} photos or videos`);
-      return;
-    }
-    const bad = files.find((f) => !isAllowedMediaMime(f.type));
-    if (bad) {
-      showToast("Only images and mp4 videos can be uploaded");
-      return;
-    }
-    const tooBig = files.find((f) => f.size > maxBytesForMime(f.type));
-    if (tooBig) {
-      showToast(
-        mediaKindForMime(tooBig.type) === "video"
-          ? "Videos must be 250MB or smaller"
-          : "Photos must be 10MB or smaller",
-      );
+    const problem = rejectMediaSelection(files, { existingCount: photos.length });
+    if (problem) {
+      showToast(problem);
       return;
     }
     try {
@@ -96,20 +74,7 @@ export function PhotoGallery({
               onClick={() => setLightboxIndex(i)}
               className="block h-20 w-20 overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
-              <img
-                src={photo.thumbnailUrl}
-                alt={photo.originalName}
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-              {photo.kind === "video" && (
-                <span
-                  data-testid="video-badge"
-                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                >
-                  <PlayCircle className="h-7 w-7 text-white drop-shadow" strokeWidth={1.5} />
-                </span>
-              )}
+              <MediaThumb photo={photo} />
             </button>
             {allowDelete && canEditPhotos && (
               <button
@@ -160,14 +125,14 @@ export function PhotoGallery({
           <button
             type="button"
             onClick={() => handleDelete(confirmingDelete)}
-            className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+            className={DANGER_BUTTON_CLASS}
           >
             Delete
           </button>
           <button
             type="button"
             onClick={() => setConfirmingDelete(null)}
-            className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+            className={SECONDARY_BUTTON_SM_CLASS}
           >
             Cancel
           </button>

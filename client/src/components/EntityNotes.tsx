@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS, PRIMARY_BUTTON_SM_CLASS, SECONDARY_BUTTON_CLASS, SECONDARY_BUTTON_SM_CLASS, DANGER_BUTTON_CLASS } from "./ui.js";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { EntityNoteDTO, NoteCategory } from "@logger/shared";
 import { NOTE_CATEGORIES, NOTE_CATEGORY_META } from "@logger/shared";
@@ -114,20 +115,20 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
           onChange={(e) => setBody(e.target.value)}
           placeholder={isImportantDate ? "Optional notes" : undefined}
           rows={3}
-          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={`mt-2 w-full ${FIELD_CLASS}`}
         />
         <div className="mt-2 flex gap-2">
           <button
             type="button"
             onClick={handleSave}
-            className="min-h-[44px] rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white dark:bg-slate-700"
+            className={PRIMARY_BUTTON_SM_CLASS}
           >
             Save
           </button>
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="min-h-[44px] rounded-md border border-slate-300 px-4 py-1.5 text-sm dark:border-slate-600 dark:text-slate-200"
+            className={SECONDARY_BUTTON_CLASS}
           >
             Cancel
           </button>
@@ -159,14 +160,14 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
           <button
             type="button"
             onClick={handleDelete}
-            className="min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+            className={DANGER_BUTTON_CLASS}
           >
             Delete
           </button>
           <button
             type="button"
             onClick={() => setConfirmingDelete(false)}
-            className="min-h-[44px] rounded-md border border-slate-300 px-3 text-sm dark:border-slate-600 dark:text-slate-200"
+            className={SECONDARY_BUTTON_SM_CLASS}
           >
             Cancel
           </button>

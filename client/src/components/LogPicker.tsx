@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "./ui.js";
 import type { LogWithEntityDTO } from "@logger/shared";
 import { CATEGORY_META } from "@logger/shared";
 import { useSearch } from "../api/hooks.js";
@@ -36,7 +37,7 @@ export function LogPicker({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Find an event to add…"
-        className="w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+        className={`w-full ${FIELD_CLASS}`}
       />
       {hasQuery && (
         <ul className="flex flex-col gap-1">

@@ -1,17 +1,9 @@
 import { Router } from "express";
+import { idParam } from "../lib/params.js";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
 import { createLogPhotos, deleteLogPhoto, MAX_PHOTOS_PER_LOG } from "../services/logPhotosService.js";
-import { upload, rejectOversizeUpload, toClientError } from "../lib/photoUpload.js";
-import { BadRequestError } from "../lib/errors.js";
-
-function parseLogId(raw: string): number {
-  const id = Number(raw);
-  if (!Number.isInteger(id)) {
-    throw new BadRequestError("Invalid log id");
-  }
-  return id;
-}
+import { upload, rejectOversizeUpload, toClientError } from "../middleware/upload.js";
 
 export function createLogPhotosRouter(db: AppDb, photosDir: string = config.photosDir): Router {
   const router = Router();
@@ -24,7 +16,7 @@ export function createLogPhotosRouter(db: AppDb, photosDir: string = config.phot
       }
       let logId: number;
       try {
-        logId = parseLogId(req.params.logId);
+        logId = idParam(req, "logId", "log id");
       } catch (err) {
         next(err);
         return;
@@ -37,11 +29,8 @@ export function createLogPhotosRouter(db: AppDb, photosDir: string = config.phot
   });
 
   router.delete("/:logId/photos/:photoId", (req, res) => {
-    const logId = parseLogId(req.params.logId);
-    const photoId = Number(req.params.photoId);
-    if (!Number.isInteger(photoId)) {
-      throw new BadRequestError("Invalid photo id");
-    }
+    const logId = idParam(req, "logId", "log id");
+    const photoId = idParam(req, "photoId", "photo id");
     deleteLogPhoto(db, photosDir, logId, photoId);
     res.status(204).send();
   });

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { idParam } from "../lib/params.js";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
 import {
@@ -22,16 +23,7 @@ import {
   personTagSchema,
   galleryQuerySchema,
 } from "../lib/validation.js";
-import { upload, rejectOversizeUpload, toClientError } from "../lib/photoUpload.js";
-import { BadRequestError } from "../lib/errors.js";
-
-function parseId(raw: string, label: string): number {
-  const id = Number(raw);
-  if (!Number.isInteger(id)) {
-    throw new BadRequestError(`Invalid ${label}`);
-  }
-  return id;
-}
+import { upload, rejectOversizeUpload, toClientError } from "../middleware/upload.js";
 
 export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosDir): Router {
   const router = Router();
@@ -46,16 +38,16 @@ export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosD
   });
 
   router.get("/:id", (req, res) => {
-    res.json(getAlbumById(db, parseId(req.params.id, "album id")));
+    res.json(getAlbumById(db, idParam(req, "id", "album id")));
   });
 
   router.put("/:id", (req, res) => {
     const input = updateAlbumSchema.parse(req.body);
-    res.json(updateAlbum(db, parseId(req.params.id, "album id"), input));
+    res.json(updateAlbum(db, idParam(req, "id", "album id"), input));
   });
 
   router.delete("/:id", (req, res) => {
-    const id = parseId(req.params.id, "album id");
+    const id = idParam(req, "id", "album id");
     // Loose photos are kept as gallery orphans (FK ON DELETE SET NULL) unless ?deletePhotos=true.
     if (req.query.deletePhotos === "true") {
       deletePhotosForAlbum(db, photosDir, id);
@@ -66,34 +58,34 @@ export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosD
 
   router.post("/:id/events", (req, res) => {
     const { logId } = albumEventSchema.parse(req.body);
-    res.status(201).json(addAlbumEvent(db, parseId(req.params.id, "album id"), logId));
+    res.status(201).json(addAlbumEvent(db, idParam(req, "id", "album id"), logId));
   });
 
   router.delete("/:id/events/:logId", (req, res) => {
     removeAlbumEvent(
       db,
-      parseId(req.params.id, "album id"),
-      parseId(req.params.logId, "log id"),
+      idParam(req, "id", "album id"),
+      idParam(req, "logId", "log id"),
     );
     res.status(204).send();
   });
 
   router.post("/:id/people", (req, res) => {
     const person = personTagSchema.parse(req.body);
-    res.status(200).json(addAlbumPerson(db, parseId(req.params.id, "album id"), person));
+    res.status(200).json(addAlbumPerson(db, idParam(req, "id", "album id"), person));
   });
 
   router.delete("/:id/people/:personId", (req, res) => {
     removeAlbumPerson(
       db,
-      parseId(req.params.id, "album id"),
-      parseId(req.params.personId, "person id"),
+      idParam(req, "id", "album id"),
+      idParam(req, "personId", "person id"),
     );
     res.status(204).send();
   });
 
   router.get("/:id/photos", (req, res) => {
-    const id = parseId(req.params.id, "album id");
+    const id = idParam(req, "id", "album id");
     const { cursor, limit } = galleryQuerySchema.parse(req.query);
     res.json(listGalleryPhotos(db, { albumId: id, cursor, limit }));
   });
@@ -106,7 +98,7 @@ export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosD
       }
       let id: number;
       try {
-        id = parseId(req.params.id, "album id");
+        id = idParam(req, "id", "album id");
       } catch (err) {
         next(err);
         return;
@@ -122,8 +114,8 @@ export function createAlbumsRouter(db: AppDb, photosDir: string = config.photosD
     deleteAlbumPhoto(
       db,
       photosDir,
-      parseId(req.params.id, "album id"),
-      parseId(req.params.photoId, "photo id"),
+      idParam(req, "id", "album id"),
+      idParam(req, "photoId", "photo id"),
     );
     res.status(204).send();
   });

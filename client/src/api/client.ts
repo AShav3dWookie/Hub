@@ -10,6 +10,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Turn a response into its parsed body, or throw.
+ *
+ * A failure carries the server's own `{ error }` message where there is one, falling back to
+ * the status text when the body is missing or is not JSON — an nginx error page, say. A 204 has
+ * no body at all and resolves to undefined.
+ */
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = body.error ?? message;
+    } catch {
+      // No JSON body to take a message from; the status text stands.
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
+  return res.json() as Promise<T>;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -19,22 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      message = body.error ?? message;
-    } catch {
-      // ignore body parse failure
-    }
-    throw new ApiError(res.status, message);
-  }
-
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  return res.json() as Promise<T>;
+  return handleResponse<T>(res);
 }
 
 /**
@@ -47,22 +57,7 @@ async function postForm<T>(path: string, formData: FormData): Promise<T> {
     credentials: "include",
     body: formData,
   });
-
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      message = body.error ?? message;
-    } catch {
-      // ignore body parse failure
-    }
-    throw new ApiError(res.status, message);
-  }
-
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  return res.json() as Promise<T>;
+  return handleResponse<T>(res);
 }
 
 export const api = {

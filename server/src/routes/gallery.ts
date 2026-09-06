@@ -1,10 +1,10 @@
 import { Router } from "express";
+import { idParam } from "../lib/params.js";
 import type { AppDb } from "../db/client.js";
 import { config } from "../config.js";
 import { listGalleryPhotos } from "../services/galleryService.js";
 import { deletePhotoById } from "../services/logPhotosService.js";
 import { galleryQuerySchema } from "../lib/validation.js";
-import { BadRequestError } from "../lib/errors.js";
 
 export function createGalleryRouter(db: AppDb, photosDir: string = config.photosDir): Router {
   const router = Router();
@@ -15,10 +15,7 @@ export function createGalleryRouter(db: AppDb, photosDir: string = config.photos
   });
 
   router.delete("/:photoId", (req, res) => {
-    const photoId = Number(req.params.photoId);
-    if (!Number.isInteger(photoId)) {
-      throw new BadRequestError("Invalid photo id");
-    }
+    const photoId = idParam(req, "photoId", "photo id");
     deletePhotoById(db, photosDir, photoId);
     res.status(204).send();
   });
