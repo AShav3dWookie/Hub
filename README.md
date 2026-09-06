@@ -112,10 +112,19 @@ npm run docker:test    # builds the image, runs it, and polls /api/health
 
 See [.env.example](.env.example) for the full list (`PORT`, `DB_PATH`, `AUTH_ENABLED`, `AUTH_PASSWORD_HASH`, `SESSION_SECRET`, `TRUST_PROXY`, `COOKIE_SECURE`, `SESSION_MAX_AGE_DAYS`).
 
-Generate the login password hash with:
+Generate the login password hash for `.env` with:
 
 ```bash
 npm run auth:hash -- 'your password'
+```
+
+That env hash is only the first-run value. After that the password is stored in the database and
+changed from **Settings → Password** in the app, or — to recover a forgotten one — straight on the
+server, taking effect on the next login with no restart:
+
+```bash
+npm run auth:set-password -- 'your password'                          # local checkout
+docker compose exec app node dist/scripts/setPassword.js 'your password'   # running container
 ```
 
 ## Reverse-proxy / WAN deployment

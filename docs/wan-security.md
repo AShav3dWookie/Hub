@@ -73,6 +73,31 @@ It also **warns** (but starts) if `TRUST_PROXY` is off or `COOKIE_SECURE=false` 
 ⚠️ **Consequence:** `docker compose up` with `AUTH_ENABLED=true` and no real `SESSION_SECRET`
 in `.env` will crash-loop. That is intentional — fix `.env`, don't work around it.
 
+## Changing the password
+
+The login password lives in the **database** (`app_settings`, key `auth.password_hash`) as soon as
+you change it. `AUTH_PASSWORD_HASH` in `.env` is only the value used while no password has ever
+been set — once a database value exists it always wins and the env hash is never consulted again.
+Keep a valid hash in `.env` regardless: the startup guard still requires one.
+
+**In the app:** Settings → **Password** (the section only appears when auth is on). Enter the
+current password, the new one twice. Your session stays signed in. Other devices keep their
+sessions until those cookies expire — changing the password does not sign them out.
+
+**From the server** — the way back in after a forgotten password:
+
+```bash
+docker compose exec app node dist/scripts/setPassword.js 'the new password'
+```
+
+It writes the new hash straight to the database and takes effect on the **next login** — no
+restart, no container rebuild. Locally against a native checkout, `npm run auth:set-password --
+'the new password'` does the same thing (honours `DB_PATH`).
+
+⚠️ `docker compose down -v` (and `npm run docker:auth:reset`) deletes the volume, so the database
+— and with it the stored password — is recreated empty and the password reverts to the
+`AUTH_PASSWORD_HASH` seed in the environment.
+
 ## Staying logged in
 
 The app's session cookie is:
@@ -114,6 +139,16 @@ npm run docker:auth:reset    # tear down + wipe when done
 9. `curl -i -X POST http://localhost:3300/api/auth/login -H 'content-type: application/json' -d '{"password":"test-password"}'`
    → `Set-Cookie: logger.sid=…; path=/; expires=…; samesite=lax; secure; httponly`.
 10. Same `curl` with a wrong password → `401 {"error":"Invalid password"}`, no session `Set-Cookie`.
+11. Settings → **Password**: a wrong current password → "Current password is incorrect."; mistyped
+    confirmation → an inline error with no request sent; a valid change → "Password changed" toast,
+    fields cleared, and you stay signed in.
+12. Log out → `test-password` is now rejected and the new password works (the database value
+    overrode the compose `AUTH_PASSWORD_HASH`, with no restart).
+13. Recovery:
+    `docker compose -f docker-compose.auth.yml exec app node dist/scripts/setPassword.js 'recovered-pw-456'`
+    → log in with `recovered-pw-456`; the previous password is rejected.
+14. `npm run docker:auth:reset && npm run docker:auth` → `test-password` works again (the volume
+    was wiped, so the env seed is back in effect).
 
 ## Rollout checklist
 

@@ -96,4 +96,85 @@ describe("app", () => {
 
     delete process.env.SESSION_SECRET;
   });
+
+  /** An auth-enabled app plus an agent already logged in with `correct-horse`. */
+  async function loggedIn() {
+    process.env.AUTH_ENABLED = "true";
+    process.env.AUTH_PASSWORD_HASH = await bcrypt.hash("correct-horse", 10);
+    ctx = createTestDb();
+    const { createApp } = await import("./app.js");
+    const app = createApp(ctx.db);
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ password: "correct-horse" });
+    return { app, agent };
+  }
+
+  it("answers a malformed login with 400 rather than hanging", async () => {
+    // Regression: these handlers await bcrypt, and Express 4 drops a rejected promise on the
+    // floor — a thrown ZodError used to leave the request open until it timed out.
+    const { app } = await loggedIn();
+    const res = await request(app).post("/api/auth/login").send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("changing the password replaces the one from the environment", async () => {
+    const { app, agent } = await loggedIn();
+
+    const changed = await agent
+      .post("/api/auth/password")
+      .send({ currentPassword: "correct-horse", newPassword: "new-horse-battery" });
+    expect(changed.status).toBe(204);
+
+    const withOld = await request(app).post("/api/auth/login").send({ password: "correct-horse" });
+    expect(withOld.status).toBe(401);
+
+    const withNew = await request(app)
+      .post("/api/auth/login")
+      .send({ password: "new-horse-battery" });
+    expect(withNew.status).toBe(200);
+  });
+
+  it("keeps the current session alive after a password change", async () => {
+    const { agent } = await loggedIn();
+
+    await agent
+      .post("/api/auth/password")
+      .send({ currentPassword: "correct-horse", newPassword: "new-horse-battery" });
+
+    const stillIn = await agent.get("/api/search");
+    expect(stillIn.status).toBe(200);
+  });
+
+  it("refuses a password change without the current password", async () => {
+    const { app, agent } = await loggedIn();
+
+    const res = await agent
+      .post("/api/auth/password")
+      .send({ currentPassword: "not-it", newPassword: "new-horse-battery" });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "Current password is incorrect" });
+
+    // The old password still works, so nothing was written.
+    const login = await request(app).post("/api/auth/login").send({ password: "correct-horse" });
+    expect(login.status).toBe(200);
+  });
+
+  it("rejects a new password that is too short", async () => {
+    const { agent } = await loggedIn();
+
+    const res = await agent
+      .post("/api/auth/password")
+      .send({ currentPassword: "correct-horse", newPassword: "short" });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses a password change from someone who is not logged in", async () => {
+    const { app } = await loggedIn();
+
+    const res = await request(app)
+      .post("/api/auth/password")
+      .send({ currentPassword: "correct-horse", newPassword: "new-horse-battery" });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "Authentication required" });
+  });
 });

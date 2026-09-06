@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fetchAuthStatus, useLogin } from "./auth.js";
+import { fetchAuthStatus, useLogin, useChangePassword } from "./auth.js";
 import { getMeta, setMeta, META_AUTH_STATUS } from "../local/db.js";
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
@@ -63,5 +63,31 @@ describe("useLogin", () => {
       }),
     );
     expect(await getMeta(META_AUTH_STATUS)).toEqual({ authRequired: true, authenticated: true });
+  });
+});
+
+describe("useChangePassword", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends the current and new password to the server", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, status: 204, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+
+    const { result } = renderHook(() => useChangePassword(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await result.current.mutateAsync({ currentPassword: "old-one", newPassword: "brand-new-one" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ currentPassword: "old-one", newPassword: "brand-new-one" }),
+      }),
+    );
   });
 });
