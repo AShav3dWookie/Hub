@@ -210,6 +210,26 @@ describe("Settings", () => {
     expect(screen.queryByText("Password changed")).not.toBeInTheDocument();
   });
 
+  it("distinguishes a server error from a wrong password", async () => {
+    withAuthRequired();
+    changePasswordMutate.mockRejectedValueOnce(new ApiError(500, "Internal server error"));
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
+  });
+
+  it("distinguishes an unreachable server from a wrong password", async () => {
+    withAuthRequired();
+    changePasswordMutate.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/can.?t reach the server/i);
+  });
+
   it("cannot change the password while offline", () => {
     withAuthRequired();
     vi.mocked(useOnlineStatus).mockReturnValue(false);
