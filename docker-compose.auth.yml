@@ -1,0 +1,78 @@
+# Isolated, production-shaped instance for hands-on testing of the password login
+# BEFORE the app goes behind the real Cloudflare -> nginx -> Authelia stack.
+#
+#   npm run docker:auth         # build + start  -> http://localhost:3300
+#   npm run docker:auth:down    # stop, keep the data
+#   npm run docker:auth:reset   # stop + wipe the data
+#
+# Topology (mirrors the home server, minus Authelia which is nginx-level and the
+# app never sees):
+#
+#   your browser -> http://localhost:3300 -> nginx (sets X-Forwarded-Proto https)
+#                                             -> app (Express, internal :3000)
+#
+# AUTH is ON. Log in with the password:  test-password
+#
+# The session secret and password hash below are throwaway values committed on
+# purpose so the rig runs with no setup. Never reuse them anywhere real.
+# See docs/wan-security.md for the manual test checklist and the real deployment.
+
+name: logger-auth
+
+networks:
+  edge:
+
+services:
+  seed:
+    build: { context: ., target: runtime }
+    image: logger-auth:local
+    working_dir: /app/server
+    networks: [edge]
+    environment:
+      DB_PATH: /data/logger.db
+    volumes:
+      - auth-data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        test -f /data/logger.db
+        && echo 'DB already present — leaving it alone'
+        || node dist/scripts/seedTestData.js
+
+  app:
+    build: { context: ., target: runtime }
+    image: logger-auth:local
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    networks: [edge]
+    expose:
+      - "3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DB_PATH: /data/logger.db
+      AUTH_ENABLED: "true"
+      # bcrypt hash of "test-password"; every $ doubled for Compose interpolation.
+      AUTH_PASSWORD_HASH: "$$2b$$12$$W6K9ej36PC/P25ExfsFiB.1L6JeIsG1aE0G.tSdRqbalQ8qaTtARK"
+      SESSION_SECRET: "local-auth-rig-session-secret-not-for-real-use-0123456789"
+      TRUST_PROXY: "1"
+      # COOKIE_SECURE unset => auto-derived => Secure (nginx sends X-Forwarded-Proto https)
+    volumes:
+      - auth-data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      app:
+        condition: service_started
+    networks: [edge]
+    ports:
+      - "3300:80"
+    volumes:
+      - ./docker/nginx.auth.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+volumes:
+  auth-data:

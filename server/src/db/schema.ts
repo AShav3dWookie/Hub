@@ -233,3 +233,17 @@ export const syncAppliedMutations = sqliteTable("sync_applied_mutations", {
   resultJson: text("result_json").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+/**
+ * Generic key/value store for mutable server settings that must outlive a single env var.
+ * Plain and non-syncable (no `syncColumns`, no triggers) — server-only, never in the change feed.
+ * First key: `auth.password_hash`, the bcrypt hash of the login password once it has been changed
+ * away from the `AUTH_PASSWORD_HASH` seed. See `authCredentialsService`.
+ */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(current_timestamp)`),
+});

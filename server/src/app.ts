@@ -16,7 +16,7 @@ import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
 import { createSyncRouter } from "./routes/sync.js";
-import { authRouter } from "./routes/auth.js";
+import { createAuthRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -26,21 +26,43 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   // Ensure the uploaded-photos directory exists (shares the DB's persistent volume).
   fs.mkdirSync(photosDir, { recursive: true });
 
+  // Behind nginx/Cloudflare the app receives plain HTTP; trusting the proxy's X-Forwarded-Proto
+  // is what makes req.protocol / req.secure — and therefore the session cookie's Secure flag —
+  // reflect the real external scheme.
+  if (config.trustProxy !== false) {
+    app.set("trust proxy", config.trustProxy);
+  }
+
   app.use(cors());
   app.use(express.json());
   app.use(
     cookieSession({
       name: "logger.sid",
       secret: config.sessionSecret,
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      maxAge: config.sessionMaxAgeDays * 24 * 60 * 60 * 1000,
       httpOnly: true,
       sameSite: "lax",
+      // undefined => cookie-session derives Secure per request from req.protocol.
       secure: config.cookieSecure,
     }),
   );
 
+  // Slide the session expiry forward on activity. cookie-session re-emits Set-Cookie (with a fresh
+  // Expires = now + maxAge) only when the session value changes, so stamp a day number at most
+  // once per day on authenticated API traffic. A regular visitor never has to log in again; someone
+  // away longer than sessionMaxAgeDays comes back to an expired cookie.
+  app.use((req, _res, next) => {
+    if (req.path.startsWith("/api") && req.session?.authenticated) {
+      const today = Math.floor(Date.now() / 86_400_000);
+      if (req.session.t !== today) {
+        req.session.t = today;
+      }
+    }
+    next();
+  });
+
   app.use("/api", healthRouter);
-  app.use("/api/auth", authRouter);
+  app.use("/api/auth", createAuthRouter(db));
   app.use("/api/entities", requireAuth, createEntitiesRouter(db));
   app.use("/api/logs", requireAuth, createLogsRouter(db, photosDir));
   app.use("/api/logs", requireAuth, createLogPhotosRouter(db, photosDir));

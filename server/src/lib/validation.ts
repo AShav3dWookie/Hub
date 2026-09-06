@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
 import { daysInMonth, daysBetween } from "@logger/shared";
+import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
 export const categorySchema = z.enum(CATEGORIES);
 export const loggableCategorySchema = z.enum(LOGGABLE_CATEGORIES);
@@ -108,6 +109,13 @@ export const calendarRangeQuerySchema = z
 
 export const loginSchema = z.object({
   password: z.string().min(1),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  // The upper bound is bcrypt's: it hashes only the first 72 bytes, so a longer password would be
+  // silently truncated and a different long password could log in.
+  newPassword: z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH),
 });
 
 /**

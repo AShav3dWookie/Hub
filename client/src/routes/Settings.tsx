@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DANGER_BUTTON_CLASS } from "../components/ui.js";
+import { DANGER_BUTTON_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   useOnlineStatus,
@@ -11,6 +11,12 @@ import {
   useThumbnailCacheStats,
   useClearThumbnailCache,
 } from "../api/localHooks.js";
+import { useAuthStatus, useChangePassword } from "../api/auth.js";
+import { useToast } from "../components/ToastProvider.js";
+import { ApiError } from "../api/client.js";
+
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 72;
 
 const BACKGROUND_SYNC_LABEL: Record<string, string> = {
   active: "On — daily",
@@ -69,6 +75,113 @@ const SYNC_ERROR_LABEL: Record<string, string> = {
   unknown: "Sync failed",
 };
 
+/**
+ * Change the login password. Only rendered when the server actually requires one, so a LAN
+ * deployment with auth off never sees it. Online-only: there is no sensible way to queue this.
+ */
+function PasswordSection({ online }: { online: boolean }) {
+  const changePassword = useChangePassword();
+  const { showToast } = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function validate(): string | null {
+    if (!current || !next || !confirm) return "Fill in all three fields.";
+    if (next.length < MIN_PASSWORD_LENGTH) {
+      return `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (next.length > MAX_PASSWORD_LENGTH) {
+      return `New password must be at most ${MAX_PASSWORD_LENGTH} characters.`;
+    }
+    if (next !== confirm) return "New passwords don't match.";
+    if (next === current) return "Choose a password different from your current one.";
+    return null;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const problem = validate();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError(null);
+    try {
+      await changePassword.mutateAsync({ currentPassword: current, newPassword: next });
+      showToast("Password changed");
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(
+          err.status === 401
+            ? "Current password is incorrect."
+            : "Something went wrong. Please try again.",
+        );
+      } else {
+        setError("Can't reach the server. Check your connection and try again.");
+      }
+    }
+  }
+
+  return (
+    <Section title="Password">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-slate-600 dark:text-slate-300">Current password</span>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+            className={FIELD_CLASS}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-slate-600 dark:text-slate-300">New password</span>
+          <input
+            type="password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            autoComplete="new-password"
+            className={FIELD_CLASS}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-slate-600 dark:text-slate-300">Confirm new password</span>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+            className={FIELD_CLASS}
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={changePassword.isPending || !online}
+          className={PRIMARY_BUTTON_CLASS}
+        >
+          {changePassword.isPending ? "Changing…" : "Change password"}
+        </button>
+        {!online && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Reconnect to change your password.
+          </p>
+        )}
+      </form>
+    </Section>
+  );
+}
+
 export function Settings() {
   const online = useOnlineStatus();
   const { data: sync } = useSyncStatus();
@@ -78,6 +191,7 @@ export function Settings() {
   const discardDead = useDiscardDeadLetters();
   const { data: cache } = useThumbnailCacheStats();
   const clearThumbs = useClearThumbnailCache();
+  const { data: authStatus } = useAuthStatus();
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const pending = outbox?.pending ?? 0;
@@ -208,6 +322,8 @@ export function Settings() {
           Clear thumbnails
         </button>
       </Section>
+
+      {authStatus?.authRequired && <PasswordSection online={online} />}
 
       <Section title="App">
         <Row label="Version" value={APP_VERSION} />

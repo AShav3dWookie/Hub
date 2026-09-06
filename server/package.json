@@ -13,7 +13,9 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src",
     "db:migrate": "tsx src/db/migrate.ts",
-    "seed:test-data": "tsx src/scripts/seedTestData.ts"
+    "seed:test-data": "tsx src/scripts/seedTestData.ts",
+    "auth:hash": "tsx src/scripts/hashPassword.ts",
+    "auth:set-password": "tsx src/scripts/setPassword.ts"
   },
   "dependencies": {
     "@logger/shared": "*",

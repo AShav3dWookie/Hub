@@ -32,9 +32,27 @@ export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (password: string) => api.post<AuthStatus>("/auth/login", { password }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth-status"] });
+    onSuccess: (status) => {
+      // The login response IS an AuthStatus and is authoritative (the session cookie is now
+      // set). Write it straight into the cache so a ProtectedRoute the user navigates to as
+      // soon as this resolves sees `authenticated: true` immediately. Invalidating instead
+      // left a window where the in-flight refetch still returned the stale `false` and bounced
+      // them back to /login.
+      queryClient.setQueryData(["auth-status"], status);
+      void setMeta(META_AUTH_STATUS, status);
     },
+  });
+}
+
+/**
+ * Online-only and never queued, like login: a password change has to reach the server to mean
+ * anything, so it deliberately skips the outbox. Nothing in the query cache changes — the session
+ * and `["auth-status"]` are unaffected by a successful change.
+ */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string }) =>
+      api.post("/auth/password", input),
   });
 }
 

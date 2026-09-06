@@ -33,4 +33,12 @@ describe("auth routes (auth disabled)", () => {
     const res = await request(setup()).post("/api/auth/logout");
     expect(res.status).toBe(204);
   });
+
+  it("POST /api/auth/password refuses to set a password there is no login for", async () => {
+    const res = await request(setup())
+      .post("/api/auth/password")
+      .send({ currentPassword: "anything", newPassword: "new-horse-battery" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/disabled/i);
+  });
 });

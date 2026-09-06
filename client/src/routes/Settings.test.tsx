@@ -16,9 +16,28 @@ import {
   useClearThumbnailCache,
 } from "../api/localHooks.js";
 
+vi.mock("../api/auth.js");
+import { useAuthStatus, useChangePassword } from "../api/auth.js";
+import { ApiError } from "../api/client.js";
+
 const forceSyncMutate = vi.fn();
 const clearMutate = vi.fn();
 const discardMutate = vi.fn();
+const changePasswordMutate = vi.fn();
+
+/** Turn the password section on; it only renders when the server requires a login. */
+function withAuthRequired() {
+  vi.mocked(useAuthStatus).mockReturnValue({
+    data: { authRequired: true, authenticated: true },
+  } as ReturnType<typeof useAuthStatus>);
+}
+
+async function fillPasswordForm(current: string, next: string, confirm: string) {
+  await userEvent.type(screen.getByLabelText("Current password"), current);
+  await userEvent.type(screen.getByLabelText("New password"), next);
+  await userEvent.type(screen.getByLabelText("Confirm new password"), confirm);
+  await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+}
 
 beforeEach(() => {
   vi.mocked(useOnlineStatus).mockReturnValue(true);
@@ -47,9 +66,18 @@ beforeEach(() => {
     mutate: clearMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useClearThumbnailCache>);
+  vi.mocked(useAuthStatus).mockReturnValue({
+    data: { authRequired: false, authenticated: true },
+  } as ReturnType<typeof useAuthStatus>);
+  changePasswordMutate.mockResolvedValue(undefined);
+  vi.mocked(useChangePassword).mockReturnValue({
+    mutateAsync: changePasswordMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useChangePassword>);
   forceSyncMutate.mockClear();
   clearMutate.mockClear();
   discardMutate.mockClear();
+  changePasswordMutate.mockClear();
 });
 
 describe("Settings", () => {
@@ -130,5 +158,84 @@ describe("Settings", () => {
     expect(discardMutate).not.toHaveBeenCalled(); // confirmation first
     await userEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(discardMutate).toHaveBeenCalledOnce();
+  });
+
+  it("hides the password form when the server needs no login", () => {
+    renderWithProviders(<Settings />);
+    expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
+  });
+
+  it("changes the password and confirms it", async () => {
+    withAuthRequired();
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-one");
+
+    expect(changePasswordMutate).toHaveBeenCalledWith({
+      currentPassword: "old-password",
+      newPassword: "brand-new-one",
+    });
+    expect(await screen.findByText("Password changed")).toBeInTheDocument();
+    expect(screen.getByLabelText("Current password")).toHaveValue("");
+  });
+
+  it("will not submit when the new password is mistyped", async () => {
+    withAuthRequired();
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-two");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/don't match/i);
+    expect(changePasswordMutate).not.toHaveBeenCalled();
+  });
+
+  it("will not submit a new password that is too short", async () => {
+    withAuthRequired();
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "short", "short");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/at least 8/i);
+    expect(changePasswordMutate).not.toHaveBeenCalled();
+  });
+
+  it("reports a wrong current password", async () => {
+    withAuthRequired();
+    changePasswordMutate.mockRejectedValueOnce(new ApiError(401, "Current password is incorrect"));
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("wrong-password", "brand-new-one", "brand-new-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/current password is incorrect/i);
+    expect(screen.queryByText("Password changed")).not.toBeInTheDocument();
+  });
+
+  it("distinguishes a server error from a wrong password", async () => {
+    withAuthRequired();
+    changePasswordMutate.mockRejectedValueOnce(new ApiError(500, "Internal server error"));
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
+  });
+
+  it("distinguishes an unreachable server from a wrong password", async () => {
+    withAuthRequired();
+    changePasswordMutate.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderWithProviders(<Settings />);
+
+    await fillPasswordForm("old-password", "brand-new-one", "brand-new-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/can.?t reach the server/i);
+  });
+
+  it("cannot change the password while offline", () => {
+    withAuthRequired();
+    vi.mocked(useOnlineStatus).mockReturnValue(false);
+    renderWithProviders(<Settings />);
+
+    expect(screen.getByRole("button", { name: /change password/i })).toBeDisabled();
+    expect(screen.getByText(/reconnect to change your password/i)).toBeInTheDocument();
   });
 });
