@@ -3,6 +3,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
+import { ProtectedRoute } from "../components/ProtectedRoute.js";
 import { Login } from "./Login.js";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -14,7 +15,14 @@ function renderLogin(route: Parameters<typeof renderWithProviders>[1] = { route:
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<div>home</div>} />
-      <Route path="/gallery" element={<div>gallery page</div>} />
+      <Route
+        path="/gallery"
+        element={
+          <ProtectedRoute>
+            <div>gallery page</div>
+          </ProtectedRoute>
+        }
+      />
     </Routes>,
     route,
   );
@@ -40,9 +48,15 @@ describe("Login", () => {
     expect(await screen.findByText("home")).toBeInTheDocument();
   });
 
-  it("returns to the originally-requested page after signing in", async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse({ authRequired: true, authenticated: true }),
+  it("lands on the originally-requested guarded page without bouncing back", async () => {
+    // Auth status stays "not authenticated" for the whole test — proving the guard is
+    // satisfied by the login response written into the cache, not by a lucky refetch.
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes("/auth/login")
+          ? jsonResponse({ authRequired: true, authenticated: true })
+          : jsonResponse({ authRequired: true, authenticated: false }),
+      ),
     );
 
     renderLogin({ route: { pathname: "/login", state: { from: { pathname: "/gallery" } } } });
