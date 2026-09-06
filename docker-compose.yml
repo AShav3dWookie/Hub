@@ -4,13 +4,19 @@ services:
     image: logger:local
     ports:
       - "${PORT:-3000}:3000"
+    # Auth is off by default (LAN use). To expose this on the WAN see
+    # docs/wan-security.md — with AUTH_ENABLED=true the server refuses to start
+    # unless SESSION_SECRET is a real (non-placeholder, >=32 char) value, so the
+    # default below intentionally makes an auth-on deploy fail fast.
     environment:
       - PORT=3000
       - DB_PATH=/app/data/logger.db
       - AUTH_ENABLED=${AUTH_ENABLED:-false}
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
-      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - TRUST_PROXY=${TRUST_PROXY:-}
+      - COOKIE_SECURE=${COOKIE_SECURE:-}
+      - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-}
     volumes:
       - ./test-env:/app/data
     restart: unless-stopped
