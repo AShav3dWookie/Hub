@@ -47,7 +47,9 @@ npm run seed:test-data             # writes a realistic sample DB to test-env/lo
 
 npm run dev:server                 # API on :3000
 npm run dev:client                 # Vite on :5173, proxies /api -> :3000
-docker compose up --build          # full app on :3000 (SQLite persisted in a volume)
+docker compose up --build          # full app on :3000 (dev: builds, bind-mounts ./test-env)
+
+npm run release -- patch           # bump + tag + push -> CI publishes the image to GHCR
 ```
 
 Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd client && ...`, or
@@ -313,9 +315,43 @@ don't render CSS, so this is the only way to actually *see* a change.
 No pull requests — merge locally and push. Follow-up work (e.g. "add more tests for X") gets its own
 branch too.
 
+## Releases & deployment
+
+`.github/workflows/` is the only CI. **`ci.yml`** runs build → lint → typechecks → `npm test` on
+pushes to `main` and PRs. **`release.yml`** fires on a `v*.*.*` tag: the same checks, then it builds
+and pushes `ghcr.io/ashav3dwookie/hub` (lowercase — GHCR demands it) tagged `X.Y.Z`, `X.Y` and
+`latest`. `linux/amd64` only; `provenance`/`sbom` off so the package page shows a plain image.
+Neither workflow runs Playwright — run `npm run test:e2e` locally.
+
+`npm run release -- patch|minor|major|X.Y.Z` (`scripts/release.sh`) is the only way to cut one: it
+bumps all four `package.json` files **and `package-lock.json`** to one explicit version — the Docker
+builder runs `npm ci`, which aborts on a lockfile that disagrees — then commits, tags and pushes.
+It refuses off `main`, on a dirty tree, or out of sync with origin.
+
+The version is baked in via a `APP_VERSION` build arg: the **builder** stage exports it as
+`VITE_APP_VERSION` for Vite, and the **runtime** stage re-declares it (`ARG` does not cross a
+`FROM`) so `GET /api/health` returns `{status, version}`. `npm run docker:test` asserts that whole
+chain, including that Vite really put it in the bundle.
+
+**`AUTH_PASSWORD_HASH` must have every `$` doubled in a `.env` Compose reads** — Compose
+interpolates `env_file` values too, so a raw bcrypt hash loses its salt and every login fails
+silently. `.env.prod.example` carries the escaping one-liner. `docs/deployment.md` is the guide.
+
+### The four compose files
+
+| File | Purpose |
+| --- | --- |
+| `docker-compose.yml` | Dev. Builds from source, bind-mounts `./test-env:/app/data`, `:3000`. Project `hub` (from the directory name), container `hub-app-1`. |
+| `docker-compose.prod.yml` | **The server.** Pulls from GHCR, never builds. Named volume `hub-data`, `HOST_PORT` default **8090**. Project is also `hub` — locally always pass `-p hub-prod-test`. |
+| `docker-compose.auth.yml` | Auth rig, nginx in front, `:3300`. |
+| `docker-compose.pwa.yml` | PWA rig, nginx `:3200` + Chromium `:3210`. |
+
+Host ports in use: 3000 (dev), 3099 (smoke test), 3100 (e2e), 3200/3210 (pwa rig), 3300 (auth rig),
+5173 (Vite), 8090 (production).
+
 ## Repo notes
 
 - `test-env/` and `data/` are gitignored scratch dirs (seeded DBs, local Docker mounts).
-- `docker-compose.yml` may carry a local bind-mount edit (`./test-env:/app/data`) — an environment
-  preference, not usually committed.
+- `docker-compose.yml`'s `./test-env:/app/data` bind mount **is committed** — it is the dev
+  arrangement. Production uses the `hub-data` named volume in `docker-compose.prod.yml`.
 - `photos-plan.txt` and `Future_features.md` at the root are feature design notes.
