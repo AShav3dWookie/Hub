@@ -23,7 +23,10 @@ describe("app", () => {
     const app = createApp(ctx.db);
     const res = await request(app).get("/api/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok" });
+    expect(res.body.status).toBe("ok");
+    // The deployed image tag. Asserted by shape, not value: config reads process.env at module
+    // load, so an APP_VERSION set in the ambient environment would otherwise fail the suite.
+    expect(typeof res.body.version).toBe("string");
   });
 
   it("allows unauthenticated API access when AUTH_ENABLED is not set", async () => {
