@@ -46,6 +46,10 @@ sh(npm, ["run", "seed:test-data", "--workspace", "server"], {
 
 console.log(`[e2e] starting server on :${PORT}`);
 // cwd = server/ so the app finds its static bundle at ./public (see app.ts).
+// Auth is off here. The login flow is covered by unit/integration tests and the
+// docker-compose.auth.yml rig (see docs/wan-security.md); if an auth-on e2e pass
+// is ever wanted, gate it behind an env flag and set AUTH_ENABLED / SESSION_SECRET
+// / AUTH_PASSWORD_HASH below.
 const server = spawn(process.execPath, [path.join("dist", "index.js")], {
   cwd: path.join(root, "server"),
   stdio: "inherit",

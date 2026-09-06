@@ -77,8 +77,9 @@ export const config = {
   cookieSecure: parseCookieSecure(process.env.COOKIE_SECURE) as boolean | undefined,
   // Lifetime of the auth session cookie. The cookie is persistent (survives a browser restart)
   // and its expiry slides forward on activity (see app.ts), so a regular user re-logs in only
-  // after being away this long.
-  sessionMaxAgeDays: Number(process.env.SESSION_MAX_AGE_DAYS ?? 90),
+  // after being away this long. `|| 90` also catches an empty-string env var (compose passes
+  // `SESSION_MAX_AGE_DAYS=` when the host has not set it).
+  sessionMaxAgeDays: Number(process.env.SESSION_MAX_AGE_DAYS || 90) || 90,
 };
 
 /**

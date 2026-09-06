@@ -140,10 +140,24 @@ when disabled. **`config.ts` reads `process.env` at module load**, so tests that
 must `vi.resetModules()` and dynamically `import` `app.js` (see `app.test.ts`).
 
 `assertSecureConfig()` runs from the entrypoint (not at module load, so tests can build the app
-freely) and refuses to start when auth is on but `SESSION_SECRET` is still the built-in development
-value — that constant is in this repository, so signing real sessions with it would let anyone forge
-a logged-in cookie. It also refuses auth-on with no `AUTH_PASSWORD_HASH`, which previously failed
-every login with a 500 at request time instead of at boot.
+freely) and, when auth is on, refuses to start on a `SESSION_SECRET` that is a known placeholder
+(the committed dev value, `change-me-in-production`, …) or shorter than 32 chars — signing real
+sessions with a guessable secret lets anyone forge a logged-in cookie — or with no
+`AUTH_PASSWORD_HASH` (which previously 500'd every login at request time instead of at boot).
+`warnInsecureConfig()` (entrypoint only) additionally warns, without blocking, on `TRUST_PROXY`
+off or `COOKIE_SECURE=false` while auth is on. Generate a hash with `npm run auth:hash -- '<pw>'`.
+
+**Reverse-proxy / WAN.** `TRUST_PROXY` (defaults to `1` when `AUTH_ENABLED=true`) drives
+`app.set("trust proxy", …)` so `X-Forwarded-Proto` is honoured. `COOKIE_SECURE` is
+`boolean | undefined` — leave it unset so `cookie-session` derives the `Secure` flag per request
+from `req.protocol`; forcing `true` on a request seen as plain HTTP makes cookie-session silently
+drop the cookie. The session cookie is persistent and its expiry **slides** forward — a tiny
+middleware in `app.ts` stamps `req.session.t` once/day on authenticated `/api` hits so
+cookie-session re-emits `Set-Cookie` with a fresh `Expires` (`SESSION_MAX_AGE_DAYS`, default 90).
+The app is deliberately **Authelia-unaware**: Authelia gates at nginx, the app keeps its own
+separate password. `docs/wan-security.md` is the full guide; `npm run docker:auth` is a
+production-shaped rig (nginx in front, auth on, `X-Forwarded-Proto: https`) on `:3300` with
+password `test-password` for testing the login flow locally.
 
 ### Photos & video storage
 

@@ -18,6 +18,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
+To expose the app on the internet (password login + reverse proxy + Authelia), see
+[docs/wan-security.md](docs/wan-security.md).
+
 The app will be available at http://localhost:3000 (or `$PORT`). SQLite data persists in the `logger-data` named volume across restarts.
 
 ### Docker basic
@@ -30,9 +33,6 @@ docker run -d \
   -e PORT=3000 \
   -e DB_PATH=/app/data/logger.db \
   -e AUTH_ENABLED=false \
-  -e AUTH_PASSWORD_HASH= \
-  -e SESSION_SECRET=password \
-  -e COOKIE_SECURE=false \
   -v test-env:/app/data \
   --restart unless-stopped \
   logger:local
@@ -110,4 +110,17 @@ npm run docker:test    # builds the image, runs it, and polls /api/health
 
 ## Environment variables
 
-See [.env.example](.env.example) for the full list (`PORT`, `DB_PATH`, `AUTH_ENABLED`, `AUTH_PASSWORD_HASH`, `SESSION_SECRET`).
+See [.env.example](.env.example) for the full list (`PORT`, `DB_PATH`, `AUTH_ENABLED`, `AUTH_PASSWORD_HASH`, `SESSION_SECRET`, `TRUST_PROXY`, `COOKIE_SECURE`, `SESSION_MAX_AGE_DAYS`).
+
+Generate the login password hash with:
+
+```bash
+npm run auth:hash -- 'your password'
+```
+
+## Reverse-proxy / WAN deployment
+
+[docs/wan-security.md](docs/wan-security.md) covers running the app at a public hostname behind
+`Cloudflare → nginx → Authelia → app`: the two independent auth layers, the `TRUST_PROXY` /
+`COOKIE_SECURE` settings, the startup guard, and a local rig
+(`npm run docker:auth`, nginx in front, auth on) for testing the login flow before cutover.
