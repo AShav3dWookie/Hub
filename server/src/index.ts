@@ -1,10 +1,11 @@
-import { assertSecureConfig, config } from "./config.js";
+import { assertSecureConfig, warnInsecureConfig, config } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { createApp } from "./app.js";
 import { sweepExpiredAppointments } from "./services/upcomingEventsService.js";
 
 // Fail before opening a port rather than serving a deployment that only looks protected.
 assertSecureConfig();
+warnInsecureConfig();
 
 const db = runMigrations(config.dbPath);
 sweepExpiredAppointments(db);
