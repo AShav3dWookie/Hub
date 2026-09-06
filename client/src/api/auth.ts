@@ -44,6 +44,18 @@ export function useLogin() {
   });
 }
 
+/**
+ * Online-only and never queued, like login: a password change has to reach the server to mean
+ * anything, so it deliberately skips the outbox. Nothing in the query cache changes — the session
+ * and `["auth-status"]` are unaffected by a successful change.
+ */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string }) =>
+      api.post("/auth/password", input),
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({

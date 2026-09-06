@@ -16,7 +16,7 @@ import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
 import { createSyncRouter } from "./routes/sync.js";
-import { authRouter } from "./routes/auth.js";
+import { createAuthRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -62,7 +62,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   });
 
   app.use("/api", healthRouter);
-  app.use("/api/auth", authRouter);
+  app.use("/api/auth", createAuthRouter(db));
   app.use("/api/entities", requireAuth, createEntitiesRouter(db));
   app.use("/api/logs", requireAuth, createLogsRouter(db, photosDir));
   app.use("/api/logs", requireAuth, createLogPhotosRouter(db, photosDir));

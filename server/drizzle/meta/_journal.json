@@ -64,6 +64,13 @@
       "when": 1788297735526,
       "tag": "0008_whole_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788725601855,
+      "tag": "0009_fat_the_call",
+      "breakpoints": true
     }
   ]
 }
