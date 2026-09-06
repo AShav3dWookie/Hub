@@ -3,12 +3,16 @@ node_modules
 **/dist
 **/*.tsbuildinfo
 **/data
+# The local seeded DB and its photos — can be hundreds of MB, and nothing in the build needs it.
+test-env
 .git
+.github
 .gitignore
 *.log
 .DS_Store
 coverage
 .devcontainer
 .vscode
+.claude
 .playwright-mcp
 e2e/.artifacts
