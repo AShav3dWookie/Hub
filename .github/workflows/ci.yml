@@ -1,0 +1,37 @@
+# Build, lint and test on every push to main and every pull request, so a broken main is caught
+# before anyone cuts a release tag. Publishes nothing — see release.yml for that.
+#
+# Playwright is deliberately not run here: 14 serial specs plus a browser download roughly
+# quadruples the run, and a flaky browser test blocking main is not worth it. Run
+# `npm run test:e2e` locally before merging anything that touches the shell or the service worker.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build + lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Build first: shared/dist is what the other workspaces typecheck against.
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run typecheck:parity
+      - run: npm run typecheck:e2e
+      - run: npm test
