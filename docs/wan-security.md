@@ -152,11 +152,14 @@ npm run docker:auth:reset    # tear down + wipe when done
 
 ## Rollout checklist
 
-1. `npm run auth:hash -- 'your password'` → `AUTH_PASSWORD_HASH`.
+1. `npm run auth:hash -- 'your password' | sed 's/\$/$$/g'` → `AUTH_PASSWORD_HASH`. The `$`
+   doubling is required in a `.env` Compose reads — see [deployment.md](deployment.md).
 2. `openssl rand -base64 48` → `SESSION_SECRET`. Fill in the prod `.env` (table above).
 3. `npm run docker:auth` locally and run the checklist above.
-4. `docker compose up -d --build` on the home server with the real `.env`.
+4. Deploy the published image on the home server — `npm run release`, then
+   `docker compose -f docker-compose.prod.yml pull && ... up -d`. Full instructions in
+   [deployment.md](deployment.md); the server needs no checkout and builds nothing.
 5. Add [`docker/nginx.prod.conf`](../docker/nginx.prod.conf)'s `server {}` to your host nginx,
-   set the cert paths and `proxy_pass` target, `nginx -t`, reload.
+   set the cert paths, confirm `proxy_pass` matches `HOST_PORT` (default 8090), `nginx -t`, reload.
 6. Point Cloudflare DNS at the origin; confirm end-to-end over `https://hub.aaronhanna.uk`.
 7. Optionally enable the Authelia `auth_request` block and align session durations.

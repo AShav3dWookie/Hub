@@ -18,25 +18,38 @@ cp .env.example .env
 docker compose up --build
 ```
 
-To expose the app on the internet (password login + reverse proxy + Authelia), see
-[docs/wan-security.md](docs/wan-security.md).
-
-The app will be available at http://localhost:3000 (or `$PORT`). SQLite data persists in the `logger-data` named volume across restarts.
+The app will be available at http://localhost:3000 (or `$PORT`). This is the **development**
+compose file: it builds from source and bind-mounts `./test-env` as the data directory, so the
+database and photos are the seeded ones in your checkout.
 
 ### Docker basic
 ```bash
 docker build -t logger:local .
-docker volume create logger-data
 docker run -d \
   --name logger \
   -p 3000:3000 \
   -e PORT=3000 \
   -e DB_PATH=/app/data/logger.db \
   -e AUTH_ENABLED=false \
-  -v test-env:/app/data \
+  -v "$(pwd)/test-env:/app/data" \
   --restart unless-stopped \
   logger:local
 ```
+
+## Deploying to the home server
+
+Releases are published as a Docker image to this repo's GitHub Container Registry, and the server
+pulls it — nothing is built there.
+
+```bash
+npm run release -- minor    # bumps, tags and pushes; CI builds and publishes the image
+```
+
+Then on the server: `docker compose -f docker-compose.prod.yml pull && ... up -d`.
+Full guide, including one-time setup, rollback and backups: **[docs/deployment.md](docs/deployment.md)**.
+
+To expose the app on the internet (password login + reverse proxy + Authelia), see
+[docs/wan-security.md](docs/wan-security.md).
 
 ## Development — Dev Container (recommended)
 
@@ -87,7 +100,7 @@ To populate a database with a realistic set of sample entries for manual testing
 npm run seed:test-data
 ```
 
-This writes a ready-to-use SQLite file to `test-env/logger.db` (gitignored). Point the app at it locally with `DB_PATH=./test-env/logger.db npm run dev:server`, or bind-mount it into a container instead of using the named volume:
+This writes a ready-to-use SQLite file to `test-env/logger.db` (gitignored). Point the app at it locally with `DB_PATH=./test-env/logger.db npm run dev:server`, or bind-mount it into a container:
 
 ```bash
 docker build -t logger:local .
