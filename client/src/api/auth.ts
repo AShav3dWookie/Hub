@@ -32,8 +32,14 @@ export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (password: string) => api.post<AuthStatus>("/auth/login", { password }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth-status"] });
+    onSuccess: (status) => {
+      // The login response IS an AuthStatus and is authoritative (the session cookie is now
+      // set). Write it straight into the cache so a ProtectedRoute the user navigates to as
+      // soon as this resolves sees `authenticated: true` immediately. Invalidating instead
+      // left a window where the in-flight refetch still returned the stale `false` and bounced
+      // them back to /login.
+      queryClient.setQueryData(["auth-status"], status);
+      void setMeta(META_AUTH_STATUS, status);
     },
   });
 }
