@@ -22,6 +22,14 @@ ENV VITE_APP_VERSION=$APP_VERSION
 RUN npm run build
 RUN npm prune --omit=dev
 
+# npm hoists a dependency to /app/node_modules only while nothing claims a conflicting
+# major. A dev dependency wanting zod 4 parks that at the root — where the prune above
+# deletes it, correctly, as dev-only — and pushes the server's own zod 3 down into
+# server/node_modules. The runtime stage copied only the root, so the image shipped with
+# no zod at all and the server died on its first import. The workspace directories are
+# copied below; mkdir keeps those COPYs valid on a build that nests nothing.
+RUN mkdir -p /app/server/node_modules /app/shared/node_modules
+
 FROM node:22-alpine AS runtime
 # ffmpeg: decodes a single poster frame from uploaded videos (see server/src/lib/videoPoster.ts).
 RUN apk add --no-cache tini ffmpeg
@@ -29,8 +37,10 @@ WORKDIR /app/server
 ENV NODE_ENV=production
 
 COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/shared/node_modules /app/shared/node_modules
 COPY --from=builder /app/shared/dist /app/shared/dist
 COPY --from=builder /app/shared/package.json /app/shared/package.json
+COPY --from=builder /app/server/node_modules ./node_modules
 COPY --from=builder /app/server/dist ./dist
 COPY --from=builder /app/server/drizzle ./drizzle
 COPY --from=builder /app/server/package.json ./package.json
@@ -40,6 +50,16 @@ COPY --from=builder /app/client/dist ./public
 # COPYs so that rebuilding for a new version alone reuses every layer above it.
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+
+# This stage assembles node_modules by hand, so a dependency npm nested rather than hoisted
+# can go missing with nothing to show for it until the server imports it and the container
+# crash-loops. Fail the build instead. Existence on the resolution path rather than
+# require.resolve: an exports map that does not publish ./package.json would reject a
+# package that is really there.
+RUN for dep in $(node -p "Object.keys(require('/app/server/package.json').dependencies).join(' ')"); do \
+      [ -e "/app/server/node_modules/$dep" ] || [ -e "/app/node_modules/$dep" ] || \
+        { echo "missing runtime dependency: $dep"; exit 1; }; \
+    done; echo "runtime deps ok"
 
 EXPOSE 3000
 
