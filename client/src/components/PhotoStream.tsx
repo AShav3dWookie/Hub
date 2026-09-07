@@ -19,6 +19,7 @@ export function PhotoStream({
   emptyText,
   onDelete,
   canDelete,
+  currentAlbumId,
 }: {
   photos: GalleryPhotoDTO[];
   isLoading: boolean;
@@ -29,6 +30,12 @@ export function PhotoStream({
   onDelete?: (photoId: number) => Promise<void>;
   /** When given, the lightbox delete control only shows for photos this returns true for. */
   canDelete?: (photo: GalleryPhotoDTO) => boolean;
+  /**
+   * The album this stream is itself showing, if any (only AlbumDetail passes this). Left out
+   * of the "part of" line so a photo doesn't announce membership in the very page you're
+   * looking at it from — a photo in a second album still shows that one.
+   */
+  currentAlbumId?: number;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [advancing, setAdvancing] = useState(false); // waiting on fetchNextPage for the next photo
@@ -36,6 +43,7 @@ export function PhotoStream({
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const active = activeIndex == null ? null : photos[activeIndex] ?? null;
+  const albumsToShow = active?.albums.filter((a) => a.id !== currentAlbumId) ?? [];
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -146,6 +154,21 @@ export function PhotoStream({
               </span>
             ) : (
               <span className="text-slate-300">Not linked to an event</span>
+            )}
+
+            {albumsToShow.length > 0 && (
+              <span className="text-slate-300">
+                part of{" "}
+                {albumsToShow.map((a, i) => (
+                  <span key={a.id}>
+                    <Link to={`/album/${a.id}`} className="underline">
+                      {a.title}
+                    </Link>
+                    {i < albumsToShow.length - 1 ? ", " : ""}
+                  </span>
+                ))}{" "}
+                album{albumsToShow.length > 1 ? "s" : ""}
+              </span>
             )}
 
             {onDelete &&

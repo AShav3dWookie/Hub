@@ -7,6 +7,8 @@ import { createTestDb } from "../testUtils/testDb.js";
 import { createLog, updateLog, deleteLog } from "./logService.js";
 import { findOrCreateEntity } from "./entityService.js";
 import { createLogPhotos, type UploadedPhoto } from "./logPhotosService.js";
+import { createAlbumPhotos } from "./albumPhotosService.js";
+import { createAlbum, addAlbumEvent } from "./albumService.js";
 import { listGalleryPhotos } from "./galleryService.js";
 
 async function file(name = "photo.png"): Promise<UploadedPhoto> {
@@ -162,6 +164,69 @@ describe("galleryService", () => {
       expect(listGalleryPhotos(ctx.db, { personId: alice.id }).photos).toHaveLength(0);
       // still visible in the unfiltered gallery
       expect(listGalleryPhotos(ctx.db).photos).toHaveLength(1);
+    });
+  });
+
+  describe("albums on photos", () => {
+    it("a photo on a log linked to one album lists it", async () => {
+      setup();
+      const log = movieLog("Heat");
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file("ev.png")]);
+      const album = createAlbum(ctx.db, { title: "Rome Trip", eventLogIds: [log.id] });
+
+      const { photos } = listGalleryPhotos(ctx.db);
+      expect(photos[0].albums).toEqual([{ id: album.id, title: "Rome Trip" }]);
+    });
+
+    it("a loose album photo lists its own album", async () => {
+      setup();
+      const album = createAlbum(ctx.db, { title: "Rome Trip" });
+      await createAlbumPhotos(ctx.db, photosDir, album.id, [await file("loose.png")]);
+
+      const { photos } = listGalleryPhotos(ctx.db);
+      expect(photos[0].albums).toEqual([{ id: album.id, title: "Rome Trip" }]);
+    });
+
+    it("a photo with no album link returns an empty array", async () => {
+      setup();
+      const log = movieLog("Heat");
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+
+      expect(listGalleryPhotos(ctx.db).photos[0].albums).toEqual([]);
+    });
+
+    it("a photo whose log is linked to two albums lists both", async () => {
+      setup();
+      const log = movieLog("Heat");
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+      createAlbum(ctx.db, { title: "A", eventLogIds: [log.id] });
+      const b = createAlbum(ctx.db, { title: "B" });
+      addAlbumEvent(ctx.db, b.id, log.id);
+
+      const { photos } = listGalleryPhotos(ctx.db);
+      expect(photos[0].albums.map((r) => r.title).sort()).toEqual(["A", "B"]);
+    });
+
+    it("carries the same albums through the personId and albumId scopes", async () => {
+      setup();
+      const log = createLog(ctx.db, {
+        category: "movie",
+        title: "Heat",
+        rating: 4,
+        date: "2024-03-03",
+        notes: null,
+        people: [{ name: "Alice" }],
+      });
+      const alice = log.people[0];
+      await createLogPhotos(ctx.db, photosDir, log.id, [await file()]);
+      const album = createAlbum(ctx.db, { title: "Rome Trip", eventLogIds: [log.id] });
+
+      expect(listGalleryPhotos(ctx.db, { personId: alice.id }).photos[0].albums).toEqual([
+        { id: album.id, title: "Rome Trip" },
+      ]);
+      expect(listGalleryPhotos(ctx.db, { albumId: album.id }).photos[0].albums).toEqual([
+        { id: album.id, title: "Rome Trip" },
+      ]);
     });
   });
 });

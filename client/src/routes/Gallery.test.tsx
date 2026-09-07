@@ -31,6 +31,7 @@ function photo(id: number, over: Partial<GalleryPhotoDTO> = {}): GalleryPhotoDTO
     originalName: `photo-${id}.jpg`,
     createdAt: NOW,
     log: { id: 1, entityId: 9, entityTitle: "Heat", category: "movie", date: "2024-01-01" },
+    albums: [],
     ...over,
   };
 }

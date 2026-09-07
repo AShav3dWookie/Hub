@@ -17,6 +17,7 @@ function photo(id: number, over: Partial<GalleryPhotoDTO> = {}): GalleryPhotoDTO
     originalName: `photo-${id}.jpg`,
     createdAt: NOW,
     log: { id: 1, entityId: 9, entityTitle: "Heat", category: "movie", date: "2024-01-01" },
+    albums: [],
     ...over,
   };
 }
@@ -111,6 +112,64 @@ describe("PhotoStream", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "photo-4.jpg" }));
     expect(await screen.findByText("Not linked to an event")).toBeInTheDocument();
+  });
+
+  it("shows which album(s) a photo is part of, each a link, pluralized past one", async () => {
+    renderStream(
+      <PhotoStream
+        {...base}
+        photos={[
+          photo(8, {
+            albums: [
+              { id: 5, title: "Road Trip" },
+              { id: 6, title: "Ski Trip" },
+            ],
+          }),
+        ]}
+        emptyText=""
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "photo-8.jpg" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(screen.getByRole("link", { name: "Road Trip" })).toHaveAttribute("href", "/album/5");
+    expect(screen.getByRole("link", { name: "Ski Trip" })).toHaveAttribute("href", "/album/6");
+    // .textContent (not getByText, which only reads an element's own direct text and would
+    // skip over the nested link spans) is the honest read of the full rendered sentence.
+    expect(dialog.textContent).toMatch(/part of\s*Road Trip,\s*Ski Trip\s*albums/);
+  });
+
+  it("renders no album line for a photo that belongs to none", async () => {
+    renderStream(<PhotoStream {...base} photos={[photo(9)]} emptyText="" />);
+    await userEvent.click(screen.getByRole("button", { name: "photo-9.jpg" }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByText(/part of/i)).not.toBeInTheDocument();
+  });
+
+  it("currentAlbumId excludes the page's own album from the line, but a second album still shows", async () => {
+    renderStream(
+      <PhotoStream
+        {...base}
+        photos={[
+          photo(10, {
+            albums: [
+              { id: 1, title: "This Album" },
+              { id: 2, title: "Other Trip" },
+            ],
+          }),
+        ]}
+        emptyText=""
+        currentAlbumId={1}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "photo-10.jpg" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(screen.getByRole("link", { name: "Other Trip" })).toHaveAttribute("href", "/album/2");
+    expect(screen.queryByRole("link", { name: "This Album" })).not.toBeInTheDocument();
+    // Only one album is shown once the current one is excluded, so the trailing word is singular.
+    expect(dialog.textContent).toMatch(/part of\s*Other Trip\s*album\b/);
+    expect(dialog.textContent).not.toMatch(/albums/);
   });
 
   it("shows no delete control without onDelete", async () => {

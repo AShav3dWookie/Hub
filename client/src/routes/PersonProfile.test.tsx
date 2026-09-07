@@ -22,6 +22,7 @@ function photo(id: number): GalleryPhotoDTO {
     originalName: `photo-${id}.jpg`,
     createdAt: NOW,
     log: { id: 3, entityId: 3, entityTitle: "Inception", category: "movie", date: "2024-01-01" },
+    albums: [],
   };
 }
 
