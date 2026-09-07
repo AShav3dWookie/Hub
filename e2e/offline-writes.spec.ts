@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { SyncChangesResponse } from "@logger/shared";
-import { gotoHome, readStore, serviceWorkerState } from "./helpers/app";
+import { HOME_HEADING, gotoHome, readStore, serviceWorkerState } from "./helpers/app";
 
 /**
  * The writes tier end to end: with the network down, create / edit / delete across the
@@ -45,7 +45,7 @@ test("offline create / edit / delete, then reconnect and sync", async ({ page, c
   await page.getByPlaceholder(/Add a person/i).fill(personName);
   await page.getByPlaceholder(/Add a person/i).press("Enter");
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
   // --- create: an album ---
   await page.goto("/add/album");

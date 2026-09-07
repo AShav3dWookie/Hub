@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoHome, serviceWorkerState } from "./helpers/app";
+import { HOME_HEADING, gotoHome, serviceWorkerState } from "./helpers/app";
 
 test.describe("Settings", () => {
   test("reachable from the header; shows sync + cache, and syncs on demand", async ({ page }) => {
@@ -40,7 +40,7 @@ test.describe("Settings", () => {
       await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
       await page.getByLabel("Title").fill(`Queued while offline ${Date.now()}`);
       await page.getByRole("button", { name: "Save" }).click();
-      await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
       // The write went to the outbox, not the network.
       const outbox = await page.evaluate(

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
+import { HOME_HEADING, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
 import { addAlbum, addLog, assertReplicaClean, bootstrap, feedWhere, openEntity } from "./helpers/writes";
 
 /**
@@ -123,7 +123,7 @@ test("a fresh browser sees an offline-created record after its owner syncs", asy
   try {
     const p2 = await ctx2.newPage();
     await p2.goto(new URL(page.url()).origin + "/");
-    await p2.getByRole("heading", { name: "What would you like to do?" }).waitFor();
+    await p2.getByRole("heading", { name: HOME_HEADING }).waitFor();
     expect(await serviceWorkerState(p2)).toBe("activated");
     await expect
       .poll(

@@ -7,12 +7,16 @@ import { gotoHome, gotoTab } from "./helpers/app";
  * behaviour (service worker, offline, IndexedDB, settings) gets its own specs as it lands.
  */
 test.describe("app smoke", () => {
-  test("home hub renders with its five actions", async ({ page }) => {
+  test("every destination is one tap away from home", async ({ page }) => {
     await gotoHome(page);
     await expect(page).toHaveTitle(/Logger/);
-    for (const label of ["Add", "Search", "Calendar", "Gallery", "Albums"]) {
-      await expect(page.getByRole("link", { name: label, exact: true })).toBeVisible();
+    // Four of the five live in the tab bar now; Albums is the one it has no room for.
+    for (const label of ["Home", "Search", "Add", "Calendar", "Gallery"]) {
+      await expect(
+        page.getByRole("navigation").getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
     }
+    await expect(page.getByRole("main").getByRole("link", { name: /albums/i })).toBeVisible();
   });
 
   test("search finds a seeded movie and opens its entity page", async ({ page }) => {

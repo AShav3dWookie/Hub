@@ -6,6 +6,7 @@ import {
   gridRange,
   monthGrid,
   monthLabel,
+  weekdayShort,
   WEEKDAYS,
 } from "./calendar.js";
 
@@ -109,6 +110,11 @@ describe("gridRange", () => {
 });
 
 describe("labels", () => {
+  it("weekdayShort names the weekday of a date", () => {
+    expect(weekdayShort("2024-02-15")).toMatch(/Thu/);
+    expect(weekdayShort("2024-02-19")).toMatch(/Mon/);
+  });
+
   it("monthLabel names the month and year", () => {
     expect(monthLabel("2024-02")).toMatch(/February 2024/);
     expect(monthLabel("2025-12")).toMatch(/December 2025/);

@@ -32,6 +32,15 @@ export function dayLabel(date: string): string {
   });
 }
 
+/** "Mon" for a `YYYY-MM-DD` — the short weekday, for a compact "when" badge. */
+export function weekdayShort(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+}
+
 export interface GridCell {
   date: string;
   inMonth: boolean;

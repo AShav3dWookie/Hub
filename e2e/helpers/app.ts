@@ -1,9 +1,15 @@
 import type { Page } from "@playwright/test";
 
-/** Navigate to the home hub and wait for the SPA to render it. */
+/**
+ * The heading that means the home screen has rendered. Named once because eight specs
+ * assert on it as a proxy for "the SPA is up", and a copy in each is a copy to miss.
+ */
+export const HOME_HEADING = "What's on";
+
+/** Navigate to the home screen and wait for the SPA to render it. */
 export async function gotoHome(page: Page): Promise<void> {
   await page.goto("/");
-  await page.getByRole("heading", { name: "What would you like to do?" }).waitFor();
+  await page.getByRole("heading", { name: HOME_HEADING }).waitFor();
 }
 
 /**
