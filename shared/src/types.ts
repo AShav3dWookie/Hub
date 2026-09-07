@@ -50,6 +50,12 @@ export interface GalleryPhotoDTO extends LogPhotoDTO {
     category: LoggableCategory;
     date: string;
   } | null;
+  /**
+   * Albums this photo is part of: its own direct album (uploaded straight to it), or — if
+   * it's attached to a log instead — every album that log is linked to as an event. A photo
+   * is never both, mirroring the one-copy invariant on log_photos.
+   */
+  albums: AlbumRef[];
 }
 
 /** Response for GET /api/gallery. */

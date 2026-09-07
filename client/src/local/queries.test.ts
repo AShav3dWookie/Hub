@@ -205,13 +205,40 @@ describe("getGallery", () => {
   it("albumId scope covers loose photos and linked-event photos", () => {
     const movie = makeEntity({ title: "Heat", category: "movie" });
     const eventLog = makeLog({ entityId: movie.id });
-    const album = makeAlbum({ eventLogIds: [eventLog.id] });
+    const album = makeAlbum({ title: "Rome Trip", eventLogIds: [eventLog.id] });
+    // A real snapshot (built from the server's own sync feed) always keeps a log's albumIds
+    // and an album's eventLogIds as consistent mirrors of the same album_events join — the
+    // fixture has to be wired up the same way by hand.
+    eventLog.albumIds = [album.id];
     const loose = makePhoto({ id: 20, albumId: album.id });
     const viaEvent = makePhoto({ id: 21, logId: eventLog.id });
     const unrelated = makePhoto({ id: 22 });
     const s = snap({ entities: [movie], logs: [eventLog], albums: [album], photos: [loose, viaEvent, unrelated] });
 
-    expect(q.getGallery(s, { albumId: album.id }).photos.map((p) => p.id).sort()).toEqual([20, 21]);
+    const photos = q.getGallery(s, { albumId: album.id }).photos;
+    expect(photos.map((p) => p.id).sort()).toEqual([20, 21]);
+    // Same album, reached two different ways: the loose photo via its own albumId, the
+    // event photo via its log's albumIds — both must resolve to the same AlbumRef.
+    expect(photos.find((p) => p.id === 20)?.albums).toEqual([{ id: album.id, title: "Rome Trip" }]);
+    expect(photos.find((p) => p.id === 21)?.albums).toEqual([{ id: album.id, title: "Rome Trip" }]);
+  });
+
+  it("a photo whose log is linked to two albums lists both", () => {
+    const movie = makeEntity({ title: "Heat", category: "movie" });
+    const eventLog = makeLog({ entityId: movie.id });
+    const albumA = makeAlbum({ title: "A", eventLogIds: [eventLog.id] });
+    const albumB = makeAlbum({ title: "B", eventLogIds: [eventLog.id] });
+    eventLog.albumIds = [albumA.id, albumB.id];
+    const photo = makePhoto({ id: 30, logId: eventLog.id });
+    const s = snap({ entities: [movie], logs: [eventLog], albums: [albumA, albumB], photos: [photo] });
+
+    const result = q.getGallery(s).photos[0];
+    expect(result.albums.map((a) => a.title).sort()).toEqual(["A", "B"]);
+  });
+
+  it("a photo with no album link returns an empty albums array", () => {
+    const s = snap({ photos: [makePhoto({ id: 40 })] });
+    expect(q.getGallery(s).photos[0].albums).toEqual([]);
   });
 });
 

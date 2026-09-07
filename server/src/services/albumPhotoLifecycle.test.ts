@@ -105,6 +105,8 @@ describe("album photo lifecycle & the one-copy invariant", () => {
       expect(v.id).toBe(photo.id);
       expect(v.url).toBe(fromLog.url);
       expect(v.thumbnailUrl).toBe(fromLog.thumbnailUrl);
+      // One log, referenced as an event by two albums — the photo lists both, from every view.
+      expect(v.albums.map((r) => r.title).sort()).toEqual(["A", "B"]);
     }
   });
 

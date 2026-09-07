@@ -1,15 +1,34 @@
 import { and, eq, lt, or, desc, isNotNull, inArray, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
-import { logs, logPhotos, logPeople, entities, albumEvents, albumPeople } from "../db/schema.js";
+import { logs, logPhotos, logPeople, entities, albums, albumEvents, albumPeople } from "../db/schema.js";
 import { toLogPhotoDTO } from "./logPhotosService.js";
+import { getAlbumsForLogs } from "./logService.js";
 import {
   DEFAULT_GALLERY_LIMIT,
   paginateByDescendingId,
+  type AlbumRef,
   type GalleryPhotoDTO,
   type GalleryQuery,
   type GalleryResponse,
   type LoggableCategory,
 } from "@logger/shared";
+
+/** A photo's own direct album, by id — the counterpart to getAlbumsForLogs' indirect case. */
+function getAlbumRefsById(db: AppDb, albumIds: number[]): Map<number, AlbumRef> {
+  const result = new Map<number, AlbumRef>();
+  if (albumIds.length === 0) return result;
+
+  const rows = db
+    .select({ id: albums.id, title: albums.title })
+    .from(albums)
+    .where(inArray(albums.id, albumIds))
+    .all();
+
+  for (const row of rows) {
+    result.set(row.id, { id: row.id, title: row.title });
+  }
+  return result;
+}
 
 /**
  * Uploaded photos, newest first. Ordered by log_photos.id DESC (monotonic with upload
@@ -76,19 +95,37 @@ export function listGalleryPhotos(db: AppDb, query: GalleryQuery = {}): GalleryR
 
   const { page, nextCursor } = paginateByDescendingId(rows, limit, (row) => row.photo.id);
 
-  const photos: GalleryPhotoDTO[] = page.map((row) => ({
-    ...toLogPhotoDTO(row.photo),
-    log:
-      row.logId != null
-        ? {
-            id: row.logId,
-            entityId: row.entityId as number,
-            entityTitle: row.entityTitle as string,
-            category: row.entityCategory as LoggableCategory,
-            date: row.logDate as string,
-          }
-        : null,
-  }));
+  // A photo's albums come from exactly one of two disjoint sources (never both — see the
+  // one-copy invariant on log_photos): its own direct albumId, or the albums its log is
+  // linked to as an event. Batched the same way getPeopleForLogs/getAlbumsForLogs are, rather
+  // than per-row, to keep this an O(1)-query lookup regardless of page size.
+  const directAlbumIds = [...new Set(page.map((r) => r.photo.albumId).filter((id): id is number => id != null))];
+  const linkedLogIds = [...new Set(page.map((r) => r.logId).filter((id): id is number => id != null))];
+  const directAlbumById = getAlbumRefsById(db, directAlbumIds);
+  const albumsByLog = getAlbumsForLogs(db, linkedLogIds);
+
+  const photos: GalleryPhotoDTO[] = page.map((row) => {
+    const direct = row.photo.albumId != null ? directAlbumById.get(row.photo.albumId) : undefined;
+    const photoAlbums: AlbumRef[] = direct
+      ? [direct]
+      : row.logId != null
+        ? (albumsByLog.get(row.logId) ?? [])
+        : [];
+    return {
+      ...toLogPhotoDTO(row.photo),
+      log:
+        row.logId != null
+          ? {
+              id: row.logId,
+              entityId: row.entityId as number,
+              entityTitle: row.entityTitle as string,
+              category: row.entityCategory as LoggableCategory,
+              date: row.logDate as string,
+            }
+          : null,
+      albums: photoAlbums,
+    };
+  });
 
   return { photos, nextCursor };
 }

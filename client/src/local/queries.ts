@@ -43,6 +43,7 @@ import {
   sortLogResults,
   summariseEntityLogs,
   type AlbumDTO,
+  type AlbumRef,
   type AlbumSummary,
   type AlbumSyncDTO,
   type CalendarRangeResponse,
@@ -375,6 +376,17 @@ export function getGallery(snap: LocalSnapshot, query: GalleryQuery = {}): Galle
   const dtos: GalleryPhotoDTO[] = page.map((p) => {
     const log = p.logId != null ? snap.logById.get(p.logId) : undefined;
     const entity = log ? snap.entityById.get(log.entityId) : undefined;
+    // Mirrors toLogDTO's albums assembly above: a photo's own direct album, or — if it's
+    // attached to a log instead — every album that log is linked to as an event. Never both.
+    const directAlbum = p.albumId != null ? snap.albumById.get(p.albumId) : undefined;
+    const albums: AlbumRef[] = directAlbum
+      ? [{ id: directAlbum.id, title: directAlbum.title }]
+      : log
+        ? log.albumIds
+            .map((id) => snap.albumById.get(id))
+            .filter((a): a is AlbumSyncDTO => a != null)
+            .map((a) => ({ id: a.id, title: a.title }))
+        : [];
     return {
       ...toLogPhotoDTO(p),
       log:
@@ -387,6 +399,7 @@ export function getGallery(snap: LocalSnapshot, query: GalleryQuery = {}): Galle
               date: log.date,
             }
           : null,
+      albums,
     };
   });
 

@@ -269,6 +269,7 @@ export function AlbumDetail() {
               : undefined
           }
           canDelete={(photo) => photo.log == null}
+          currentAlbumId={albumId}
         />
       </div>
 

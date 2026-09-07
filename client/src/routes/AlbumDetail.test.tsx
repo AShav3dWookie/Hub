@@ -82,6 +82,7 @@ const photosPayload: GalleryResponse = {
       originalName: "event.jpg",
       createdAt: NOW,
       log: { id: 30, entityId: 9, entityTitle: "Heat", category: "movie", date: "2024-04-02" },
+      albums: [],
     },
     {
       id: 101,
@@ -92,6 +93,7 @@ const photosPayload: GalleryResponse = {
       originalName: "loose.jpg",
       createdAt: NOW,
       log: null,
+      albums: [],
     },
   ],
   nextCursor: null,
@@ -141,6 +143,28 @@ describe("AlbumDetail", () => {
 
     expect(await screen.findByRole("img", { name: "event.jpg" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "loose.jpg" })).toBeInTheDocument();
+  });
+
+  it("excludes this album from a photo's 'part of' line, but shows a different one it's also in", async () => {
+    vi.mocked(repo.getGallery).mockResolvedValue({
+      photos: [
+        {
+          ...photosPayload.photos[0],
+          albums: [
+            { id: 1, title: "Road Trip" }, // the album this very page is showing
+            { id: 77, title: "Ski Trip" },
+          ],
+        },
+        photosPayload.photos[1],
+      ],
+      nextCursor: null,
+    });
+
+    renderDetail();
+    await userEvent.click(await screen.findByRole("img", { name: "event.jpg" }));
+
+    expect(await screen.findByRole("link", { name: "Ski Trip" })).toHaveAttribute("href", "/album/77");
+    expect(screen.queryByRole("link", { name: "Road Trip" })).not.toBeInTheDocument();
   });
 
   it("shows only the year for a year-granularity album event (book)", async () => {
