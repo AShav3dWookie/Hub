@@ -42,7 +42,7 @@ function CategorySelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as NoteCategory)}
-      className="rounded-md border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+      className={FIELD_CLASS}
     >
       {categories.map((c) => (
         <option key={c} value={c}>
@@ -98,13 +98,13 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="Tag (e.g. Birthday)"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={FIELD_CLASS}
             />
             <input
               type="date"
               value={eventDate}
               onChange={(e) => setEventDate(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={FIELD_CLASS}
             />
           </div>
         ) : (
@@ -311,13 +311,13 @@ export function EntityNotes({ entityId }: { entityId: number }) {
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
               placeholder="Tag (e.g. Birthday)"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={FIELD_CLASS}
             />
             <input
               type="date"
               value={newEventDate}
               onChange={(e) => setNewEventDate(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={FIELD_CLASS}
             />
           </div>
         )}
@@ -330,7 +330,7 @@ export function EntityNotes({ entityId }: { entityId: number }) {
               : "Conversation topics, gift ideas, anything to remember…"
           }
           rows={2}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          className={`w-full ${FIELD_CLASS}`}
         />
         <button
           type="submit"

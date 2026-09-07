@@ -93,7 +93,7 @@ export function AlbumAddForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4 sm:max-w-lg">
       <h1 className="text-2xl font-semibold">Create an album</h1>
 
       <label className="flex flex-col gap-1">
@@ -176,7 +176,7 @@ export function AlbumAddForm() {
           onChange={(e) =>
             setPhotoFiles(Array.from(e.target.files ?? []).slice(0, MAX_MEDIA_PER_LOG))
           }
-          className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
+          className="text-sm text-slate-600 file:mr-3 file:min-h-[44px] file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
         />
         {!canPickMedia && (
           <p className="text-xs text-slate-500 dark:text-slate-400">

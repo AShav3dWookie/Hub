@@ -34,8 +34,10 @@ export function StarRating({
             disabled={readOnly}
             onClick={() => onChange?.(value === star ? null : star)}
             onKeyDown={(e) => handleKeyDown(e, star)}
-            className={`rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 dark:focus-visible:ring-slate-300 ${
-              readOnly ? "cursor-default" : "cursor-pointer"
+            // An interactive star is a tap target and gets the full 44px; a read-only one is
+            // just a glyph in a result card, and padding it out would stretch every row.
+            className={`flex items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 dark:focus-visible:ring-slate-300 ${
+              readOnly ? "cursor-default" : "min-h-[44px] min-w-[44px] cursor-pointer"
             }`}
           >
             <Star

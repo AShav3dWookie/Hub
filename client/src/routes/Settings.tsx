@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DANGER_BUTTON_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
+import { DANGER_BUTTON_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS, SECTION_HEADING } from "../components/ui.js";
 import { AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   useOnlineStatus,
@@ -52,19 +52,22 @@ function bytes(n: number): string {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {title}
-      </h2>
+      <h2 className={SECTION_HEADING}>{title}</h2>
       {children}
     </section>
   );
 }
 
+/**
+ * Stacked on a phone, side-by-side once there is room. As a two-column row at 388px the
+ * long values here -- "When opened, and daily at 03:00", a sync error sentence -- squeezed
+ * the label to a word per line.
+ */
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-slate-600 dark:text-slate-300">{label}</span>
-      <span className="text-right text-slate-900 dark:text-white">{value}</span>
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+      <span className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{label}</span>
+      <span className="text-sm text-slate-900 dark:text-white sm:text-right">{value}</span>
     </div>
   );
 }
