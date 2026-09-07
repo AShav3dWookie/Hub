@@ -66,13 +66,15 @@ export function PhotoGallery({
 
   return (
     <div className="mt-2">
-      <div className="flex flex-wrap gap-2">
+      {/* A real grid, not a wrap-flex of hardcoded 80px tiles: those gave four to a row
+          with a ragged right edge at any width but one. */}
+      <div className="grid grid-cols-4 gap-2">
         {photos.map((photo, i) => (
           <div key={photo.id} className="relative">
             <button
               type="button"
               onClick={() => setLightboxIndex(i)}
-              className="block h-20 w-20 overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
+              className="block aspect-square w-full overflow-hidden rounded-md border border-slate-200 dark:border-slate-700"
             >
               <MediaThumb photo={photo} />
             </button>
@@ -81,9 +83,11 @@ export function PhotoGallery({
                 type="button"
                 aria-label={`Delete ${photo.originalName}`}
                 onClick={() => setConfirmingDelete(photo.id)}
-                className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900/80 p-1 text-white hover:bg-red-600"
+                // Inside the tile rather than overhanging it, so it can be a 32px target
+                // instead of the 20px one it was without colliding with its neighbour.
+                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-red-600"
               >
-                <X size={12} />
+                <X size={16} aria-hidden />
               </button>
             )}
           </div>
@@ -94,7 +98,7 @@ export function PhotoGallery({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={upload.isPending}
-            className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed border-slate-300 px-1 text-center text-xs text-slate-500 hover:border-slate-400 disabled:opacity-50 dark:border-slate-600 dark:text-slate-400"
+            className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-slate-300 px-1 text-center text-xs text-slate-500 hover:border-slate-400 disabled:opacity-50 dark:border-slate-600 dark:text-slate-400"
           >
             {upload.isPending ? "Uploading…" : "Add photos"}
           </button>

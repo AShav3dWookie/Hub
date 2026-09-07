@@ -102,8 +102,10 @@ export function PhotoStream({
         <p className="text-slate-500 dark:text-slate-400">{emptyText}</p>
       )}
 
+      {/* -mx-3 breaks out of main's padding and the gutter tightens, so the tiles get bigger
+          *and* one more fits per row on anything wider than a 360px phone. */}
       {photos.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+        <div className="-mx-3 grid grid-cols-3 gap-1 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
           {photos.map((photo, i) => (
             <button
               key={photo.id}
