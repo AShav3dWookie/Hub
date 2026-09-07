@@ -1,0 +1,59 @@
+# PRODUCTION — the home server. This is the only compose file meant to run there, and it never
+# builds: the image is pulled from GHCR, published by .github/workflows/release.yml when a
+# `vX.Y.Z` tag is pushed.
+#
+# One-time on the server (the package is private):
+#   echo <PAT> | docker login ghcr.io -u AShav3dWookie --password-stdin
+#   cp .env.prod.example .env    # then fill it in
+#
+# Deploy / upgrade:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#   curl -s localhost:8090/api/health      # confirms which version is live
+#
+# Rollback: set IMAGE_TAG to the previous version in .env and repeat those two commands.
+#
+# NOTE the project name below is `hub`, the same as the dev docker-compose.yml gets from its
+# directory name. On a dev machine always add `-p hub-prod-test`, or this will recreate the
+# local hub-app-1 container from the registry image.
+#
+# Full guide: docs/deployment.md.
+
+name: hub
+
+services:
+  app:
+    image: ghcr.io/ashav3dwookie/hub:${IMAGE_TAG:-latest}
+    # Published on the LAN, not bound to 127.0.0.1: host nginx proxies to it (see
+    # docker/nginx.prod.conf). That also means http://<lan-ip>:${HOST_PORT} reaches the app
+    # directly, bypassing nginx and therefore Authelia — which is why AUTH_ENABLED defaults to
+    # true here. Close it with a firewall rule if you want only nginx to reach it.
+    ports:
+      - "${HOST_PORT:-8090}:3000"
+    # AUTH_ENABLED, AUTH_PASSWORD_HASH, SESSION_SECRET, TRUST_PROXY, COOKIE_SECURE and
+    # SESSION_MAX_AGE_DAYS come from .env — copy .env.prod.example and fill it in. Using env_file
+    # rather than listing each one as `${VAR}` below keeps this file from needing an edit every
+    # time the app grows a setting.
+    #
+    # ⚠️ Compose interpolates env_file values, so AUTH_PASSWORD_HASH must have every `$` doubled
+    # in .env. A raw bcrypt hash loses its salt to variable expansion and every login fails with
+    # nothing in the logs. .env.prod.example has the one-liner that escapes it.
+    env_file:
+      - path: .env
+        required: false
+    # Fixed values only. `environment` wins over `env_file`, so nothing configurable belongs here.
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # PHOTOS_DIR derives from dirname(DB_PATH), so photos share the volume below.
+      - DB_PATH=/app/data/logger.db
+    volumes:
+      - data:/app/data
+    restart: unless-stopped
+    # No healthcheck block: the image carries a HEALTHCHECK and compose inherits it.
+
+volumes:
+  data:
+    # Pinned, so the real volume is `hub-data` rather than `<project>_data` and stays findable
+    # for backups whatever the project is called.
+    name: hub-data

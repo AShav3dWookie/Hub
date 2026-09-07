@@ -6,7 +6,7 @@ Feature: Allow photo attachments on log entries ("logs" = entries about an event
 
 LOCKED-IN DECISIONS
 - Scope: Only logs whose category has hasPeople: true in CATEGORY_FIELDS (shared/src/categories.ts) -- currently Movie and Eating Out (not TV, Book, Game) -- can have photos. Enforce this server-side, not just hidden in UI.
-- Storage: Local disk under the existing Docker persistent volume (docker-compose.yml mounts a logger-data volume at /app/data; DB_PATH=/app/data/logger.db). New photosDir should derive from path.dirname(config.dbPath) + "/photos" -- reuses the same volume, no Dockerfile/compose changes needed.
+- Storage: Local disk under whatever is mounted at /app/data (DB_PATH=/app/data/logger.db) -- the hub-data named volume in docker-compose.prod.yml, ./test-env in the dev compose file. New photosDir should derive from path.dirname(config.dbPath) + "/photos" -- reuses the same mount, no Dockerfile/compose changes needed.
 - Multiplicity: Multiple photos per log (gallery). Limits: max 10 photos/log, max 10MB/file, allowed types jpeg/png/webp/heic -- validated server-side.
 - Upload timing: Supported both at log creation (LogAddForm) and afterward (EntityDetail log view). Implementation: two-step flow -- create the log via existing JSON endpoint first, then upload photos via multipart to the returned logId (no combined JSON+multipart endpoint).
 - Deletion: Individual photo deletion supported (delete-confirm UI pattern, matching existing inline-confirm patterns used for notes/logs).

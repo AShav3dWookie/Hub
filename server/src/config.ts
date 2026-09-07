@@ -58,9 +58,9 @@ const authEnabled = process.env.AUTH_ENABLED === "true";
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   dbPath,
-  // Uploaded log photos live alongside the SQLite file so they share the same
-  // persistent Docker volume (logger-data mounted at /app/data) with no extra
-  // mount. Overridable for tests / non-standard layouts.
+  // Uploaded log photos live alongside the SQLite file so they share the same persistent
+  // volume with no extra mount (in production that is `hub-data` mounted at /app/data — see
+  // docker-compose.prod.yml). Overridable for tests / non-standard layouts.
   photosDir: process.env.PHOTOS_DIR ?? path.join(path.dirname(dbPath), "photos"),
   // ffmpeg is used only to decode a single poster frame from uploaded videos. The Docker
   // image installs it (apk add ffmpeg); local dev without it falls back to a generated
@@ -70,6 +70,10 @@ export const config = {
   authPasswordHash: process.env.AUTH_PASSWORD_HASH ?? "",
   sessionSecret: process.env.SESSION_SECRET ?? DEV_SESSION_SECRET,
   nodeEnv: process.env.NODE_ENV ?? "development",
+  // Baked into the image at build time (the Dockerfile runtime stage sets APP_VERSION from the
+  // git tag, via .github/workflows/release.yml) and reported by GET /api/health, so you can
+  // check what is actually deployed without opening the UI. "dev" outside a released image.
+  appVersion: process.env.APP_VERSION ?? "dev",
   // How Express treats X-Forwarded-* headers. See parseTrustProxy above.
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY, authEnabled),
   // Whether to mark the auth session cookie as `Secure`. `undefined` (the default) auto-derives

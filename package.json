@@ -25,6 +25,7 @@
     "test:e2e:report": "playwright show-report e2e/.artifacts/report",
     "typecheck:e2e": "tsc -p e2e/tsconfig.json",
     "db:generate": "drizzle-kit generate --config server/drizzle.config.ts",
+    "release": "bash scripts/release.sh",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build",
     "docker:test": "bash scripts/docker-smoke-test.sh",
