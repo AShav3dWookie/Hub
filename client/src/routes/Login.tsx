@@ -40,9 +40,10 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-16 dark:text-slate-100">
+    // Rendered outside Layout, so nothing else pads the notch or the home indicator for it.
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(2.5rem+env(safe-area-inset-top))] dark:text-slate-100">
       <div className={`${CARD_CLASS} w-full max-w-sm`}>
-        <h1 className="text-xl font-semibold">Logger</h1>
+        <h1 className="text-2xl font-semibold">Logger</h1>
         <p className="mt-1 mb-4 text-sm text-slate-500 dark:text-slate-400">
           Enter your password to continue.
         </p>
