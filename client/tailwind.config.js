@@ -7,9 +7,10 @@ export default {
      * 2xl in the generated stylesheet, so an `xs:` rule would win over `sm:` at
      * 640px. Listing the whole ladder keeps source order == size order.
      *
-     * `xs` exists for one job: the unprefixed base has to survive a 360px Android,
-     * so a couple of grids want "3 columns at 360, 4 at 390+". Everything else is
-     * written mobile-first, where the phone is the base and sm:/md: scale up.
+     * `xs` exists for one job, and currently has exactly one user: the gallery grid
+     * wants "3 columns at 360, 4 at 390+", because the unprefixed base has to survive a
+     * 360px Android. Everything else is written mobile-first, where the phone is the
+     * base and sm:/md: scale up.
      */
     screens: {
       xs: "390px",

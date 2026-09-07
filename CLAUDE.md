@@ -241,10 +241,43 @@ Every write hook goes through `useRefreshingMutation`, which queues the outbox e
 invalidates and syncs. Add a write by writing that one expression, not the five-line wiring.
 
 Tailwind with `dark:` variants throughout; icons from `lucide-react`. The repeated class strings live
-in `components/ui.tsx` (`FIELD_CLASS`, `CARD_CLASS`, the button shapes) — use them rather than pasting
-the string again. Reusable components: `Lightbox` (full-screen image + caption slot), `PhotoGallery`
-(per-log grid + upload), `PhotoStream` (paged gallery grid), `PeopleTagInput`, `PersonLinks`
-(the "with Ada, Zoe" line), `MediaThumb` (thumbnail + video badge), `SearchResults`, `AlbumSections`.
+in `components/ui.tsx` (`FIELD_CLASS`, `CARD_CLASS`, the button/chip/action shapes, `SECTION_HEADING`,
+`ROW_LINK`) — use them rather than pasting the string again. Reusable components: `Lightbox`
+(full-screen image + caption slot), `PhotoGallery` (per-log grid + upload), `PhotoStream` (paged
+gallery grid), `GalleryTabs` (the Photos/Albums switch), `PeopleTagInput`, `PersonLinks` (the
+"with Ada, Zoe" line), `MediaThumb` (thumbnail + video badge), `SearchResults`, `AlbumSections`.
+
+#### The client is mobile-first, and the type scale is not stock
+
+The app is used as an installed PWA on a ~412×915 phone, so **the unprefixed base is the phone** and
+`sm:`/`md:` scale *up*. Writing a desktop layout and hoping a breakpoint rescues the phone is how the
+UI ended up unusable there once already.
+
+**`tailwind.config.js` redefines `theme.extend.fontSize`, so `text-sm` is 16px, not 14.** Every step
+is one notch above stock, and there is a real `2xs` (12px) at the bottom — reach for that rather than
+an arbitrary `text-[10px]`. `text-sm` is the body size and is 16px deliberately: below 16px, mobile
+browsers zoom the page when an input takes focus, so every field inheriting it fixes that for free.
+Tune the ramp by editing those six numbers, not by sweeping class names across the codebase.
+
+`screens` is **overridden, not extended** — `extend.screens` appends after `2xl`, which would let a
+new `xs:` rule beat `sm:` at 640px. `xs` (390px) has one user, the gallery grid.
+
+**Chrome heights are CSS variables** in `index.css`: `--header-h`, `--nav-h`, and `--content-h`, the
+exact height a route gets between the sticky header and the fixed tab bar. `Layout`, `BottomNav` and
+`ToastProvider` all derive from them — they used to each hardcode a number from the nav height, and
+disagree. `Calendar` uses `--content-h` to be a two-pane screen whose grid never scrolls. Anything
+pinned near the bottom must clear `var(--nav-h) + env(safe-area-inset-bottom)`, not sit at `bottom-0`.
+
+`Layout` is a sticky header carrying Back and Settings; `BottomNav` is a five-tab bar
+(`lib/tabs.ts`), which is why Albums lives inside Gallery instead. Safe-area insets are consumed in
+`Layout`, `BottomNav`, `Login` and `Lightbox` — the app sets `viewport-fit=cover` and runs
+standalone, so nothing pads them otherwise. **Playwright reports every inset as 0**, so safe-area
+work can only be confirmed on a real device.
+
+Tap targets are 44px. The only deliberate exception is `REMOVE_BUTTON_CLASS` at 36px: a 44px circle
+does not fit inside a text pill. `e2e/mobile-layout.spec.ts` enforces all of this — no horizontal
+overflow, nothing stranded behind the tab bar, no control under 44px, and a calendar grid that keeps
+one height across 4-, 5- and 6-row months.
 
 **Media is online-only.** It has no offline queue, and a record created offline holds a temporary
 negative id the photo routes reject. The add forms call `sync/resolveServerId.ts`, which flushes the
@@ -259,6 +292,10 @@ run for real. Route tests use `supertest` against `createApp()`, with a `fs.mkdt
 `photosDir`. **Client** (`environment: jsdom`): `renderWithProviders()` wraps in QueryClient +
 MemoryRouter + ToastProvider; the global `fetch` is stubbed with `vi.fn()` (no MSW). Test files are
 colocated as `*.test.ts(x)`.
+
+`e2e/mobile-layout.spec.ts` is the layout net: it runs on the existing Pixel 7 project and, as a
+by-product, writes a screenshot per route to `e2e/.artifacts/screens/` (gitignored). That is the only
+way to actually *see* a CSS change — the jsdom suite renders no styles.
 
 **parity/** is the fourth, and spans both workspaces at once. It seeds a real database, drains the
 server's own change-feed into `buildSnapshot`, then asserts the server service and the offline client
