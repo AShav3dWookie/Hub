@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarHeart, ChevronRight, GalleryVerticalEnd, Images, PlusCircle } from "lucide-react";
+import { CalendarHeart, ChevronRight, Images, PlusCircle } from "lucide-react";
 import { CATEGORY_META } from "@logger/shared";
 import type { ImportantDateEntry, UpcomingEventEntry } from "@logger/shared";
 import { useGallery, useUpcomingImportantDates, useUpcomingEvents } from "../api/hooks.js";
@@ -142,18 +142,6 @@ export function Home() {
       )}
 
       <RecentPhotos />
-
-      {/* Albums is the one destination the tab bar has no room for. */}
-      <Link
-        to="/albums"
-        className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500"
-      >
-        <span className="flex items-center gap-3 font-medium">
-          <GalleryVerticalEnd size={20} strokeWidth={1.5} aria-hidden />
-          Albums
-        </span>
-        <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden />
-      </Link>
     </div>
   );
 }

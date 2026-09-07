@@ -109,13 +109,6 @@ describe("Home", () => {
     expect(within(strip).getAllByRole("img")).toHaveLength(4);
   });
 
-  it("links to Albums, the one destination the tab bar has no room for", async () => {
-    renderWithProviders(<Home />);
-    await screen.findByText("What's on");
-
-    expect(screen.getByRole("link", { name: /albums/i })).toHaveAttribute("href", "/albums");
-  });
-
   it("does not render upcoming widgets when there is nothing upcoming", async () => {
     renderWithProviders(<Home />);
 

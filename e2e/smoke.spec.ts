@@ -7,16 +7,21 @@ import { gotoHome, gotoTab } from "./helpers/app";
  * behaviour (service worker, offline, IndexedDB, settings) gets its own specs as it lands.
  */
 test.describe("app smoke", () => {
-  test("every destination is one tap away from home", async ({ page }) => {
+  test("every tab destination is one tap away from home", async ({ page }) => {
     await gotoHome(page);
     await expect(page).toHaveTitle(/Logger/);
-    // Four of the five live in the tab bar now; Albums is the one it has no room for.
     for (const label of ["Home", "Search", "Add", "Calendar", "Gallery"]) {
       await expect(
         page.getByRole("navigation").getByRole("link", { name: label, exact: true }),
       ).toBeVisible();
     }
-    await expect(page.getByRole("main").getByRole("link", { name: /albums/i })).toBeVisible();
+  });
+
+  test("albums are reachable from the gallery's Photos/Albums toggle", async ({ page }) => {
+    await gotoHome(page);
+    await gotoTab(page, "Gallery");
+    await page.getByRole("link", { name: "Albums" }).click();
+    await expect(page).toHaveURL(/\/albums/);
   });
 
   test("search finds a seeded movie and opens its entity page", async ({ page }) => {
