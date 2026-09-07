@@ -56,13 +56,18 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-1}
       - COOKIE_SECURE=${COOKIE_SECURE:-}
       - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-}
+    # The SQLite database and the uploaded photos, together. Set DATA_DIR to an absolute host
+    # path and this becomes a bind mount; leave it unset and it is the `hub-data` named volume.
+    #
+    # Prefer a path on a dataset you can back up directly — e.g.
+    # DATA_DIR=/mnt/<pool>/apps/hub/data — ideally its own dataset, so snapshots and replication
+    # target just this app's data instead of the whole Docker root.
     volumes:
-      - data:/app/data
+      - ${DATA_DIR:-data}:/app/data
     restart: unless-stopped
     # No healthcheck block: the image carries a HEALTHCHECK and compose inherits it.
 
 volumes:
+  # Only used when DATA_DIR is unset. Pinned so it is `hub-data` rather than `<project>_data`.
   data:
-    # Pinned, so the real volume is `hub-data` rather than `<project>_data` and stays findable
-    # for backups whatever the project is called.
     name: hub-data

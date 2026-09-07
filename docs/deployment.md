@@ -130,8 +130,28 @@ the registry and probably still in the local Docker cache, so this takes seconds
 
 ## Data
 
-The SQLite database and the uploaded photos both live in the named volume **`hub-data`** at
-`/app/data`. It is not touched by `pull` or `up -d`, only by an explicit `down -v`.
+The SQLite database and the uploaded photos both live at `/app/data` in the container. Where that
+is on the host depends on `DATA_DIR`:
+
+- **`DATA_DIR` set to an absolute path** → a bind mount. **Prefer this if you back the server up.**
+  Point it at its own dataset (`/mnt/<pool>/apps/hub/data`) and snapshots, replication and
+  cloud-sync tasks can target exactly this app's data. It is also just a normal directory, so
+  seeding and restoring are file copies.
+- **`DATA_DIR` unset** → the named volume `hub-data`, which lives under the Docker root. Fine, but
+  backing it up means either reaching into Docker's internals or capturing the whole Docker root
+  alongside every image layer.
+
+Either way the data is untouched by `pull` and `up -d`; only an explicit `down -v` removes a named
+volume, and nothing in the deploy flow removes a bind-mounted directory.
+
+> **SQLite runs in WAL mode**, so `logger.db`, `logger.db-wal` and `logger.db-shm` are one unit and
+> must be captured at the same instant. A **ZFS snapshot is atomic and safe** — restoring from one
+> looks like a power cut, which SQLite recovers from cleanly. A plain `rsync`/cloud-sync of a live
+> database is **not** atomic and can copy the db and its WAL from different moments. If you sync
+> rather than snapshot, sync *from* a snapshot (`.zfs/snapshot/…`), or stop the container first.
+>
+> (The `SQLITE_IOERR_SHMOPEN` warning in CLAUDE.md is about Docker Desktop's Windows↔Linux
+> filesystem shim. A native Linux bind mount onto ZFS is not affected.)
 
 **Seed it from an existing database:**
 
