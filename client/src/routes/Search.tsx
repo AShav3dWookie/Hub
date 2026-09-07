@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { FIELD_CLASS } from "../components/ui.js";
+import {
+  CHIP_CLASS,
+  CHIP_MUTED_CLASS,
+  CHIP_OFF_CLASS,
+  CHIP_ON_CLASS,
+  FIELD_CLASS,
+} from "../components/ui.js";
 import { SlidersHorizontal } from "lucide-react";
 import type {
   GroupBy,
@@ -29,6 +35,9 @@ import {
 import { useDebouncedValue } from "../lib/useDebouncedValue.js";
 
 
+
+/** A filter control's caption, sitting above it rather than inline beside it. */
+const FILTER_LABEL_CLASS = "flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400";
 
 export function Search() {
   const [q, setQ] = useState("");
@@ -98,20 +107,22 @@ export function Search() {
       <h1 className="text-2xl font-semibold">Search</h1>
 
       <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="text"
-            placeholder="Keyword… (matches title, notes, and people)"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className={`min-w-[16rem] flex-1 ${FIELD_CLASS}`}
-          />
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+        {/* The keyword box had a 16rem minimum inside a ~360px column, so this row wrapped
+            at every phone width. It takes a row of its own; Match and Filters share the next. */}
+        <input
+          type="text"
+          placeholder="Keyword… (title, notes, people)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className={`w-full ${FIELD_CLASS}`}
+        />
+        <div className="flex items-center gap-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
             Match:
             <select
               value={qMode}
               onChange={(e) => setQMode(e.target.value as MatchMode)}
-              className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`min-w-0 flex-1 ${FIELD_CLASS}`}
             >
               <option value="all">All words</option>
               <option value="any">Any word</option>
@@ -121,26 +132,22 @@ export function Search() {
             type="button"
             onClick={() => setShowFilters((v) => !v)}
             aria-expanded={showFilters}
-            className="flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
           >
-            <SlidersHorizontal size={16} />
+            <SlidersHorizontal size={18} aria-hidden />
             Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
           </button>
         </div>
 
         {showFilters && (
           <>
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Category">
+            <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Category">
               <button
                 type="button"
                 role="tab"
                 aria-selected={category === ""}
                 onClick={() => handleCategoryChange("")}
-                className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
-                  category === ""
-                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
-                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                }`}
+                className={`${CHIP_CLASS} ${category === "" ? CHIP_ON_CLASS : CHIP_OFF_CLASS}`}
               >
                 All
               </button>
@@ -151,12 +158,8 @@ export function Search() {
                   role="tab"
                   aria-selected={category === c}
                   onClick={() => handleCategoryChange(c)}
-                  className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
-                    category === c
-                      ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
-                      : c === "person"
-                        ? "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500 dark:hover:bg-slate-800"
-                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  className={`${CHIP_CLASS} ${
+                    category === c ? CHIP_ON_CLASS : c === "person" ? CHIP_MUTED_CLASS : CHIP_OFF_CLASS
                   }`}
                 >
                   {CATEGORY_META[c].label}
@@ -167,11 +170,7 @@ export function Search() {
                 role="tab"
                 aria-selected={isAlbum}
                 onClick={() => handleCategoryChange("album")}
-                className={`min-h-[36px] rounded-md border px-3 py-1.5 text-sm font-medium ${
-                  isAlbum
-                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600"
-                    : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500 dark:hover:bg-slate-800"
-                }`}
+                className={`${CHIP_CLASS} ${isAlbum ? CHIP_ON_CLASS : CHIP_MUTED_CLASS}`}
               >
                 Album
               </button>
@@ -184,12 +183,14 @@ export function Search() {
               </p>
             ) : (
               <>
-                <div className="flex flex-wrap gap-3">
+                {/* Two even columns instead of a wrapping row: at 388px the w-40 year pair
+                    and a full-width select wrapped into a ragged three-line stack. */}
+                <div className="grid grid-cols-2 gap-2">
                   {(!categoryFields || categoryFields.hasRating) && (
                     <select
                       value={ratingMin}
                       onChange={(e) => setRatingMin(e.target.value)}
-                      className={FIELD_CLASS}
+                      className={`col-span-2 w-full ${FIELD_CLASS}`}
                     >
                       <option value="">Any rating</option>
                       {[1, 2, 3, 4, 5].map((r) => (
@@ -206,7 +207,7 @@ export function Search() {
                       placeholder="Author contains…"
                       value={authorContains}
                       onChange={(e) => setAuthorContains(e.target.value)}
-                      className={FIELD_CLASS}
+                      className={`col-span-2 w-full ${FIELD_CLASS}`}
                     />
                   )}
 
@@ -214,17 +215,17 @@ export function Search() {
                     <>
                       <input
                         type="number"
-                        placeholder="Release year from"
+                        placeholder="Year from"
                         value={releaseYearMin}
                         onChange={(e) => setReleaseYearMin(e.target.value)}
-                        className={`w-40 ${FIELD_CLASS}`}
+                        className={`w-full ${FIELD_CLASS}`}
                       />
                       <input
                         type="number"
-                        placeholder="Release year to"
+                        placeholder="Year to"
                         value={releaseYearMax}
                         onChange={(e) => setReleaseYearMax(e.target.value)}
-                        className={`w-40 ${FIELD_CLASS}`}
+                        className={`w-full ${FIELD_CLASS}`}
                       />
                     </>
                   )}
@@ -243,35 +244,40 @@ export function Search() {
             )}
 
             {!nameOnly && (
-              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-                <label className="flex items-center gap-2 text-sm">
-                  Group:
+              // Labels above their controls, in an even two-column grid. Inline "Group: [x]"
+              // labels are what wrapped this row into four ragged lines on a phone.
+              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <label className={`col-span-2 ${FILTER_LABEL_CLASS}`}>
+                  Group
                   <select
                     value={groupBy}
                     onChange={(e) => setGroupBy(e.target.value as GroupBy)}
-                    className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className={`w-full ${FIELD_CLASS}`}
                   >
                     <option value="entity">By item</option>
                     <option value="log">Flat list</option>
                   </select>
                 </label>
 
-                <label className="flex items-center gap-2 text-sm">
-                  Sort:
+                <label className={FILTER_LABEL_CLASS}>
+                  Sort
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortBy)}
-                    className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className={`w-full ${FIELD_CLASS}`}
                   >
                     <option value="date">Date</option>
                     <option value="title">Title</option>
                     <option value="rating">Rating</option>
                     {groupBy === "log" && <option value="person">Person</option>}
                   </select>
+                </label>
+                <label className={FILTER_LABEL_CLASS}>
+                  Order
                   <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                    className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className={`w-full ${FIELD_CLASS}`}
                   >
                     <option value="desc">Desc</option>
                     <option value="asc">Asc</option>
@@ -279,26 +285,31 @@ export function Search() {
                 </label>
 
                 {groupBy === "entity" && (
-                  <label className="flex items-center gap-2 text-sm">
-                    Sort visits by:
-                    <select
-                      value={visitSortBy}
-                      onChange={(e) => setVisitSortBy(e.target.value as VisitSortBy)}
-                      className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="date">Date</option>
-                      <option value="rating">Rating</option>
-                      <option value="person">Person</option>
-                    </select>
-                    <select
-                      value={visitSortOrder}
-                      onChange={(e) => setVisitSortOrder(e.target.value as SortOrder)}
-                      className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="desc">Desc</option>
-                      <option value="asc">Asc</option>
-                    </select>
-                  </label>
+                  <>
+                    <label className={FILTER_LABEL_CLASS}>
+                      Sort visits by
+                      <select
+                        value={visitSortBy}
+                        onChange={(e) => setVisitSortBy(e.target.value as VisitSortBy)}
+                        className={`w-full ${FIELD_CLASS}`}
+                      >
+                        <option value="date">Date</option>
+                        <option value="rating">Rating</option>
+                        <option value="person">Person</option>
+                      </select>
+                    </label>
+                    <label className={FILTER_LABEL_CLASS}>
+                      Visit order
+                      <select
+                        value={visitSortOrder}
+                        onChange={(e) => setVisitSortOrder(e.target.value as SortOrder)}
+                        className={`w-full ${FIELD_CLASS}`}
+                      >
+                        <option value="desc">Desc</option>
+                        <option value="asc">Asc</option>
+                      </select>
+                    </label>
+                  </>
                 )}
               </div>
             )}
