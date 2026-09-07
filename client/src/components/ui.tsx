@@ -77,3 +77,16 @@ export const ROW_LINK = `flex items-center justify-between gap-3 hover:bg-slate-
  */
 export const REMOVE_BUTTON_CLASS =
   "flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-full hover:bg-slate-300 dark:hover:bg-slate-600";
+
+/**
+ * The quiet Edit / Delete pair at the foot of a card.
+ *
+ * These were 44px tall already but rendered as bare text links, so on a phone there was
+ * nothing to show where the target began or ended. An outline costs little and makes the
+ * hit area visible.
+ */
+export const CARD_ACTION_CLASS =
+  "flex min-h-[44px] items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800";
+
+export const CARD_ACTION_DANGER_CLASS =
+  "flex min-h-[44px] items-center justify-center rounded-md border border-red-200 px-4 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950";

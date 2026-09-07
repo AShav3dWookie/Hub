@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { FIELD_CLASS, PRIMARY_BUTTON_SM_CLASS, SECONDARY_BUTTON_CLASS, SECONDARY_BUTTON_SM_CLASS, DANGER_BUTTON_CLASS } from "../components/ui.js";
+import {
+  CARD_ACTION_CLASS,
+  CARD_ACTION_DANGER_CLASS,
+  DANGER_BUTTON_CLASS,
+  FIELD_CLASS,
+  PRIMARY_BUTTON_SM_CLASS,
+  SECONDARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_SM_CLASS,
+} from "../components/ui.js";
 import { useParams, Navigate, Link } from "react-router-dom";
 import type { PersonTagInput, LogDTO, LoggableCategory } from "@logger/shared";
 import { CATEGORY_META, CATEGORY_FIELDS } from "@logger/shared";
@@ -219,18 +227,18 @@ function LogRow({
           </button>
         </div>
       ) : (
-        <div className="mt-2 flex gap-1 text-sm">
+        <div className="mt-3 flex gap-2">
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="min-h-[44px] min-w-[44px] rounded-md px-2 text-slate-600 hover:bg-slate-100 hover:underline dark:text-slate-300 dark:hover:bg-slate-800"
+            className={CARD_ACTION_CLASS}
           >
             Edit
           </button>
           <button
             type="button"
             onClick={() => setConfirmingDelete(true)}
-            className="min-h-[44px] min-w-[44px] rounded-md px-2 text-red-600 hover:bg-red-50 hover:underline dark:text-red-400 dark:hover:bg-red-950"
+            className={CARD_ACTION_DANGER_CLASS}
           >
             Delete
           </button>

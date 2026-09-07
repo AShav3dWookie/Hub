@@ -21,9 +21,15 @@ const ROUTES: { path: string; ready: (page: Page) => Promise<unknown> }[] = [
   { path: "/add/album", ready: (p) => p.getByRole("textbox").first().waitFor() },
   { path: "/calendar", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/gallery", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
+  // /albums renders its empty state: the seed fixture creates no albums, which is also why
+  // there is no /album/:id here to check.
   { path: "/albums", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/entity/1", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
+  { path: "/person/1", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
+  // Renders outside Layout, so it has neither header nor tab bar and needs its own
+  // safe-area handling — which is exactly why it is worth checking here.
+  { path: "/login", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
 ];
 
 /** A filename-safe stem for a route path: "/add/movie" -> "add-movie", "/" -> "home". */

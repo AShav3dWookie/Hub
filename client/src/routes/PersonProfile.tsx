@@ -61,11 +61,16 @@ export function PersonProfile() {
             key={log.id}
             className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
           >
-            <div className="flex items-center justify-between">
-              <Link to={`/entity/${log.entity.id}`} className="font-medium hover:underline dark:text-white">
+            {/* Stacked: at 388px a title beside "Eating Out · 2026-07-18" left both of them
+                a word wide. */}
+            <div className="flex flex-col gap-0.5">
+              <Link
+                to={`/entity/${log.entity.id}`}
+                className="flex min-h-[44px] items-center font-medium hover:underline dark:text-white"
+              >
                 {log.entity.title}
               </Link>
-              <span className="text-sm text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {CATEGORY_META[log.entity.category].label} ·{" "}
                 {formatLogDate(log.date, log.entity.category)}
               </span>
