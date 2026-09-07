@@ -5,12 +5,14 @@ import { StarRating } from "../components/StarRating.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
 import { EntityNotes } from "../components/EntityNotes.js";
 import { PhotoStream } from "../components/PhotoStream.js";
+import { useEditableRoute } from "../components/EditModeProvider.js";
 
 export function PersonProfile() {
   const { id } = useParams<{ id: string }>();
   const personId = Number(id);
   const { data, isLoading } = useEntityDetail(personId);
   const photos = usePersonPhotos(personId);
+  const editable = useEditableRoute();
 
   if (isLoading) return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   if (!data) return <p className="text-slate-500 dark:text-slate-400">Not found.</p>;
@@ -52,7 +54,7 @@ export function PersonProfile() {
         />
       </div>
 
-      <EntityNotes entityId={personId} />
+      <EntityNotes entityId={personId} editable={editable} />
 
       <div className="flex flex-col gap-3">
         {appearances.length === 0 && <p className="text-slate-500 dark:text-slate-400">No appearances yet.</p>}

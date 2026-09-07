@@ -33,13 +33,13 @@ function setProfile(profile: any, photos: GalleryPhotoDTO[] = []) {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-function renderProfile() {
+function renderProfile({ editing = false } = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/person/:id" element={<PersonProfile />} />
       <Route path="/entity/:id" element={<div>entity page</div>} />
     </Routes>,
-    { route: "/person/7" },
+    { route: "/person/7", editing },
   );
 }
 
@@ -191,5 +191,20 @@ describe("PersonProfile", () => {
     setProfile(personProfile, []);
     renderProfile();
     expect(await screen.findByText("No photos of Sarah yet.")).toBeInTheDocument();
+  });
+
+  it("keeps the add-note form out of the way until edit mode", async () => {
+    setProfile(personProfile, []);
+    renderProfile();
+
+    await screen.findByRole("heading", { name: "Sarah" });
+    expect(screen.queryByRole("button", { name: "Add note" })).not.toBeInTheDocument();
+  });
+
+  it("offers the add-note form in edit mode", async () => {
+    setProfile(personProfile, []);
+    renderProfile({ editing: true });
+
+    expect(await screen.findByRole("button", { name: "Add note" })).toBeInTheDocument();
   });
 });

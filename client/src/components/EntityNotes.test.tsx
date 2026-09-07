@@ -38,7 +38,7 @@ describe("EntityNotes", () => {
       },
     ] satisfies EntityNoteDTO[]);
 
-    renderWithProviders(<EntityNotes entityId={5} />);
+    renderWithProviders(<EntityNotes entityId={5} editable={false} />);
 
     await screen.findByRole("button", { name: /Gift idea/ });
     expect(screen.queryByText("Concert tickets")).not.toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("EntityNotes", () => {
   });
 
   it("shows all three category sections, collapsed, with zero counts when there are no notes", async () => {
-    renderWithProviders(<EntityNotes entityId={5} />);
+    renderWithProviders(<EntityNotes entityId={5} editable={false} />);
 
     expect(await screen.findByRole("button", { name: /General/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: /Gift idea/ })).toHaveAttribute("aria-expanded", "false");
@@ -56,7 +56,7 @@ describe("EntityNotes", () => {
   });
 
   it("queues a note.create envelope for the new note", async () => {
-    renderWithProviders(<EntityNotes entityId={5} />);
+    renderWithProviders(<EntityNotes entityId={5} editable />);
     await screen.findByRole("button", { name: /General/ });
 
     await userEvent.type(screen.getByPlaceholderText(/Conversation topics/), "Loves hiking");
@@ -83,11 +83,35 @@ describe("EntityNotes", () => {
       },
     ]);
 
-    renderWithProviders(<EntityNotes entityId={5} />);
+    renderWithProviders(<EntityNotes entityId={5} editable />);
     await userEvent.click(await screen.findByRole("button", { name: /General/ }));
     await screen.findByText("Note body");
 
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(screen.getByText("Delete this note?")).toBeInTheDocument();
+  });
+
+  it("shows the notes but none of their controls outside edit mode", async () => {
+    vi.mocked(repo.listEntityNotes).mockResolvedValue([
+      {
+        id: 1,
+        entityId: 5,
+        category: "general",
+        body: "Note body",
+        tag: null,
+        eventDate: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+
+    renderWithProviders(<EntityNotes entityId={5} editable={false} />);
+    await userEvent.click(await screen.findByRole("button", { name: /General/ }));
+    expect(await screen.findByText("Note body")).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: "Add note" })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Conversation topics/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });
 });

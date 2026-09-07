@@ -116,14 +116,17 @@ function trackFetch() {
 
 const lastMatching = (pred: (c: Call) => boolean) => [...calls].reverse().find(pred);
 
-function renderDetail() {
+function renderDetail({ editing = false } = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/album/:id" element={<AlbumDetail />} />
     </Routes>,
-    { route: "/album/1" },
+    { route: "/album/1", editing },
   );
 }
+
+/** In edit mode the title is an input, so the heading is not there to wait on. */
+const loadedInEditMode = () => screen.findByDisplayValue("Road Trip");
 
 describe("AlbumDetail", () => {
   beforeEach(() => {
@@ -196,8 +199,8 @@ describe("AlbumDetail", () => {
   });
 
   it("shows a remove button only for directly-added people", async () => {
-    renderDetail();
-    await screen.findByRole("heading", { name: "Road Trip" });
+    renderDetail({ editing: true });
+    await loadedInEditMode();
 
     expect(screen.getByRole("button", { name: "Remove Alex" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove Sam" })).not.toBeInTheDocument();
@@ -205,7 +208,7 @@ describe("AlbumDetail", () => {
   });
 
   it("only lets you delete loose photos from the album view", async () => {
-    renderDetail();
+    renderDetail({ editing: true });
 
     await userEvent.click(await screen.findByRole("img", { name: "loose.jpg" }));
     expect(screen.getByRole("button", { name: /delete photo/i })).toBeInTheDocument();
@@ -216,8 +219,8 @@ describe("AlbumDetail", () => {
   });
 
   it("does not show the event picker results until a query is typed", async () => {
-    renderDetail();
-    await screen.findByRole("heading", { name: "Road Trip" });
+    renderDetail({ editing: true });
+    await loadedInEditMode();
     expect(screen.getByPlaceholderText(/find an event to add/i)).toHaveValue("");
     expect(screen.queryByText(/no matching events/i)).not.toBeInTheDocument();
   });
@@ -243,8 +246,8 @@ describe("AlbumDetail", () => {
       ],
     });
 
-    renderDetail();
-    await screen.findByRole("heading", { name: "Road Trip" });
+    renderDetail({ editing: true });
+    await loadedInEditMode();
     await userEvent.type(screen.getByPlaceholderText(/find an event to add/i), "sic");
     await userEvent.click(await screen.findByRole("button", { name: /Sicario/ }));
 
@@ -252,7 +255,7 @@ describe("AlbumDetail", () => {
   });
 
   it("deletes a loose photo through the album photo endpoint", async () => {
-    renderDetail();
+    renderDetail({ editing: true });
     await userEvent.click(await screen.findByRole("img", { name: "loose.jpg" }));
     await userEvent.click(screen.getByRole("button", { name: /delete photo/i }));
     const confirmRow = screen.getByText("Delete this photo?").parentElement!;
@@ -264,8 +267,8 @@ describe("AlbumDetail", () => {
   });
 
   it("uploads loose photos to the album", async () => {
-    const { container } = renderDetail();
-    await screen.findByRole("heading", { name: "Road Trip" });
+    const { container } = renderDetail({ editing: true });
+    await loadedInEditMode();
 
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     await userEvent.upload(input, new File(["x"], "new.png", { type: "image/png" }));
@@ -276,20 +279,20 @@ describe("AlbumDetail", () => {
   });
 
   it("removes an event from the album", async () => {
-    renderDetail();
+    renderDetail({ editing: true });
     await userEvent.click(await screen.findByRole("button", { name: /remove heat from album/i }));
     expect(await queuedPayload("album.removeEvent")).toMatchObject({ albumId: 1, logId: 30 });
   });
 
   it("removes a directly-added person", async () => {
-    renderDetail();
+    renderDetail({ editing: true });
     await userEvent.click(await screen.findByRole("button", { name: "Remove Alex" }));
     expect(await queuedPayload("album.removePerson")).toMatchObject({ albumId: 1, personId: 2 });
   });
 
   it("adds a person to the album", async () => {
-    renderDetail();
-    await screen.findByRole("heading", { name: "Road Trip" });
+    renderDetail({ editing: true });
+    await loadedInEditMode();
     await userEvent.type(screen.getByPlaceholderText(/add a person/i), "Robin{Enter}");
     await userEvent.click(screen.getByRole("button", { name: /add to album/i }));
 
@@ -297,16 +300,52 @@ describe("AlbumDetail", () => {
   });
 
   it("deletes the album, offering keep-photos vs delete-photos", async () => {
-    renderDetail();
-    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    renderDetail({ editing: true });
+    await userEvent.click(await screen.findByRole("button", { name: "Delete album" }));
     await userEvent.click(screen.getByRole("button", { name: /delete album, keep photos/i }));
     expect(await queuedPayload("album.delete")).toMatchObject({ albumId: 1, deletePhotos: false });
   });
 
   it("deletes the album and its loose photos when chosen", async () => {
-    renderDetail();
-    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    renderDetail({ editing: true });
+    await userEvent.click(await screen.findByRole("button", { name: "Delete album" }));
     await userEvent.click(screen.getByRole("button", { name: /delete album & its loose photos/i }));
     expect(await queuedPayload("album.delete")).toMatchObject({ albumId: 1, deletePhotos: true });
+  });
+
+  it("shows what the album holds and none of the controls that change it, outside edit mode", async () => {
+    renderDetail();
+    await screen.findByRole("heading", { name: "Road Trip" });
+
+    // The content is all still there.
+    expect(screen.getByRole("link", { name: "Heat" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Alex" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "loose.jpg" })).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: "Delete album" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove Alex" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove heat from album/i })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/find an event to add/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/add a person/i)).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it("cannot delete a photo from the lightbox outside edit mode", async () => {
+    renderDetail();
+    await userEvent.click(await screen.findByRole("img", { name: "loose.jpg" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /delete photo/i })).not.toBeInTheDocument();
+  });
+
+  it("queues an album.update from the header form", async () => {
+    renderDetail({ editing: true });
+    const title = await loadedInEditMode();
+
+    await userEvent.clear(title);
+    await userEvent.type(title, "Coast Trip");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await queuedPayload("album.update")).toMatchObject({ albumId: 1, title: "Coast Trip" });
   });
 });

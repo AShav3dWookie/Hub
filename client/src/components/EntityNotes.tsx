@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CARD_ACTION_CLASS,
   CARD_ACTION_DANGER_CLASS,
@@ -61,8 +61,17 @@ function CategorySelect({
   );
 }
 
-function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) {
-  const [editing, setEditing] = useState(false);
+function NoteRow({
+  note,
+  entityId,
+  editable,
+}: {
+  note: EntityNoteDTO;
+  entityId: number;
+  /** The screen is in edit mode. Without it the note is text and nothing else. */
+  editable: boolean;
+}) {
+  const [formOpen, setFormOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [category, setCategory] = useState<NoteCategory>(note.category);
   const [body, setBody] = useState(note.body);
@@ -73,6 +82,14 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
   const updateNote = useUpdateEntityNote(entityId, note.id);
   const deleteNote = useDeleteEntityNote(entityId);
   const { showToast } = useToast();
+
+  // Leaving edit mode takes anything it opened with it.
+  useEffect(() => {
+    if (!editable) {
+      setFormOpen(false);
+      setConfirmingDelete(false);
+    }
+  }, [editable]);
 
   async function handleSave() {
     if (isImportantDate) {
@@ -87,7 +104,7 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
       if (!body.trim()) return;
       await updateNote.mutateAsync({ category, body: body.trim() });
     }
-    setEditing(false);
+    setFormOpen(false);
     showToast("Note updated");
   }
 
@@ -96,7 +113,7 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
     showToast("Note deleted");
   }
 
-  if (editing) {
+  if (formOpen) {
     return (
       <li className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
         {isImportantDate ? (
@@ -135,7 +152,7 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
           </button>
           <button
             type="button"
-            onClick={() => setEditing(false)}
+            onClick={() => setFormOpen(false)}
             className={SECONDARY_BUTTON_CLASS}
           >
             Cancel
@@ -162,7 +179,7 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
           {note.body}
         </p>
       )}
-      {confirmingDelete ? (
+      {editable && confirmingDelete && (
         <div className="mt-2 flex items-center gap-3 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this note?</span>
           <button
@@ -180,11 +197,12 @@ function NoteRow({ note, entityId }: { note: EntityNoteDTO; entityId: number }) 
             Cancel
           </button>
         </div>
-      ) : (
+      )}
+      {editable && !confirmingDelete && (
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => setFormOpen(true)}
             className={CARD_ACTION_CLASS}
           >
             Edit
@@ -206,12 +224,14 @@ function NoteCategoryGroup({
   category,
   notes,
   entityId,
+  editable,
   expanded,
   onToggle,
 }: {
   category: NoteCategory;
   notes: EntityNoteDTO[];
   entityId: number;
+  editable: boolean;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -236,7 +256,7 @@ function NoteCategoryGroup({
           ) : (
             <ul className="flex flex-col gap-2">
               {notes.map((note) => (
-                <NoteRow key={note.id} note={note} entityId={entityId} />
+                <NoteRow key={note.id} note={note} entityId={entityId} editable={editable} />
               ))}
             </ul>
           )}
@@ -246,7 +266,14 @@ function NoteCategoryGroup({
   );
 }
 
-export function EntityNotes({ entityId }: { entityId: number }) {
+export function EntityNotes({
+  entityId,
+  editable,
+}: {
+  entityId: number;
+  /** The screen is in edit mode: the add form and each note's controls appear only then. */
+  editable: boolean;
+}) {
   const { data: notes, isLoading } = useEntityNotes(entityId);
   const [newCategory, setNewCategory] = useState<NoteCategory>("general");
   const [newBody, setNewBody] = useState("");
@@ -307,49 +334,51 @@ export function EntityNotes({ entityId }: { entityId: number }) {
         Notes
       </h2>
 
-      <form
-        onSubmit={handleAdd}
-        className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
-      >
-        <CategorySelect value={newCategory} onChange={setNewCategory} />
-        {isImportantDate && (
-          <div className="flex flex-col gap-2">
-            <input
-              type="text"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              placeholder="Tag (e.g. Birthday)"
-              className={FIELD_CLASS}
-            />
-            <input
-              type="date"
-              value={newEventDate}
-              onChange={(e) => setNewEventDate(e.target.value)}
-              className={FIELD_CLASS}
-            />
-          </div>
-        )}
-        <textarea
-          value={newBody}
-          onChange={(e) => setNewBody(e.target.value)}
-          placeholder={
-            isImportantDate
-              ? "Optional notes (e.g. Don't forget the card!)"
-              : "Conversation topics, gift ideas, anything to remember…"
-          }
-          rows={2}
-          className={`w-full ${FIELD_CLASS}`}
-        />
-        <button
-          type="submit"
-          disabled={
-            createNote.isPending || (isImportantDate ? !newTag.trim() || !newEventDate : !newBody.trim())
-          }
-          className="min-h-[44px] self-start rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-slate-700"
+      {editable && (
+        <form
+          onSubmit={handleAdd}
+          className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
         >
-          Add note
-        </button>
-      </form>
+          <CategorySelect value={newCategory} onChange={setNewCategory} />
+          {isImportantDate && (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Tag (e.g. Birthday)"
+                className={FIELD_CLASS}
+              />
+              <input
+                type="date"
+                value={newEventDate}
+                onChange={(e) => setNewEventDate(e.target.value)}
+                className={FIELD_CLASS}
+              />
+            </div>
+          )}
+          <textarea
+            value={newBody}
+            onChange={(e) => setNewBody(e.target.value)}
+            placeholder={
+              isImportantDate
+                ? "Optional notes (e.g. Don't forget the card!)"
+                : "Conversation topics, gift ideas, anything to remember…"
+            }
+            rows={2}
+            className={`w-full ${FIELD_CLASS}`}
+          />
+          <button
+            type="submit"
+            disabled={
+              createNote.isPending || (isImportantDate ? !newTag.trim() || !newEventDate : !newBody.trim())
+            }
+            className="min-h-[44px] self-start rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-slate-700"
+          >
+            Add note
+          </button>
+        </form>
+      )}
 
       {isLoading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading notes…</p>}
       {!isLoading && (
@@ -360,6 +389,7 @@ export function EntityNotes({ entityId }: { entityId: number }) {
               category={category}
               notes={notesByCategory[category]}
               entityId={entityId}
+              editable={editable}
               expanded={expandedCategories.has(category)}
               onToggle={() => toggleCategory(category)}
             />

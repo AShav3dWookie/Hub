@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Layout } from "./Layout.js";
+import { EditModeProvider, useEditableRoute } from "./EditModeProvider.js";
 
 const useAuthStatus = vi.hoisted(() => vi.fn());
 const logoutMutate = vi.hoisted(() => vi.fn());
@@ -22,6 +23,12 @@ function Where() {
   return <div data-testid="path">{useLocation().pathname}</div>;
 }
 
+/** A screen that has something to edit, so the header offers the pencil. */
+function Editable() {
+  const editing = useEditableRoute();
+  return <p>{editing ? "editing" : "reading"}</p>;
+}
+
 /**
  * Back needs a real history stack, which renderWithProviders' single `route` cannot build.
  */
@@ -32,11 +39,13 @@ function renderAt(initialEntries: string[], initialIndex = initialEntries.length
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries} initialIndex={initialIndex}>
-        <Layout>
-          <Routes>
-            <Route path="*" element={<Where />} />
-          </Routes>
-        </Layout>
+        <EditModeProvider>
+          <Layout>
+            <Routes>
+              <Route path="*" element={<Where />} />
+            </Routes>
+          </Layout>
+        </EditModeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -97,6 +106,38 @@ describe("Layout", () => {
   it("reaches settings from the header", () => {
     renderWithProviders(<Layout>x</Layout>);
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("offers no edit pencil on a screen with nothing to edit", () => {
+    renderWithProviders(<Layout>x</Layout>);
+    expect(screen.queryByRole("button", { name: "Edit this screen" })).not.toBeInTheDocument();
+  });
+
+  it("offers the pencil on a screen that has something to edit", () => {
+    renderWithProviders(
+      <Layout>
+        <Editable />
+      </Layout>,
+    );
+    expect(screen.getByRole("button", { name: "Edit this screen" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("reading")).toBeInTheDocument();
+  });
+
+  it("turns edit mode on and back off from the header", async () => {
+    renderWithProviders(
+      <Layout>
+        <Editable />
+      </Layout>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit this screen" }));
+    const done = screen.getByRole("button", { name: "Done editing" });
+    expect(done).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("editing")).toBeInTheDocument();
+
+    await userEvent.click(done);
+    expect(screen.getByRole("button", { name: "Edit this screen" })).toBeInTheDocument();
+    expect(screen.getByText("reading")).toBeInTheDocument();
   });
 
   it("offers no back arrow at a tab root, where there is nothing to go back to", () => {

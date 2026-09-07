@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { HOME_HEADING, outboxCount, readStore, syncFromSettings } from "./helpers/app";
+import { HOME_HEADING, enterEditMode, outboxCount, readStore, syncFromSettings } from "./helpers/app";
 import { addLog, assertReplicaClean, bootstrap, feedWhere, openEntity } from "./helpers/writes";
 
 /**
@@ -58,6 +58,7 @@ test("create A, create B, delete A — all offline in one batch → server has B
   await addLog(page, "movie", { title: `B ${tag}` });
 
   await openEntity(page, `A ${tag}`);
+  await enterEditMode(page);
   await page.getByRole("button", { name: "Delete" }).first().click();
   await page.getByRole("button", { name: /^Delete$/ }).click();
   await context.setOffline(false);
@@ -82,7 +83,8 @@ test("edit then delete the same log offline → ends deleted", async ({ page, co
 
   await context.setOffline(true);
   await openEntity(page, `EditDelete ${tag}`);
-  await page.getByRole("button", { name: "Edit" }).first().click();
+  await enterEditMode(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
   await page.locator("textarea").first().fill("pointless edit");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("pointless edit")).toBeVisible();

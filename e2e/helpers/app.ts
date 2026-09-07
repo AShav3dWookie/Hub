@@ -21,6 +21,22 @@ export async function gotoTab(page: Page, label: string): Promise<void> {
 }
 
 /**
+ * Turn on the screen's edit mode from the header pencil.
+ *
+ * Detail screens are read-only until this is tapped — the Edit, Delete, Add photos, remove and
+ * picker controls do not exist in the DOM before it — so any spec that drives one needs this
+ * first. Idempotent: a screen already in edit mode is left alone.
+ */
+export async function enterEditMode(page: Page): Promise<void> {
+  const pencil = page.getByRole("button", { name: "Edit this screen" });
+  const done = page.getByRole("button", { name: "Done editing" });
+  if (await done.isVisible().catch(() => false)) return;
+  await pencil.waitFor();
+  await pencil.click();
+  await done.waitFor();
+}
+
+/**
  * Waits for the page's service worker to have an **active** worker and returns its state
  * (normally `"activated"`), or `null` if none activates within `timeoutMs`.
  */

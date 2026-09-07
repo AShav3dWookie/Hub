@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { SyncChangesResponse } from "@logger/shared";
 import { E2E_BASE_URL } from "../playwright.config";
-import { HOME_HEADING, gotoHome, gotoTab, outboxCount, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
+import { HOME_HEADING, enterEditMode, gotoHome, gotoTab, outboxCount, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
 
 /**
  * Persistence guarantees for the writes tier: whatever the user does offline — one write, a
@@ -83,7 +83,8 @@ async function openEntity(page: Page, title: string) {
 
 async function editFirstLogNotes(page: Page, entityTitle: string, notes: string) {
   await openEntity(page, entityTitle);
-  await page.getByRole("button", { name: "Edit" }).first().click();
+  await enterEditMode(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
   await page.locator("textarea").first().fill(notes);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(notes)).toBeVisible();
@@ -217,6 +218,7 @@ test("an offline delete persists and is not resurrected by later pulls", async (
   // Delete it offline.
   await context.setOffline(true);
   await openEntity(page, `Doomed ${tag}`);
+  await enterEditMode(page);
   await page.getByRole("button", { name: "Delete" }).first().click();
   await page.getByRole("button", { name: /^Delete$/ }).click();
   await expect

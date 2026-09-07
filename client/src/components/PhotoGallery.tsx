@@ -14,12 +14,16 @@ const MAX_PHOTOS = MAX_MEDIA_PER_LOG;
 export function PhotoGallery({
   logId,
   photos,
-  allowDelete = false,
+  editable = false,
 }: {
   logId: number;
   photos: LogPhotoDTO[];
-  /** Show the per-photo delete control. Off in the read-only strip, on in the event editor. */
-  allowDelete?: boolean;
+  /**
+   * Show the controls that change the strip: the add tile and the per-photo delete.
+   * Off by default, and off outside the screen's edit mode — reading a log should not
+   * offer to upload to it.
+   */
+  editable?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -34,7 +38,7 @@ export function PhotoGallery({
 
   // Photos go straight to the server (no offline queue): only possible online, and only once
   // the entry itself has a real server id (a freshly-created offline entry has a temp one).
-  const canEditPhotos = online && logId > 0;
+  const canEditPhotos = editable && online && logId > 0;
   const atLimit = photos.length >= MAX_PHOTOS;
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -78,7 +82,7 @@ export function PhotoGallery({
             >
               <MediaThumb photo={photo} />
             </button>
-            {allowDelete && canEditPhotos && (
+            {canEditPhotos && (
               <button
                 type="button"
                 aria-label={`Delete ${photo.originalName}`}
@@ -105,7 +109,7 @@ export function PhotoGallery({
         )}
       </div>
 
-      {!canEditPhotos && (
+      {editable && !canEditPhotos && (
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           {logId < 0
             ? "Photos can be added once this entry has synced."
@@ -113,17 +117,19 @@ export function PhotoGallery({
         </p>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={MEDIA_ACCEPT_ATTR}
-        multiple
-        onChange={handleFiles}
-        className="hidden"
-        data-testid="photo-file-input"
-      />
+      {canEditPhotos && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={MEDIA_ACCEPT_ATTR}
+          multiple
+          onChange={handleFiles}
+          className="hidden"
+          data-testid="photo-file-input"
+        />
+      )}
 
-      {allowDelete && confirmingDelete != null && (
+      {canEditPhotos && confirmingDelete != null && (
         <div className="mt-2 flex items-center gap-3 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this photo?</span>
           <button

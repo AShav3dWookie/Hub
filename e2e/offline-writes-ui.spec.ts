@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { HOME_HEADING, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
+import { HOME_HEADING, enterEditMode, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
 import { addAlbum, addLog, assertReplicaClean, bootstrap, feedWhere, openEntity } from "./helpers/writes";
 
 /**
@@ -97,6 +97,9 @@ test("photo controls are hidden on an unsynced record and appear once it syncs",
   await addLog(page, "movie", { title: `Photo Film ${tag}` });
 
   await openEntity(page, `Photo Film ${tag}`);
+  // Read mode offers no photo controls at all; edit mode is where the "not yet synced" hint lives.
+  await expect(page.getByRole("button", { name: "Add photos" })).toHaveCount(0);
+  await enterEditMode(page);
   await expect(page.getByText(/photos can be added once this entry has synced/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Add photos" })).toHaveCount(0);
 
@@ -104,6 +107,7 @@ test("photo controls are hidden on an unsynced record and appear once it syncs",
   await syncFromSettings(page);
 
   await openEntity(page, `Photo Film ${tag}`);
+  await enterEditMode(page);
   await expect(page.getByRole("button", { name: "Add photos" })).toBeVisible();
   await assertReplicaClean(page);
 });

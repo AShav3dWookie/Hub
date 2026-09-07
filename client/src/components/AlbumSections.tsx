@@ -23,11 +23,14 @@ import { formatLogDate } from "../lib/formatLogDate.js";
 export function AlbumPeopleSection({
   people,
   directPersonIds,
+  editing,
   onAdd,
   onRemove,
 }: {
   people: PersonRef[];
   directPersonIds: number[];
+  /** Edit mode: the tag input and the per-person remove only exist while it is on. */
+  editing: boolean;
   onAdd: (person: PersonTagInput) => Promise<unknown>;
   onRemove: (personId: number) => void;
 }) {
@@ -56,15 +59,18 @@ export function AlbumPeopleSection({
             <Link to={`/person/${person.id}`} className="hover:underline">
               {person.name}
             </Link>
+            {/* "via event" is information rather than a control, so it stays in read mode. */}
             {directPersonIds.includes(person.id) ? (
-              <button
-                type="button"
-                aria-label={`Remove ${person.name}`}
-                onClick={() => onRemove(person.id)}
-                className={REMOVE_BUTTON_CLASS}
-              >
-                <X size={14} />
-              </button>
+              editing && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${person.name}`}
+                  onClick={() => onRemove(person.id)}
+                  className={REMOVE_BUTTON_CLASS}
+                >
+                  <X size={14} />
+                </button>
+              )
             ) : (
               <span className="text-xs text-slate-500 dark:text-slate-400">via event</span>
             )}
@@ -72,18 +78,20 @@ export function AlbumPeopleSection({
         ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <PeopleTagInput value={draft} onChange={setDraft} />
-        {draft.length > 0 && (
-          <button
-            type="button"
-            onClick={addDraft}
-            className="min-h-[44px] self-start rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white dark:bg-slate-700"
-          >
-            Add to album
-          </button>
-        )}
-      </div>
+      {editing && (
+        <div className="flex flex-col gap-2">
+          <PeopleTagInput value={draft} onChange={setDraft} />
+          {draft.length > 0 && (
+            <button
+              type="button"
+              onClick={addDraft}
+              className="min-h-[44px] self-start rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white dark:bg-slate-700"
+            >
+              Add to album
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -91,10 +99,13 @@ export function AlbumPeopleSection({
 /** The logs an album references. Linking never modifies the event itself. */
 export function AlbumEventsSection({
   events,
+  editing,
   onAdd,
   onRemove,
 }: {
   events: LogWithEntityDTO[];
+  /** Edit mode: the picker and the per-event remove only exist while it is on. */
+  editing: boolean;
   onAdd: (logId: number) => void;
   onRemove: (logId: number) => void;
 }) {
@@ -119,14 +130,16 @@ export function AlbumEventsSection({
               <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 {CATEGORY_META[log.entity.category].label} ·{" "}
                 {formatLogDate(log.date, log.entity.category)}
-                <button
-                  type="button"
-                  aria-label={`Remove ${log.entity.title} from album`}
-                  onClick={() => onRemove(log.id)}
-                  className={REMOVE_BUTTON_CLASS}
-                >
-                  <X size={14} aria-hidden />
-                </button>
+                {editing && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${log.entity.title} from album`}
+                    onClick={() => onRemove(log.id)}
+                    className={REMOVE_BUTTON_CLASS}
+                  >
+                    <X size={14} aria-hidden />
+                  </button>
+                )}
               </span>
             </div>
             {categoryHasRating(log.entity.category) && <StarRating value={log.rating} readOnly />}
@@ -138,7 +151,9 @@ export function AlbumEventsSection({
         ))}
       </ul>
 
-      <LogPicker excludeIds={events.map((e) => e.id)} onPick={(log) => onAdd(log.id)} />
+      {editing && (
+        <LogPicker excludeIds={events.map((e) => e.id)} onPick={(log) => onAdd(log.id)} />
+      )}
     </div>
   );
 }
