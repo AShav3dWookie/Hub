@@ -127,6 +127,26 @@ test.describe("mobile layout", () => {
     expect(offenders).toEqual([]);
   });
 
+  test("the people tag input's dropdown and pills also meet the 44px floor", async ({ page }) => {
+    // A blind spot in the check above: it only measures the *default* state of each route, so
+    // it missed three 24px pill remove buttons that render only once a person is tagged, and
+    // the create-a-new-person dropdown row, which renders only while typing. Both need their
+    // own state to exist on screen at all.
+    await page.goto("/add/hang_out");
+    const input = page.getByPlaceholder("Add a person");
+    await input.fill("Zzz Nobody");
+
+    const createRow = page.getByRole("button", { name: /Create/ });
+    await expect(createRow).toBeVisible();
+    expect((await createRow.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+    await createRow.click();
+    const removeButton = page.getByRole("button", { name: /Remove Zzz Nobody/ });
+    await expect(removeButton).toBeVisible();
+    // Deliberately 36, not 44 — a 44px circle does not fit inside a text pill.
+    expect((await removeButton.boundingBox())?.height).toBe(36);
+  });
+
   test("the calendar grid keeps one height across 4-, 5- and 6-row months", async ({ page }) => {
     await page.goto("/calendar");
     await page.getByRole("heading", { level: 1 }).waitFor();

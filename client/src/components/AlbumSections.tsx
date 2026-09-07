@@ -123,9 +123,9 @@ export function AlbumEventsSection({
                   type="button"
                   aria-label={`Remove ${log.entity.title} from album`}
                   onClick={() => onRemove(log.id)}
-                  className="flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className={REMOVE_BUTTON_CLASS}
                 >
-                  <X size={14} />
+                  <X size={14} aria-hidden />
                 </button>
               </span>
             </div>

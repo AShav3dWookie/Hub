@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS, REMOVE_BUTTON_CLASS } from "../components/ui.js";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import type { LogWithEntityDTO, PersonTagInput } from "@logger/shared";
@@ -152,9 +152,9 @@ export function AlbumAddForm() {
                   type="button"
                   aria-label={`Remove ${ev.entity.title}`}
                   onClick={() => setEvents((prev) => prev.filter((x) => x.id !== ev.id))}
-                  className="flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className={REMOVE_BUTTON_CLASS}
                 >
-                  <X size={14} />
+                  <X size={14} aria-hidden />
                 </button>
               </li>
             ))}
