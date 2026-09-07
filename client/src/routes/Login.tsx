@@ -40,7 +40,7 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-4 py-16 dark:text-slate-100">
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-16 dark:text-slate-100">
       <div className={`${CARD_CLASS} w-full max-w-sm`}>
         <h1 className="text-xl font-semibold">Logger</h1>
         <p className="mt-1 mb-4 text-sm text-slate-500 dark:text-slate-400">

@@ -150,7 +150,7 @@ export function Calendar({
                     />
                   ))}
                   {items.length > 3 && (
-                    <span className="text-[10px] leading-none text-slate-500 dark:text-slate-400">
+                    <span className="text-2xs leading-none text-slate-500 dark:text-slate-400">
                       +{items.length - 3}
                     </span>
                   )}

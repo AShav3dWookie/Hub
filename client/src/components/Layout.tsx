@@ -8,7 +8,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const logout = useLogout();
 
   return (
-    <div className="min-h-full dark:bg-slate-950">
+    <div className="min-h-dvh dark:bg-slate-950">
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <Link
