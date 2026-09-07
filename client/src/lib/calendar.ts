@@ -40,13 +40,21 @@ export interface GridCell {
 /**
  * The Monday-first grid for a month: leading days from the previous month to fill the first week,
  * then the month, then trailing days to complete the last week. Every cell is a real date.
+ *
+ * A month naturally needs 4, 5 or 6 rows, which made the screen change height as you paged
+ * through the year and shunted everything below the grid up and down. `minRows` pads the grid
+ * out to a fixed number of rows so it can hold one size; the padding cells are always
+ * out-of-month, so they render no events and only ever act as "jump to that month".
+ *
+ * It is opt-in because `gridRange` -- which decides what the calendar *fetches* -- must keep
+ * asking for the natural window rather than a padded one.
  */
-export function monthGrid(month: string): GridCell[] {
+export function monthGrid(month: string, minRows = 0): GridCell[] {
   const [year, m] = month.split("-").map(Number);
   const first = new Date(Date.UTC(year, m - 1, 1));
   const leading = (first.getUTCDay() + 6) % 7; // Mon = 0
   const inMonthCount = daysInMonth(year, m);
-  const rows = Math.ceil((leading + inMonthCount) / 7);
+  const rows = Math.max(Math.ceil((leading + inMonthCount) / 7), minRows);
 
   const cells: GridCell[] = [];
   const start = new Date(first);
