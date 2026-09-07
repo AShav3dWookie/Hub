@@ -19,38 +19,46 @@ function renderNav(initialEntries: string[], initialIndex = initialEntries.lengt
   );
 }
 
+/** react-router marks the matched NavLink with aria-current="page". */
+const activeTab = () => screen.getByRole("link", { current: "page" });
+
 describe("BottomNav", () => {
-  it("shows only Settings on the home screen", () => {
-    renderNav(["/"]);
-    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-  });
-
-  it("shows Back, Home and Settings on other routes", () => {
-    renderNav(["/gallery"]);
-    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-  });
-
-  it("Back pops history when there is in-app history", async () => {
-    renderNav(["/", "/gallery"], 1);
-    expect(screen.getByTestId("path")).toHaveTextContent("/gallery");
-
-    await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByTestId("path")).toHaveTextContent("/");
-  });
-
-  it("Back falls back to / on a fresh deep link (no history)", async () => {
-    renderNav(["/gallery"]);
-    await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByTestId("path")).toHaveTextContent("/");
+  it("offers all five destinations on every screen", () => {
+    renderNav(["/entity/5"]);
+    for (const [label, href] of [
+      ["Home", "/"],
+      ["Search", "/search"],
+      ["Add", "/add"],
+      ["Calendar", "/calendar"],
+      ["Gallery", "/gallery"],
+    ]) {
+      expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
+    }
   });
 
   it("Home navigates to /", async () => {
     renderNav(["/entity/5"]);
     await userEvent.click(screen.getByRole("link", { name: "Home" }));
     expect(screen.getByTestId("path")).toHaveTextContent("/");
+  });
+
+  it("marks the tab you are on as the current page", () => {
+    renderNav(["/calendar"]);
+    expect(activeTab()).toHaveAccessibleName("Calendar");
+  });
+
+  it("marks Home current only on / itself, not on every route beneath it", () => {
+    renderNav(["/gallery"]);
+    expect(activeTab()).toHaveAccessibleName("Gallery");
+  });
+
+  it("keeps Add lit while you are filling one of its forms", () => {
+    renderNav(["/add/movie"]);
+    expect(activeTab()).toHaveAccessibleName("Add");
+  });
+
+  it("marks no tab current on a screen the tab bar does not own", () => {
+    renderNav(["/entity/5"]);
+    expect(screen.queryByRole("link", { current: "page" })).not.toBeInTheDocument();
   });
 });

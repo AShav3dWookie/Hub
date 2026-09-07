@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoHome, serviceWorkerState } from "./helpers/app";
+import { gotoHome, gotoTab, serviceWorkerState } from "./helpers/app";
 
 /**
  * Thumbnails are permanent offline data: the sync engine warms `logger-thumbs` with every
@@ -16,7 +16,7 @@ test("gallery thumbnails render offline; the full image shows an offline placeho
 
   // Warm the thumbnail cache: open the gallery online first, then let the sync engine's
   // warm-on-pull run.
-  await page.getByRole("link", { name: "Gallery", exact: true }).click();
+  await gotoTab(page, "Gallery");
   await expect(page.getByRole("img").first()).toBeVisible();
 
   await expect

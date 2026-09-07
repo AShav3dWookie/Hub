@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CARD_CLASS } from "./ui.js";
+import { CARD_CLASS, ROW_LINK, SECTION_HEADING } from "./ui.js";
 import type {
   AlbumSearchResult,
   EntityWithLogsDTO,
@@ -17,11 +17,6 @@ import { highlightMatches } from "../lib/highlight.js";
  * alongside the filter bar; each is self-contained and driven only by its rows and the keyword
  * tokens used for highlighting.
  */
-
-const SECTION_HEADING =
-  "text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
-
-const ROW_LINK = `flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 ${CARD_CLASS}`;
 
 export function SearchSkeleton() {
   return (

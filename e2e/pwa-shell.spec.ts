@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoHome, readStore, serviceWorkerState } from "./helpers/app";
+import { gotoHome, gotoTab, readStore, serviceWorkerState } from "./helpers/app";
 
 /**
  * The service-worker app shell: installable manifest, and — the point of the whole thing —
@@ -33,7 +33,7 @@ test.describe("PWA shell", () => {
       await page.reload();
       await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
 
-      await page.getByRole("link", { name: "Search", exact: true }).click();
+      await gotoTab(page, "Search");
       await page.getByRole("textbox").first().fill("Interstellar");
       await expect(page.getByText("Interstellar").first()).toBeVisible();
     } finally {

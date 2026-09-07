@@ -7,6 +7,14 @@ export async function gotoHome(page: Page): Promise<void> {
 }
 
 /**
+ * Navigate by tapping a tab in the bottom bar — the app's own navigation, and the only
+ * route to a screen that is unambiguous now that Home links to some of the same places.
+ */
+export async function gotoTab(page: Page, label: string): Promise<void> {
+  await page.getByRole("navigation").getByRole("link", { name: label, exact: true }).click();
+}
+
+/**
  * Waits for the page's service worker to have an **active** worker and returns its state
  * (normally `"activated"`), or `null` if none activates within `timeoutMs`.
  */

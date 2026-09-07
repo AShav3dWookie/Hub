@@ -9,9 +9,15 @@
  * for every variation. `min-h-[44px]` on the buttons is the comfortable tap-target size.
  */
 
-/** Text, number, date and select fields, and textareas. */
+/**
+ * Text, number, date and select fields, and textareas.
+ *
+ * Deliberately carries no width: callers append `w-full`, `flex-1` or `w-40`, and Tailwind
+ * emits `w-full` *after* the numeric widths in its own ordering, so putting it here would
+ * silently beat every `w-40 ${FIELD_CLASS}` call site.
+ */
 export const FIELD_CLASS =
-  "rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white";
+  "min-h-[44px] rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800 dark:text-white";
 
 /** A raised panel: result cards, the filter bar, the inline editors. */
 export const CARD_CLASS =
@@ -36,3 +42,34 @@ export const SECONDARY_BUTTON_SM_CLASS =
 /** The destructive confirm, always paired with a cancel. */
 export const DANGER_BUTTON_CLASS =
   "min-h-[44px] rounded-md bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700";
+
+/** A square icon-only control: month chevrons, a close button, the header actions. */
+export const ICON_BUTTON_CLASS =
+  "flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800";
+
+/** A selectable pill in a filter row or a category chooser. Pair with one of the two halves below. */
+export const CHIP_CLASS =
+  "flex min-h-[44px] items-center justify-center rounded-md border px-3 text-sm font-medium";
+
+export const CHIP_ON_CLASS =
+  "border-slate-900 bg-slate-900 text-white dark:border-slate-500 dark:bg-slate-600";
+
+export const CHIP_OFF_CLASS =
+  "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700";
+
+/** The small-caps label above a list. Was duplicated verbatim in SearchResults and AlbumSections. */
+export const SECTION_HEADING =
+  "text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
+
+/** A tappable list row that fills the width. Was ROW_LINK, local to SearchResults. */
+export const ROW_LINK = `flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 ${CARD_CLASS}`;
+
+/**
+ * The remove control inside a person/event pill.
+ *
+ * 36px rather than the 44px floor the rest of the app keeps: a 44px circle does not fit
+ * inside a text pill, and this un-tags rather than destroying anything — re-tagging is one
+ * tap. The pill around it is sized to match.
+ */
+export const REMOVE_BUTTON_CLASS =
+  "flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-full hover:bg-slate-300 dark:hover:bg-slate-600";

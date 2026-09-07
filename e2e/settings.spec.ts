@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { gotoHome, serviceWorkerState } from "./helpers/app";
 
 test.describe("Settings", () => {
-  test("reachable from the bottom bar; shows sync + cache, and syncs on demand", async ({ page }) => {
+  test("reachable from the header; shows sync + cache, and syncs on demand", async ({ page }) => {
     await gotoHome(page);
     await page.getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL(/\/settings/);

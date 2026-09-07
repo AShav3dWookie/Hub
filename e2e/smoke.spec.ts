@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoHome } from "./helpers/app";
+import { gotoHome, gotoTab } from "./helpers/app";
 
 /**
  * Baseline coverage of the shipped app, served as the production bundle against the seeded
@@ -17,7 +17,7 @@ test.describe("app smoke", () => {
 
   test("search finds a seeded movie and opens its entity page", async ({ page }) => {
     await gotoHome(page);
-    await page.getByRole("link", { name: "Search", exact: true }).click();
+    await gotoTab(page, "Search");
     await page.getByRole("textbox").first().fill("Interstellar");
     await expect(page.getByText("Interstellar").first()).toBeVisible();
     await page.getByText("Interstellar").first().click();
@@ -26,7 +26,7 @@ test.describe("app smoke", () => {
 
   test("a person profile lists their appearances", async ({ page }) => {
     await gotoHome(page);
-    await page.getByRole("link", { name: "Search", exact: true }).click();
+    await gotoTab(page, "Search");
     await page.getByRole("textbox").first().fill("Alice");
     const alice = page.getByText("Alice", { exact: true }).first();
     await expect(alice).toBeVisible();
@@ -38,7 +38,7 @@ test.describe("app smoke", () => {
 
   test("gallery route shows the seeded photos", async ({ page }) => {
     await gotoHome(page);
-    await page.getByRole("link", { name: "Gallery", exact: true }).click();
+    await gotoTab(page, "Gallery");
     await expect(page).toHaveURL(/\/gallery/);
     await expect(page.getByRole("img").first()).toBeVisible();
   });

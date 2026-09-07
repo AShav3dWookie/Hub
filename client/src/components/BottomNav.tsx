@@ -1,46 +1,29 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, Home, Settings } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { TABS } from "../lib/tabs.js";
 
-const itemClass =
-  "flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-6 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200";
+/** NavLink takes a function so `isActive` actually renders — it used to be passed a plain string. */
+const itemClass = ({ isActive }: { isActive: boolean }) =>
+  `flex min-h-[var(--nav-h)] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-xs font-medium transition-colors ${
+    isActive
+      ? "text-slate-900 dark:text-white"
+      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+  }`;
 
 export function BottomNav() {
-  const { pathname, key } = useLocation();
-  const navigate = useNavigate();
-  const onHome = pathname === "/";
-
-  function goBack() {
-    // `key === "default"` means this is the initial history entry (e.g. a fresh deep link),
-    // so there's nothing to pop — send them home instead.
-    if (key === "default") {
-      navigate("/");
-    } else {
-      navigate(-1);
-    }
-  }
-
   return (
     <nav
       aria-label="Navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+      // pb-[env(...)] keeps the labels out of the home-indicator gesture zone; the app sets
+      // viewport-fit=cover and runs standalone, so nothing else would.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
     >
-      <div className={`mx-auto flex max-w-3xl items-center ${onHome ? "justify-end" : "justify-between"}`}>
-        {!onHome && (
-          <>
-            <button type="button" onClick={goBack} className={itemClass}>
-              <ChevronLeft size={22} strokeWidth={1.75} />
-              Back
-            </button>
-            <NavLink to="/" end className={itemClass}>
-              <Home size={22} strokeWidth={1.75} />
-              Home
-            </NavLink>
-          </>
-        )}
-        <NavLink to="/settings" className={itemClass}>
-          <Settings size={22} strokeWidth={1.75} />
-          Settings
-        </NavLink>
+      <div className="mx-auto flex h-[var(--nav-h)] max-w-3xl items-stretch justify-around gap-1 px-2">
+        {TABS.map(({ to, icon: Icon, label, end }) => (
+          <NavLink key={to} to={to} end={end} className={itemClass}>
+            <Icon size={24} strokeWidth={1.75} aria-hidden />
+            {label}
+          </NavLink>
+        ))}
       </div>
     </nav>
   );

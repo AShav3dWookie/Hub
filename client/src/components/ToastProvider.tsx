@@ -29,7 +29,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 sm:bottom-6"
+          className="fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom)+0.5rem)] z-50 flex justify-center px-4"
         >
           <div className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-slate-700">
             {toast.message}
