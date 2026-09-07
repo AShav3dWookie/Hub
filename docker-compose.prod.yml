@@ -2,8 +2,11 @@
 # builds: the image is pulled from GHCR, published by .github/workflows/release.yml when a
 # `vX.Y.Z` tag is pushed.
 #
-# One-time on the server (the package is private):
+# The package is private, so the host needs credentials once:
 #   echo <PAT> | docker login ghcr.io -u AShav3dWookie --password-stdin
+# Deploying through Portainer instead? Add ghcr.io under Settings -> Registries and paste this
+# file into a stack; set the variables below in the stack's environment fields.
+#
 #   cp .env.prod.example .env    # then fill it in
 #
 # Deploy / upgrade:
@@ -30,23 +33,29 @@ services:
     # true here. Close it with a firewall rule if you want only nginx to reach it.
     ports:
       - "${HOST_PORT:-8090}:3000"
-    # AUTH_ENABLED, AUTH_PASSWORD_HASH, SESSION_SECRET, TRUST_PROXY, COOKIE_SECURE and
-    # SESSION_MAX_AGE_DAYS come from .env — copy .env.prod.example and fill it in. Using env_file
-    # rather than listing each one as `${VAR}` below keeps this file from needing an edit every
-    # time the app grows a setting.
+    # Config comes from .env next to this file (copy .env.prod.example), or from the stack's
+    # environment-variable fields if you deploy through Portainer. Written as explicit `${VAR}`
+    # substitution rather than `env_file` so that both routes work: Portainer feeds substitution,
+    # and does not reliably materialise a .env file for env_file to read.
     #
-    # ⚠️ Compose interpolates env_file values, so AUTH_PASSWORD_HASH must have every `$` doubled
-    # in .env. A raw bcrypt hash loses its salt to variable expansion and every login fails with
-    # nothing in the logs. .env.prod.example has the one-liner that escapes it.
-    env_file:
-      - path: .env
-        required: false
-    # Fixed values only. `environment` wins over `env_file`, so nothing configurable belongs here.
+    # ⚠️ AUTH_PASSWORD_HASH must have every `$` doubled to `$$`, wherever you put it — .env or a
+    # Portainer field. Compose interpolates both, so a raw bcrypt hash has its salt eaten by
+    # variable expansion and every login then fails with nothing in the logs.
+    # `npm run auth:hash -- 'pw' | sed 's/\$/$$/g'` emits the escaped form.
     environment:
       - PORT=3000
       - NODE_ENV=production
       # PHOTOS_DIR derives from dirname(DB_PATH), so photos share the volume below.
       - DB_PATH=/app/data/logger.db
+      # Defaults to ON deliberately: an unset variable must not silently expose the app.
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
+      # No usable fallback: with auth on, assertSecureConfig refuses to start on the placeholder
+      # rather than signing real sessions with a secret that is public in this repo.
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - TRUST_PROXY=${TRUST_PROXY:-1}
+      - COOKIE_SECURE=${COOKIE_SECURE:-}
+      - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-}
     volumes:
       - data:/app/data
     restart: unless-stopped

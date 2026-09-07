@@ -53,6 +53,13 @@ echo 'ghp_xxxxxxxxxxxx' | docker login ghcr.io -u AShav3dWookie --password-stdin
 This writes `~/.docker/config.json` **for the user that runs it**. If a systemd unit runs compose
 as root, log in as root too, or the pull fails there.
 
+> **On TrueNAS SCALE**, anything outside `/mnt` is reset by a version upgrade, so `/root/.docker`
+> may not survive one. Either re-run `docker login` after an upgrade, or set
+> `DOCKER_CONFIG=/mnt/<pool>/apps/hub/.docker` before logging in — and then for every
+> `docker compose` call too. Don't put the token in a shell profile, and don't automate the login
+> via TrueNAS Init/Shutdown Scripts: those are stored in the config database, which ends up in
+> config backups.
+
 **2. Files.** Copy `docker-compose.prod.yml` and `.env.prod.example` to a directory on the server
 (e.g. `/srv/hub`), then:
 
@@ -89,10 +96,32 @@ Then verify the hash survived — this must show **single** dollars:
 docker exec hub-app-1 printenv AUTH_PASSWORD_HASH
 ```
 
+## Deploying through Portainer instead
+
+Paste `docker-compose.prod.yml` into **Stacks → Add stack → Web editor** and set the same
+variables in the stack's **Environment variables** fields rather than a `.env` file. The compose
+file uses `${VAR}` substitution precisely so both routes work.
+
+- **Registry auth:** Portainer → **Settings → Registries → Add registry → Custom registry**, URL
+  `ghcr.io`, username `AShav3dWookie`, password the PAT. Portainer keeps it in its own database on
+  a pool, so a TrueNAS upgrade doesn't lose it. Portainer CE has historically been inconsistent
+  about applying registry credentials to *compose stacks*; if the pull fails `unauthorized`, also
+  do the host `docker login` above.
+- **`AUTH_PASSWORD_HASH` still needs `$$`.** Portainer's variables feed compose substitution just
+  like a `.env` file does, so the escaping rule is identical.
+- **Upgrading** is *Pull and redeploy*, after changing `IMAGE_TAG` in the stack's variables.
+
+Whichever route you use, verify with `docker exec hub-app-1 printenv AUTH_PASSWORD_HASH` (single
+dollars) and `curl -s localhost:8090/api/health` (the version you expect).
+
+> **Fail-closed by design:** with no configuration at all, `AUTH_ENABLED` defaults to `true` and
+> `SESSION_SECRET` to the placeholder, which the startup guard rejects — so a misconfigured stack
+> crash-loops with a clear error rather than serving the app with no password.
+
 ## Upgrade
 
-Set the new `IMAGE_TAG` in `.env`, then the same two commands. `curl /api/health` confirms the
-new version is live.
+Set the new `IMAGE_TAG` in `.env` (or the stack's variables), then the same two commands.
+`curl /api/health` confirms the new version is live.
 
 ## Rollback
 
