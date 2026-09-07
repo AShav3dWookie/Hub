@@ -1,21 +1,48 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronLeft, Settings } from "lucide-react";
 import { useLogout, useAuthStatus } from "../api/auth.js";
 import { BottomNav } from "./BottomNav.js";
+import { TAB_PATHS } from "../lib/tabs.js";
+import { ICON_BUTTON_CLASS } from "./ui.js";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { data } = useAuthStatus();
   const logout = useLogout();
+  const { pathname, key } = useLocation();
+  const navigate = useNavigate();
+
+  // The tab bar owns the five roots, so a back arrow there would be a no-op. Everything
+  // deeper is reached from somewhere, and needs a way out that isn't the system gesture.
+  const atTabRoot = TAB_PATHS.includes(pathname);
+
+  function goBack() {
+    // `key === "default"` means this is the initial history entry (e.g. a fresh deep link),
+    // so there's nothing to pop — send them home instead.
+    if (key === "default") {
+      navigate("/");
+    } else {
+      navigate(-1);
+    }
+  }
 
   return (
-    <div className="min-h-full dark:bg-slate-950">
-      <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
+    <div className="flex min-h-dvh flex-col dark:bg-slate-950">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="mx-auto flex h-[var(--header-h)] max-w-3xl items-center gap-1 px-2">
+          {!atTabRoot && (
+            <button type="button" onClick={goBack} aria-label="Back" className={ICON_BUTTON_CLASS}>
+              <ChevronLeft size={24} strokeWidth={1.75} aria-hidden />
+            </button>
+          )}
           <Link
             to="/"
-            className="rounded-md text-lg font-semibold text-slate-900 transition-colors hover:text-slate-600 hover:underline dark:text-white dark:hover:text-slate-300"
+            className="flex min-h-[44px] min-w-0 flex-1 items-center rounded-md px-1 text-lg font-semibold text-slate-900 transition-colors hover:text-slate-600 dark:text-white dark:hover:text-slate-300"
           >
             Logger
+          </Link>
+          <Link to="/settings" aria-label="Settings" className={ICON_BUTTON_CLASS}>
+            <Settings size={22} strokeWidth={1.75} aria-hidden />
           </Link>
           {data?.authRequired && data.authenticated && (
             <button
@@ -28,7 +55,9 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-8 pb-24 dark:text-slate-100">{children}</main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-3 pt-[var(--content-pt)] pb-[var(--content-pb)] dark:text-slate-100">
+        {children}
+      </main>
       <BottomNav />
     </div>
   );

@@ -2,10 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
-}
+@layer base {
+  /*
+   * The app's chrome heights, named once. Layout, BottomNav and ToastProvider all
+   * derive from these instead of each guessing: `main` used to reserve pb-24 (96px)
+   * for a 56px nav, and the toast's `bottom-20 sm:bottom-6` put it *behind* the nav
+   * at >=640px.
+   */
+  :root {
+    --header-h: 3.25rem; /* 52px */
+    --nav-h: 3.75rem; /* 60px, excluding the safe-area strip below it */
+    --content-pt: 0.75rem;
+    --content-pb: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+    /* Exactly the height a route gets between the sticky header and the fixed nav.
+       The calendar uses this to become a two-pane screen. */
+    --content-h: calc(
+      100dvh - var(--header-h) - env(safe-area-inset-top, 0px) - var(--content-pt) -
+        var(--content-pb)
+    );
+  }
 
-body {
-  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  @media (min-width: 640px) {
+    :root {
+      --header-h: 4rem;
+      --nav-h: 4rem;
+      --content-pt: 1.5rem;
+    }
+  }
+
+  html {
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+    /* No pull-to-refresh: this is an installed standalone PWA, and the gesture
+       otherwise fights every vertical scroll on the calendar and gallery. */
+    overscroll-behavior-y: none;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  /* min-height, not height: a definite height here would make the sticky header and
+     the fixed nav fight the document flow. Descendants that need the full viewport
+     use `min-h-dvh` rather than `min-h-full`. */
+  #root {
+    min-height: 100dvh;
+  }
 }

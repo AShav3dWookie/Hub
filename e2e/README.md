@@ -26,9 +26,25 @@ already-running instance.
 | File | Purpose |
 |---|---|
 | `serve.mjs` | build + seed + serve the app under test |
-| `helpers/app.ts` | `gotoHome`, `serviceWorkerState`, `readStore` (IndexedDB), `offline()` |
+| `helpers/app.ts` | `gotoHome`, `gotoTab`, `HOME_HEADING`, `serviceWorkerState`, `readStore` (IndexedDB), `offline()` |
+| `mobile-layout.spec.ts` | the layout net: no overflow, nothing behind the tab bar, 44px targets — and a screenshot per route in `.artifacts/screens/` |
 | `smoke.spec.ts` | baseline — the shipped app still works |
 | `*.spec.ts` (added per branch) | PWA shell, offline reads, image cache, settings, sync |
+
+## A stale server will fail tests that look like real regressions
+
+`reuseExistingServer` is on outside CI, so if anything is already listening on `:3100`,
+Playwright **reuses it and `serve.mjs` never runs** — meaning the scratch DB is not
+re-seeded and still holds every row the last run wrote. The specs that assert "exactly one
+album matches this pattern" then fail against rows their own earlier run left behind.
+
+If a test fails on a count and passes when run alone, check the port first:
+
+```bash
+netstat -ano | grep ":3100.*LISTEN"     # then Stop-Process the pid
+```
+
+Kill the server when you are done with a run, for the same reason.
 
 ## Not covered here
 

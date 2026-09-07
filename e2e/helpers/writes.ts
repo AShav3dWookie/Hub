@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { CATEGORY_FIELDS, type LoggableCategory, type SyncChangesResponse } from "@logger/shared";
-import { gotoHome, outboxCount, readStore, serviceWorkerState } from "./app";
+import { HOME_HEADING, gotoHome, outboxCount, readStore, serviceWorkerState } from "./app";
 
 /**
  * Open the app, wait for the service worker to control the page and the first sync to fill the
@@ -154,7 +154,7 @@ export async function addLog(page: Page, category: LoggableCategory, f: LogField
   }
 
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 }
 
 /** Create an album offline-or-online; returns after navigation to its detail page. */

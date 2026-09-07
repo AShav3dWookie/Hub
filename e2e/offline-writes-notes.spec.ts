@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readStore, syncFromSettings } from "./helpers/app";
+import { gotoTab, readStore, syncFromSettings } from "./helpers/app";
 import { addLog, assertReplicaClean, bootstrap, feedWhere } from "./helpers/writes";
 
 /**
@@ -53,7 +53,7 @@ test("offline: an important-date note lands on the home widget and persists", as
   await page.getByRole("button", { name: "Add note" }).click();
 
   // The home widget reads the replica — the offline note shows before any sync.
-  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await gotoTab(page, "Home");
   await expect(page.getByText(`Anniversary ${tag}`)).toBeVisible();
 
   await context.setOffline(false);

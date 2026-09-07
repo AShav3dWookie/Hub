@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Home } from "./Home.js";
 import {
@@ -7,6 +7,7 @@ import {
   makeLog,
   makeNote,
   makePerson,
+  makePhoto,
   resetFixtureCounters,
   seedLocalDb,
 } from "../test/seedLocalDb.js";
@@ -89,21 +90,46 @@ describe("Home", () => {
     expect(screen.getByText(/Hang Out · 2026-06-19 · with Sam/)).toBeInTheDocument();
   });
 
-  it("shows Add, Search, Calendar, and Gallery action tiles", async () => {
-    renderWithProviders(<Home />);
-    await screen.findByText("What would you like to do?");
+  it("shows the four newest photos, linking through to the gallery", async () => {
+    const movie = makeEntity({ title: "Dune", category: "movie" });
+    const log = makeLog({ entityId: movie.id, date: "2026-06-01" });
+    await seedLocalDb({
+      entities: [movie],
+      logs: [log],
+      photos: [1, 2, 3, 4, 5].map((n) =>
+        makePhoto({ logId: log.id, originalName: `snap-${n}.jpg` }),
+      ),
+    });
 
-    expect(screen.getByRole("link", { name: /add/i })).toHaveAttribute("href", "/add");
-    expect(screen.getByRole("link", { name: /search/i })).toHaveAttribute("href", "/search");
-    expect(screen.getByRole("link", { name: /calendar/i })).toHaveAttribute("href", "/calendar");
-    expect(screen.getByRole("link", { name: /gallery/i })).toHaveAttribute("href", "/gallery");
+    renderWithProviders(<Home />);
+
+    const strip = await screen.findByRole("link", { name: "Recent photos" });
+    expect(strip).toHaveAttribute("href", "/gallery");
+    // Four, not five: the strip is a teaser for the gallery, not a second gallery.
+    expect(within(strip).getAllByRole("img")).toHaveLength(4);
   });
 
   it("does not render upcoming widgets when there is nothing upcoming", async () => {
     renderWithProviders(<Home />);
 
-    await screen.findByText("What would you like to do?");
+    await screen.findByText("What's on");
     expect(screen.queryByText("Today")).not.toBeInTheDocument();
     expect(screen.queryByText("Next 7 days")).not.toBeInTheDocument();
+  });
+
+  it("offers a way to log something when there is nothing upcoming", async () => {
+    renderWithProviders(<Home />);
+
+    await screen.findByText("Nothing coming up in the next week.");
+    expect(screen.getByRole("link", { name: /log something/i })).toHaveAttribute("href", "/add");
+  });
+
+  it("labels each upcoming row with its weekday, filling the empty half of the row", async () => {
+    await seedUpcoming();
+    renderWithProviders(<Home />);
+
+    // Alice's birthday falls on 2026-06-15, a Monday.
+    const alice = await screen.findByText("Alice");
+    expect(alice.closest("a")).toHaveTextContent(/Mon/);
   });
 });

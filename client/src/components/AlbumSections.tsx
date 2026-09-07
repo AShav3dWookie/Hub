@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CARD_CLASS } from "./ui.js";
+import { CARD_CLASS, REMOVE_BUTTON_CLASS, SECTION_HEADING } from "./ui.js";
 import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import type { AlbumDTO, LogWithEntityDTO, PersonRef, PersonTagInput } from "@logger/shared";
@@ -13,12 +13,6 @@ import { formatLogDate } from "../lib/formatLogDate.js";
 /**
  * The people and events halves of the album page, which was one 365-line function.
  */
-
-const SECTION_HEADING =
-  "text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
-
-const REMOVE_BUTTON =
-  "flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full hover:bg-slate-300 dark:hover:bg-slate-600";
 
 /**
  * An album's people: the ones added to it directly, plus everyone tagged on a linked event.
@@ -67,7 +61,7 @@ export function AlbumPeopleSection({
                 type="button"
                 aria-label={`Remove ${person.name}`}
                 onClick={() => onRemove(person.id)}
-                className={REMOVE_BUTTON}
+                className={REMOVE_BUTTON_CLASS}
               >
                 <X size={14} />
               </button>
@@ -129,9 +123,9 @@ export function AlbumEventsSection({
                   type="button"
                   aria-label={`Remove ${log.entity.title} from album`}
                   onClick={() => onRemove(log.id)}
-                  className="flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className={REMOVE_BUTTON_CLASS}
                 >
-                  <X size={14} />
+                  <X size={14} aria-hidden />
                 </button>
               </span>
             </div>

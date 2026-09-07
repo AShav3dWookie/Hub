@@ -4,6 +4,13 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { CATEGORY_META } from "@logger/shared";
 import type { CalendarItem } from "@logger/shared";
 import { useCalendarMonth } from "../api/hooks.js";
+import {
+  CHIP_CLASS,
+  CHIP_OFF_CLASS,
+  ICON_BUTTON_CLASS,
+  SECONDARY_BUTTON_SM_CLASS,
+  SECTION_HEADING,
+} from "../components/ui.js";
 import { addMonths, dayLabel, daysInMonth, monthGrid, monthLabel, WEEKDAYS } from "../lib/calendar.js";
 
 const CATEGORY_DOT: Record<CalendarItem["category"], string> = {
@@ -54,7 +61,9 @@ export function Calendar({
   const [addOpen, setAddOpen] = useState(false);
   useEffect(() => setAddOpen(false), [selectedDate]);
 
-  const grid = useMemo(() => monthGrid(month), [month]);
+  // Six rows always. A 4- or 5-row month padded to six keeps the grid one size, so paging
+  // through the year stops shunting the day panel up and down.
+  const grid = useMemo(() => monthGrid(month, 6), [month]);
   const { data, isLoading } = useCalendarMonth(month);
 
   const itemsByDate = useMemo(() => {
@@ -80,45 +89,49 @@ export function Calendar({
   const selectedItems = selectedDate ? (itemsByDate.get(selectedDate) ?? []) : [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Calendar</h1>
+    // A two-pane screen rather than one long scroll: the grid fills its share of the space
+    // between the header and the tab bar and never scrolls, and the day panel scrolls inside
+    // itself. min-h keeps it honest on a short viewport (landscape), where the page scrolls.
+    <div className="flex h-[var(--content-h)] min-h-[30rem] flex-col gap-2">
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          aria-label="Previous month"
+          onClick={() => goToMonth(addMonths(month, -1))}
+          className={ICON_BUTTON_CLASS}
+        >
+          <ChevronLeft size={22} aria-hidden />
+        </button>
+        {/* The month is the page title; a separate "Calendar" heading above it cost a whole bar. */}
+        <h1 className="min-w-0 flex-1 truncate text-center text-xl font-semibold">{monthLabel(month)}</h1>
+        <button
+          type="button"
+          aria-label="Next month"
+          onClick={() => goToMonth(addMonths(month, 1))}
+          className={ICON_BUTTON_CLASS}
+        >
+          <ChevronRight size={22} aria-hidden />
+        </button>
         <button
           type="button"
           onClick={() => goToMonth(todayISO.slice(0, 7))}
-          className="min-h-[36px] rounded-md border border-slate-300 px-3 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+          className={SECONDARY_BUTTON_SM_CLASS}
         >
           Today
         </button>
       </div>
 
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          aria-label="Previous month"
-          onClick={() => goToMonth(addMonths(month, -1))}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <span className="text-lg font-medium">{monthLabel(month)}</span>
-        <button
-          type="button"
-          aria-label="Next month"
-          onClick={() => goToMonth(addMonths(month, 1))}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-        >
-          <ChevronRight size={20} />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500 dark:text-slate-400">
+      <div className="grid shrink-0 grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500 dark:text-slate-400">
         {WEEKDAYS.map((d) => (
           <div key={d}>{d}</div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1" aria-busy={isLoading}>
+      <div
+        data-calendar-grid
+        className="grid min-h-0 flex-[3] grid-cols-7 grid-rows-6 gap-1"
+        aria-busy={isLoading}
+      >
         {grid.map((cell) => {
           const items = itemsByDate.get(cell.date) ?? [];
           const isToday = cell.date === todayISO;
@@ -132,25 +145,27 @@ export function Calendar({
               onClick={() => selectDay(cell.date, cell.inMonth)}
               aria-label={dayLabel(cell.date)}
               aria-pressed={isSelected}
-              className={`flex min-h-[52px] flex-col items-center gap-1 rounded-md border p-1 text-sm ${
+              className={`flex h-full w-full flex-col items-center gap-1 overflow-hidden rounded-lg border pt-1.5 text-sm tabular-nums ${
                 isSelected
-                  ? "border-slate-900 bg-slate-900 text-white dark:border-slate-400 dark:bg-slate-700"
+                  ? "border-slate-900 bg-slate-900 font-semibold text-white dark:border-slate-400 dark:bg-slate-700"
                   : isToday
-                    ? "border-slate-400 dark:border-slate-500"
+                    ? // A ring, not a filled pill behind the number: a second rounded-full span
+                      // inside a cell is indistinguishable from an event dot.
+                      "border-slate-400 ring-1 ring-inset ring-slate-400 dark:border-slate-500 dark:ring-slate-500"
                     : "border-slate-200 dark:border-slate-700"
-              } ${cell.inMonth ? "" : "text-slate-400 dark:text-slate-600"} hover:border-slate-400 dark:hover:border-slate-500`}
+              } ${cell.inMonth ? "" : "opacity-40"} hover:border-slate-400 dark:hover:border-slate-500`}
             >
               <span>{dayNum}</span>
               {cell.inMonth && items.length > 0 && (
-                <span className="flex flex-wrap items-center justify-center gap-0.5">
+                <span className="flex flex-wrap items-center justify-center gap-1">
                   {items.slice(0, 3).map((item, i) => (
                     <span
                       key={i}
-                      className={`h-1.5 w-1.5 rounded-full ${CATEGORY_DOT[item.category]}`}
+                      className={`h-2 w-2 rounded-full ${CATEGORY_DOT[item.category]}`}
                     />
                   ))}
                   {items.length > 3 && (
-                    <span className="text-[10px] leading-none text-slate-500 dark:text-slate-400">
+                    <span className="text-2xs leading-none text-slate-500 dark:text-slate-400">
                       +{items.length - 3}
                     </span>
                   )}
@@ -161,29 +176,38 @@ export function Calendar({
         })}
       </div>
 
-      {selectedDate && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      {/* Always rendered, even with nothing selected: letting the panel disappear handed the
+          grid the whole screen on a month without today in it, so the cells changed size as
+          you paged through the year. */}
+      <div className="flex min-h-0 flex-[2] flex-col gap-2">
+        {!selectedDate && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Pick a day to see what&apos;s on it.
+          </p>
+        )}
+        {selectedDate && (
+          <>
+          <div className="flex shrink-0 items-center justify-between gap-2">
+            <h2 className={`min-w-0 truncate normal-case tracking-normal ${SECTION_HEADING}`}>
               {dayLabel(selectedDate)}
             </h2>
             <button
               type="button"
               onClick={() => setAddOpen((v) => !v)}
               aria-expanded={addOpen}
-              className="flex min-h-[36px] items-center gap-1 rounded-md border border-slate-300 px-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              className={`flex shrink-0 items-center gap-1 ${SECONDARY_BUTTON_SM_CLASS}`}
             >
-              <Plus size={16} />
+              <Plus size={18} aria-hidden />
               Add event
             </button>
           </div>
           {addOpen && (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid shrink-0 grid-cols-3 gap-2">
               {CALENDAR_ADD_CATEGORIES.map((cat) => (
                 <Link
                   key={cat}
                   to={addHref(cat, selectedDate)}
-                  className="min-h-[36px] rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className={`${CHIP_CLASS} ${CHIP_OFF_CLASS}`}
                 >
                   {CATEGORY_META[cat].label}
                 </Link>
@@ -193,7 +217,8 @@ export function Calendar({
           {selectedItems.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">Nothing on this day.</p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            // The one scrolling region on the screen.
+            <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain">
               {selectedItems.map((item) => (
                 <li key={`${item.kind}-${item.logId ?? item.noteId}`}>
                   <Link
@@ -202,7 +227,7 @@ export function Calendar({
                   >
                     <span className="flex items-center gap-2">
                       <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_DOT[item.category]}`}
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${CATEGORY_DOT[item.category]}`}
                       />
                       <span className="font-medium dark:text-white">{item.title}</span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -220,8 +245,9 @@ export function Calendar({
               ))}
             </ul>
           )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

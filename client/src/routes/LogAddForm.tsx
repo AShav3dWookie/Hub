@@ -120,7 +120,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4 sm:max-w-lg">
       <h1 className="text-2xl font-semibold">Log a {CATEGORY_META[category].label}</h1>
 
       <label className="flex flex-col gap-1 relative">
@@ -136,12 +136,15 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
           autoFocus
         />
         {suggestions && suggestions.length > 0 && !selectedEntityId && (
-          <ul className="absolute top-full z-10 mt-16 w-full rounded-md border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          // top-full is already the bottom of the label, i.e. the bottom of the input; the
+          // old mt-16 pushed the list a hardcoded 64px below it and would not have tracked
+          // a field of any other height.
+          <ul className="absolute top-full z-10 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
             {suggestions.map((s) => (
               <li key={s.id}>
                 <button
                   type="button"
-                  className="block w-full px-3 py-2 text-left hover:bg-slate-100 dark:text-white dark:hover:bg-slate-700"
+                  className="flex min-h-[44px] w-full items-center px-3 py-2 text-left hover:bg-slate-100 dark:text-white dark:hover:bg-slate-700"
                   onClick={() => {
                     setTitle(s.title);
                     setSelectedEntityId(s.id);
@@ -243,7 +246,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             onChange={(e) =>
               setPhotoFiles(Array.from(e.target.files ?? []).slice(0, MAX_MEDIA_PER_LOG))
             }
-            className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
+            className="text-sm text-slate-600 file:mr-3 file:min-h-[44px] file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:text-white disabled:opacity-50 dark:text-slate-300 dark:file:bg-slate-700"
           />
           {!canPickMedia && (
             <p className="text-xs text-slate-500 dark:text-slate-400">

@@ -1,5 +1,10 @@
 import { useState } from "react";
+import { FIELD_CLASS } from "./ui.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
+
+/** A range input's caption, above it rather than inline beside it — "From [____]" beside a
+ *  date input leaves the input too narrow to show a date on a phone. */
+const RANGE_LABEL_CLASS = "flex flex-col gap-1 text-sm";
 
 export type DateMode = "specific" | "year";
 
@@ -54,11 +59,11 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
       <div className="flex items-center justify-between gap-3">
         <legend className="px-1 text-sm font-medium">Date filter</legend>
         {!forceMode && (
-          <div className="flex overflow-hidden rounded-md border border-slate-300 text-xs dark:border-slate-600">
+          <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-300 text-xs dark:border-slate-600">
             <button
               type="button"
               onClick={() => handleModeChange("specific")}
-              className={`px-2 py-1 ${
+              className={`flex min-h-[44px] items-center px-3 ${
                 mode === "specific"
                   ? "bg-slate-900 text-white dark:bg-slate-600"
                   : "bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -69,7 +74,7 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
             <button
               type="button"
               onClick={() => handleModeChange("year")}
-              className={`px-2 py-1 ${
+              className={`flex min-h-[44px] items-center px-3 ${
                 mode === "year"
                   ? "bg-slate-900 text-white dark:bg-slate-600"
                   : "bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -82,31 +87,31 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
       </div>
 
       {mode === "specific" && (
-        <div className="flex flex-wrap gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <label className={RANGE_LABEL_CLASS}>
             From
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => handleSpecificChange("start", e.target.value)}
-              className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`w-full ${FIELD_CLASS}`}
             />
           </label>
-          <label className="flex items-center gap-2 text-sm">
+          <label className={RANGE_LABEL_CLASS}>
             To
             <input
               type="date"
               value={dateTo}
               onChange={(e) => handleSpecificChange("end", e.target.value)}
-              className="rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`w-full ${FIELD_CLASS}`}
             />
           </label>
         </div>
       )}
 
       {mode === "year" && (
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <label className={RANGE_LABEL_CLASS}>
             Year
             <input
               type="number"
@@ -114,10 +119,10 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
               placeholder="e.g. 2023"
               value={year}
               onChange={(e) => handleYearChange(e.target.value, yearTo)}
-              className="w-24 rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`w-full ${FIELD_CLASS}`}
             />
           </label>
-          <label className="flex items-center gap-2 text-sm">
+          <label className={RANGE_LABEL_CLASS}>
             to
             <input
               type="number"
@@ -125,7 +130,7 @@ export function DateFilter({ dateFrom, dateTo, onChange, forceMode }: DateFilter
               placeholder="optional end year"
               value={yearTo}
               onChange={(e) => handleYearChange(year, e.target.value)}
-              className="w-32 rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              className={`w-full ${FIELD_CLASS}`}
             />
           </label>
         </div>

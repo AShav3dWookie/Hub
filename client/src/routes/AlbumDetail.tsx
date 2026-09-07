@@ -120,20 +120,20 @@ export function AlbumDetail() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-lg font-semibold dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            className={`w-full text-lg font-semibold ${FIELD_CLASS}`}
           />
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <input
               type="date"
               value={dateStart}
               onChange={(e) => applyRange("start", e.target.value)}
-              className={`flex-1 ${FIELD_CLASS}`}
+              className={`w-full ${FIELD_CLASS}`}
             />
             <input
               type="date"
               value={dateEnd}
               onChange={(e) => applyRange("end", e.target.value)}
-              className={`flex-1 ${FIELD_CLASS}`}
+              className={`w-full ${FIELD_CLASS}`}
             />
           </div>
           <textarea
@@ -141,7 +141,7 @@ export function AlbumDetail() {
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Notes"
-            className={FIELD_CLASS}
+            className={`w-full ${FIELD_CLASS}`}
           />
           <div className="flex gap-2">
             <button
@@ -239,7 +239,7 @@ export function AlbumDetail() {
               accept={MEDIA_ACCEPT_ATTR}
               multiple
               onChange={(e) => handleUpload(Array.from(e.target.files ?? []))}
-              className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
+              className="text-sm text-slate-600 file:mr-3 file:min-h-[44px] file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:text-white dark:text-slate-300 dark:file:bg-slate-700"
             />
           </div>
         ) : (

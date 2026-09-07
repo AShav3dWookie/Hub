@@ -78,15 +78,18 @@ describe("Calendar — structure", () => {
     ]);
   });
 
-  it("renders every day of the month plus the exact adjacent-month spillover", async () => {
+  it("renders every day of the month, padded out to a fixed six rows", async () => {
     render();
     await screen.findByText("February 2024");
     for (const iso of ["2024-02-01", "2024-02-15", "2024-02-29", "2024-01-29", "2024-01-31", "2024-03-01", "2024-03-03"]) {
       expect(cell(iso)).not.toBeNull();
     }
+    // February 2024 needs only five rows; the sixth is padding so the grid holds one
+    // height all year instead of shunting the day panel around as you page through it.
+    expect(cell("2024-03-10")).not.toBeNull();
     expect(cell("2024-01-28")).toBeNull();
-    expect(cell("2024-03-04")).toBeNull();
-    expect(allDayCells()).toHaveLength(35);
+    expect(cell("2024-03-11")).toBeNull();
+    expect(allDayCells()).toHaveLength(42);
   });
 
   it("auto-selects today when it is in the initial month", async () => {
@@ -105,10 +108,13 @@ describe("Calendar — structure", () => {
     allDayCells().forEach((c) => expect(c).toHaveAttribute("aria-pressed", "false"));
   });
 
-  it("fetches exactly the visible grid range", async () => {
+  it("fetches the month's own grid range, not the rows padding it out to six", async () => {
     render();
     await screen.findByText("February 2024");
+    // The padding cells are always out-of-month, so they show no events and need no data.
+    // Widening the fetch to cover them would ask the server for a week nobody can see.
     expect(requestedRanges()).toContainEqual({ from: "2024-01-29", to: "2024-03-03" });
+    expect(requestedRanges()).not.toContainEqual({ from: "2024-01-29", to: "2024-03-10" });
   });
 });
 

@@ -178,7 +178,7 @@ export function Lightbox({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/80 p-2"
     >
       <button
         type="button"
@@ -187,9 +187,9 @@ export function Lightbox({
           e.stopPropagation();
           onClose();
         }}
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+        className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
       >
-        <X size={20} />
+        <X size={22} aria-hidden />
       </button>
       {onPrev && (
         <button
@@ -199,9 +199,9 @@ export function Lightbox({
             e.stopPropagation();
             slideTo("prev");
           }}
-          className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="absolute left-3 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         >
-          <ChevronLeft size={24} />
+          <ChevronLeft size={26} aria-hidden />
         </button>
       )}
       {onNext && (
@@ -212,9 +212,9 @@ export function Lightbox({
             e.stopPropagation();
             slideTo("next");
           }}
-          className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="absolute right-3 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         >
-          <ChevronRight size={24} />
+          <ChevronRight size={26} aria-hidden />
         </button>
       )}
 
@@ -284,7 +284,7 @@ export function Lightbox({
       {children != null && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="max-w-full text-center text-sm text-white"
+          className="max-w-full pb-[env(safe-area-inset-bottom)] text-center text-sm text-white"
         >
           {children}
         </div>

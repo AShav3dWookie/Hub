@@ -6,6 +6,7 @@ import {
   gridRange,
   monthGrid,
   monthLabel,
+  weekdayShort,
   WEEKDAYS,
 } from "./calendar.js";
 
@@ -83,6 +84,22 @@ describe("monthGrid", () => {
     expect(grid[0].date).toBe("2024-12-30");
     expect(grid.filter((c) => c.inMonth).map((c) => c.date.slice(0, 7)).every((m) => m === "2025-01")).toBe(true);
   });
+
+  it("pads out to minRows, and the padding is always out-of-month", () => {
+    // Feb 2024 fills five rows on its own; April 2024 needs six already.
+    const padded = monthGrid("2024-02", 6);
+    expect(padded).toHaveLength(42);
+    expect(padded.at(-1)!.date).toBe("2024-03-10");
+    expect(padded.slice(35).every((c) => !c.inMonth)).toBe(true);
+    expect(monthGrid("2024-04", 6)).toHaveLength(42);
+    // Every day of the month still appears exactly once.
+    expect(padded.filter((c) => c.inMonth)).toHaveLength(29);
+  });
+
+  it("leaves the natural row count alone when minRows is not asked for", () => {
+    expect(monthGrid("2024-02")).toHaveLength(35);
+    expect(monthGrid("2024-02", 4)).toHaveLength(35);
+  });
 });
 
 describe("gridRange", () => {
@@ -93,6 +110,11 @@ describe("gridRange", () => {
 });
 
 describe("labels", () => {
+  it("weekdayShort names the weekday of a date", () => {
+    expect(weekdayShort("2024-02-15")).toMatch(/Thu/);
+    expect(weekdayShort("2024-02-19")).toMatch(/Mon/);
+  });
+
   it("monthLabel names the month and year", () => {
     expect(monthLabel("2024-02")).toMatch(/February 2024/);
     expect(monthLabel("2025-12")).toMatch(/December 2025/);

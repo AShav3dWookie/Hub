@@ -30,7 +30,7 @@ export function PersonAddForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4 sm:max-w-lg">
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium">Name</span>
         <input

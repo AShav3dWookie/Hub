@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { SyncChangesResponse } from "@logger/shared";
 import { E2E_BASE_URL } from "../playwright.config";
-import { gotoHome, outboxCount, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
+import { HOME_HEADING, gotoHome, gotoTab, outboxCount, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
 
 /**
  * Persistence guarantees for the writes tier: whatever the user does offline — one write, a
@@ -71,7 +71,7 @@ async function addMovie(page: Page, title: string, opts: { person?: string; note
     await page.getByPlaceholder(/Add a person/i).press("Enter");
   }
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 }
 
 async function openEntity(page: Page, title: string) {
@@ -114,9 +114,9 @@ test("queued offline writes survive a full page reload before syncing", async ({
 
   // Back to home (client-side), then a full reload — served by the SW shell. IndexedDB
   // persists across the reload; the queue must be intact.
-  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await gotoTab(page, "Home");
   await page.reload();
-  await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
   expect(await outboxCount(page)).toBe(before);
   const entities = await readStore<{ title: string; id: number }>(page, "logger", "entities");

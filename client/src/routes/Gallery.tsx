@@ -1,5 +1,6 @@
 import { useGallery, useDeleteGalleryPhoto } from "../api/hooks.js";
 import { useOnlineStatus } from "../api/localHooks.js";
+import { GalleryTabs } from "../components/GalleryTabs.js";
 import { PhotoStream } from "../components/PhotoStream.js";
 import { useToast } from "../components/ToastProvider.js";
 
@@ -23,6 +24,7 @@ export function Gallery() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Gallery</h1>
+      <GalleryTabs />
       <PhotoStream
         photos={photos}
         isLoading={isLoading}

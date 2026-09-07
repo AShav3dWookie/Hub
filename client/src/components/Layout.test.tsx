@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Layout } from "./Layout.js";
 
@@ -15,6 +17,30 @@ beforeEach(() => {
   useAuthStatus.mockReturnValue({ data: { authRequired: false, authenticated: true } });
   logoutMutate.mockReset();
 });
+
+function Where() {
+  return <div data-testid="path">{useLocation().pathname}</div>;
+}
+
+/**
+ * Back needs a real history stack, which renderWithProviders' single `route` cannot build.
+ */
+function renderAt(initialEntries: string[], initialIndex = initialEntries.length - 1) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={initialEntries} initialIndex={initialIndex}>
+        <Layout>
+          <Routes>
+            <Route path="*" element={<Where />} />
+          </Routes>
+        </Layout>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
 
 describe("Layout", () => {
   it("renders the page content", () => {
@@ -66,5 +92,34 @@ describe("Layout", () => {
     useAuthStatus.mockReturnValue({ data: undefined });
     renderWithProviders(<Layout>x</Layout>);
     expect(screen.queryByRole("button", { name: /log out/i })).not.toBeInTheDocument();
+  });
+
+  it("reaches settings from the header", () => {
+    renderWithProviders(<Layout>x</Layout>);
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("offers no back arrow at a tab root, where there is nothing to go back to", () => {
+    renderAt(["/calendar"]);
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+  });
+
+  it("offers a back arrow on a screen the tab bar does not own", () => {
+    renderAt(["/entity/5"]);
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
+  it("Back pops history when there is in-app history", async () => {
+    renderAt(["/", "/entity/5"], 1);
+    expect(screen.getByTestId("path")).toHaveTextContent("/entity/5");
+
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByTestId("path")).toHaveTextContent("/");
+  });
+
+  it("Back falls back to / on a fresh deep link (no history)", async () => {
+    renderAt(["/entity/5"]);
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByTestId("path")).toHaveTextContent("/");
   });
 });

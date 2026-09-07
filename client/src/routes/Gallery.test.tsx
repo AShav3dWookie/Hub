@@ -66,6 +66,14 @@ describe("Gallery", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it("links to Albums via the Photos/Albums toggle", async () => {
+    vi.mocked(repo.getGallery).mockResolvedValue({ photos: [], nextCursor: null });
+
+    renderWithProviders(<Gallery />);
+
+    expect(await screen.findByRole("link", { name: "Albums" })).toHaveAttribute("href", "/albums");
+  });
+
   it("renders a thumbnail per photo", async () => {
     vi.mocked(repo.getGallery).mockResolvedValue({ photos: [photo(2), photo(1)], nextCursor: null });
 

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readStore, syncFromSettings, outboxCount } from "./helpers/app";
+import { HOME_HEADING, outboxCount, readStore, syncFromSettings } from "./helpers/app";
 import { addLog, assertReplicaClean, bootstrap, feedWhere, openEntity } from "./helpers/writes";
 
 /**
@@ -129,7 +129,7 @@ test("writes survive a full reload mid-session, then a later sync", async ({ pag
 
   // Full reload while still offline and un-synced.
   await page.reload();
-  await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
   expect(await outboxCount(page)).toBeGreaterThanOrEqual(2);
 
   await addLog(page, "movie", { title: `After ${tag}` });

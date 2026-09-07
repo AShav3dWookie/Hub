@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CARD_CLASS } from "./ui.js";
+import { CARD_CLASS, ROW_LINK, SECTION_HEADING } from "./ui.js";
 import type {
   AlbumSearchResult,
   EntityWithLogsDTO,
@@ -17,11 +17,6 @@ import { highlightMatches } from "../lib/highlight.js";
  * alongside the filter bar; each is self-contained and driven only by its rows and the keyword
  * tokens used for highlighting.
  */
-
-const SECTION_HEADING =
-  "text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
-
-const ROW_LINK = `flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 ${CARD_CLASS}`;
 
 export function SearchSkeleton() {
   return (
@@ -119,14 +114,16 @@ export function EntityResults({
     <div className="flex flex-col gap-4">
       {entities.map((entity) => (
         <div key={entity.id} className={CARD_CLASS}>
-          <div className="flex items-center justify-between">
+          {/* Stacked, not two columns: a long title beside a long "Movie · 1 log · avg 5.0"
+              left the title a couple of words a line at 388px. */}
+          <div className="flex flex-col gap-0.5">
             <Link
               to={`/entity/${entity.id}`}
-              className="text-lg font-medium hover:underline dark:text-white"
+              className="flex min-h-[44px] items-center text-lg font-medium hover:underline dark:text-white"
             >
               {highlightMatches(entity.title, tokens)}
             </Link>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
               {CATEGORY_META[entity.category].label} · {entity.visitCount} log
               {entity.visitCount === 1 ? "" : "s"}
               {entity.averageRating != null && ` · avg ${entity.averageRating.toFixed(1)}★`}

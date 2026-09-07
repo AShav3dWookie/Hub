@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoHome, readStore } from "./helpers/app";
+import { HOME_HEADING, gotoHome, gotoTab, readStore } from "./helpers/app";
 
 /**
  * With reads served from the IndexedDB replica, the app keeps working after the network
@@ -16,14 +16,14 @@ test("browses cached data after going offline (client-side nav)", async ({ page,
 
   await context.setOffline(true);
   try {
-    await page.getByRole("link", { name: "Search", exact: true }).click();
+    await gotoTab(page, "Search");
     await page.getByRole("textbox").first().fill("Interstellar");
     await expect(page.getByText("Interstellar").first()).toBeVisible();
     await page.getByText("Interstellar").first().click();
     await expect(page).toHaveURL(/\/(entity|person)\/\d+/);
 
-    await page.getByRole("link", { name: "Home", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+    await gotoTab(page, "Home");
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
   } finally {
     await context.setOffline(false);
   }
