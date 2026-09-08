@@ -13,6 +13,7 @@ import type {
   EntitySyncDTO,
   LogSyncDTO,
   PhotoSyncDTO,
+  SyncEntityType,
 } from "@logger/shared";
 
 /**
@@ -31,6 +32,25 @@ const dayOffset = (days: number) => {
 export interface ParityFixture {
   db: AppDb;
   snap: LocalSnapshot;
+  cleanup: () => void;
+}
+
+/**
+ * A replica that syncs the way a real client does: once at the start, then again for whatever
+ * has changed since.
+ *
+ * `snapshotFromServer` always drains from `since = 0`, so every array it produces is rebuilt
+ * from scratch and is correct by construction. That hid a real bug — a log whose `photoIds`
+ * had gone stale on the server side was never re-emitted, and only a client that had *already*
+ * synced past it would notice. Bootstrapping can never catch that class of bug; only a second,
+ * incremental drain can.
+ */
+export interface ParitySession {
+  db: AppDb;
+  /** The replica as of the last `sync()`. */
+  snap: LocalSnapshot;
+  /** Drain everything new since the last sync, apply it, and rebuild the replica. */
+  sync: (now?: Date) => LocalSnapshot;
   cleanup: () => void;
 }
 
@@ -65,8 +85,63 @@ export function snapshotFromServer(db: AppDb, now: Date = TODAY): LocalSnapshot 
   return buildSnapshot({ entities, logs, photos, albums, notes }, now);
 }
 
+/**
+ * A replica that can be synced more than once.
+ *
+ * Rows are kept by id and upserted, tombstoned ids are dropped, and the snapshot is rebuilt
+ * from what is left — the same semantics as the client's `applyChanges`
+ * (client/src/sync/apply.ts). That function writes to IndexedDB and cannot run here, so this
+ * mirrors its behaviour rather than calling it; its dirty-row guard is deliberately left out,
+ * because parity never writes locally.
+ */
+export function createParitySession(db: AppDb, now: Date = TODAY): Omit<ParitySession, "cleanup"> {
+  const entities = new Map<number, EntitySyncDTO>();
+  const logs = new Map<number, LogSyncDTO>();
+  const photos = new Map<number, PhotoSyncDTO>();
+  const albums = new Map<number, AlbumSyncDTO>();
+  const notes = new Map<number, EntityNoteSyncDTO>();
+  const byType: Record<SyncEntityType, Map<number, unknown>> = {
+    entity: entities,
+    log: logs,
+    log_photo: photos,
+    album: albums,
+    entity_note: notes,
+  };
+
+  let cursor = 0;
+  const session = {
+    db,
+    snap: buildSnapshot({ entities: [], logs: [], photos: [], albums: [], notes: [] }, now),
+    sync(at: Date = now): LocalSnapshot {
+      for (let guard = 0; guard < 100; guard++) {
+        const page = getChanges(db, { since: cursor });
+        for (const row of page.changes.entities) entities.set(row.id, row);
+        for (const row of page.changes.logs) logs.set(row.id, row);
+        for (const row of page.changes.photos) photos.set(row.id, row);
+        for (const row of page.changes.albums) albums.set(row.id, row);
+        for (const row of page.changes.entityNotes) notes.set(row.id, row);
+        for (const t of page.deletions) byType[t.entityType].delete(t.id);
+        cursor = Number(page.nextCursor);
+        if (!page.hasMore) break;
+      }
+      session.snap = buildSnapshot(
+        {
+          entities: [...entities.values()],
+          logs: [...logs.values()],
+          photos: [...photos.values()],
+          albums: [...albums.values()],
+          notes: [...notes.values()],
+        },
+        at,
+      );
+      return session.snap;
+    },
+  };
+  return session;
+}
+
 /** Insert a photo row directly. `row_seq` is trigger-assigned, so it syncs like any other row. */
-function attachPhoto(
+export function attachPhoto(
   db: AppDb,
   opts: { logId?: number; albumId?: number; name: string; mimeType?: string },
 ): number {

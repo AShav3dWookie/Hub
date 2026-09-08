@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
+import { eq } from "drizzle-orm";
 import { logPhotos } from "../db/schema.js";
 import { createLog, deleteLog } from "./logService.js";
 import { findOrCreateEntity } from "./entityService.js";
@@ -92,6 +93,66 @@ describe("getChanges", () => {
     expect(page.changes.logs).toEqual([]);
     expect(page.deletions).toHaveLength(1);
     expect(page.deletions[0]).toMatchObject({ entityType: "log", id: log.id });
+  });
+
+  /**
+   * A photo is its own synced row, but it also changes the parent log's `photoIds`. Nothing
+   * bumped the log, so a client already past it kept `photoIds: []` and the entity page showed
+   * no photos while the gallery — which reads photos directly — showed them fine. Fixed by the
+   * parent-bump triggers in migration 0010.
+   */
+  describe("a photo changes its parent log too", () => {
+    const attach = (logId: number, name: string) =>
+      ctx.db
+        .insert(logPhotos)
+        .values({
+          logId,
+          albumId: null,
+          filename: `${name}.jpg`,
+          thumbnailFilename: `${name}_thumb.webp`,
+          originalName: `${name}.jpg`,
+          mimeType: "image/jpeg",
+          size: 1024,
+        })
+        .returning()
+        .get();
+
+    it("re-emits the log, carrying the new photo, when one is attached", () => {
+      ctx = createTestDb();
+      const log = seedLog("Dune");
+      const cursor = Number(getChanges(ctx.db).nextCursor);
+
+      const photo = attach(log.id, "beach");
+
+      const page = getChanges(ctx.db, { since: cursor });
+      expect(page.changes.logs.map((l) => l.id)).toContain(log.id);
+      expect(page.changes.logs.find((l) => l.id === log.id)?.photoIds).toEqual([photo.id]);
+    });
+
+    it("re-emits the log, without it, when a photo is removed", () => {
+      ctx = createTestDb();
+      const log = seedLog("Dune");
+      const photo = attach(log.id, "beach");
+      const cursor = Number(getChanges(ctx.db).nextCursor);
+
+      ctx.db.delete(logPhotos).where(eq(logPhotos.id, photo.id)).run();
+
+      const page = getChanges(ctx.db, { since: cursor });
+      expect(page.changes.logs.find((l) => l.id === log.id)?.photoIds).toEqual([]);
+    });
+
+    it("re-emits the log when a photo is orphaned rather than deleted", () => {
+      // Deleting a log with ?deletePhotos=false nulls log_id instead of removing the row.
+      ctx = createTestDb();
+      const keeper = seedLog("Dune");
+      const photo = attach(keeper.id, "beach");
+      const cursor = Number(getChanges(ctx.db).nextCursor);
+
+      ctx.db.update(logPhotos).set({ logId: null }).where(eq(logPhotos.id, photo.id)).run();
+
+      const page = getChanges(ctx.db, { since: cursor });
+      expect(page.changes.logs.find((l) => l.id === keeper.id)?.photoIds).toEqual([]);
+    });
   });
 
   it("returns only what changed after the cursor", () => {
