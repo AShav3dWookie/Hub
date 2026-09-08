@@ -1,5 +1,6 @@
-# Build, lint and test on every push to main and every pull request, so a broken main is caught
-# before anyone cuts a release tag. Publishes nothing — see release.yml for that.
+# Build, lint, test and build the Docker image on every push to main and every pull request,
+# so a broken main is caught before anyone cuts a release tag. Publishes nothing — see
+# release.yml for that.
 #
 # Playwright is deliberately not run here: 14 serial specs plus a browser download roughly
 # quadruples the run, and a flaky browser test blocking main is not worth it. Run
@@ -35,3 +36,30 @@ jobs:
       - run: npm run typecheck:parity
       - run: npm run typecheck:e2e
       - run: npm test
+
+  # Deliberately not `needs: test`. The image is built from the same source but by a wholly
+  # separate toolchain, so a failure here says something the node job cannot, and gating it
+  # behind those tests would only delay the answer.
+  #
+  # This job exists because an image regression reached main unnoticed: a lockfile change
+  # nested the server's zod under server/node_modules instead of hoisting it, the runtime
+  # stage copied only the hoisted root, and every image built after it crash-looped on its
+  # first import. Nothing here built an image, and `npm run docker:test` is run by hand.
+  docker:
+    name: docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `npm ci`: every dependency this needs is installed inside the Dockerfile, and
+      # npm is here only to resolve the script. Node is pinned anyway to match the job above.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Uncached, so it pays for apk, npm ci and the native module compile on every run.
+      # That is deliberate: this is the same command the README gives you to check an image
+      # by hand, so the build args, the expected version and the health assertions stay in
+      # scripts/docker-smoke-test.sh rather than being restated here. Swap in buildx with a
+      # gha cache if the few minutes start to hurt, and accept that duplication then.
+      - run: npm run docker:test
