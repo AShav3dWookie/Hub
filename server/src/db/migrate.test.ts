@@ -183,6 +183,9 @@ describe("migrations", () => {
       "entities_sync_ad",
       "logs_sync_ai",
       "log_photos_sync_ad",
+      "log_photos_parent_ai",
+      "log_photos_parent_ad",
+      "log_photos_parent_au",
       "album_events_sync_ad",
       "log_people_sync_ai",
     ]) {
@@ -338,6 +341,71 @@ describe("migrations", () => {
     ).map((r) => r.name);
     expect(triggers.some((t) => t.startsWith("app_settings"))).toBe(false);
 
+    c.close();
+  });
+
+  it("0010 re-stamps logs that already had photos, so synced clients get them back", () => {
+    // The triggers only cover writes from here on. Anyone already running the app has logs
+    // sitting at a row_seq their devices are long past, and no way to reset a replica — so
+    // without the backfill their photos would stay missing for good. Reproduces that state by
+    // dropping the new triggers, then applies the real migration file over it.
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+
+    for (const t of ["log_photos_parent_ai", "log_photos_parent_ad", "log_photos_parent_au"]) {
+      c.exec(`DROP TRIGGER ${t}`);
+    }
+
+    c.exec(
+      "INSERT INTO entities (category, title, normalized_title, created_at) VALUES ('movie','Heat','heat',datetime('now'))",
+    );
+    c.exec(
+      "INSERT INTO logs (entity_id, date, created_at, updated_at) VALUES (1, '2026-01-01', datetime('now'), datetime('now'))",
+    );
+    c.exec(
+      "INSERT INTO log_photos (log_id, filename, thumbnail_filename, original_name, mime_type, size, created_at)" +
+        " VALUES (1, 'a.jpg', 'a_thumb.webp', 'a.jpg', 'image/jpeg', 10, datetime('now'))",
+    );
+
+    const seqOf = () =>
+      (c.prepare("SELECT row_seq FROM logs WHERE id = 1").get() as { row_seq: number }).row_seq;
+    const stale = seqOf();
+    // Precondition: without the triggers the photo left the log untouched. If this ever fails,
+    // the bug fixed itself somewhere else and the backfill below proves nothing.
+    expect(seqOf()).toBe(stale);
+    const photoSeq = (
+      c.prepare("SELECT row_seq FROM log_photos WHERE id = 1").get() as { row_seq: number }
+    ).row_seq;
+    expect(photoSeq).toBeGreaterThan(stale);
+
+    applyMigrationFile(c, "0010_lucky_shooting_star");
+
+    expect(seqOf()).toBeGreaterThan(photoSeq);
+    c.close();
+  });
+
+  it("0010 leaves a log with no photos alone", () => {
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+    // Same reset as above, so the file can be replayed over an already-migrated schema.
+    for (const t of ["log_photos_parent_ai", "log_photos_parent_ad", "log_photos_parent_au"]) {
+      c.exec(`DROP TRIGGER ${t}`);
+    }
+    c.exec(
+      "INSERT INTO entities (category, title, normalized_title, created_at) VALUES ('movie','Heat','heat',datetime('now'))",
+    );
+    c.exec(
+      "INSERT INTO logs (entity_id, date, created_at, updated_at) VALUES (1, '2026-01-01', datetime('now'), datetime('now'))",
+    );
+    const before = (c.prepare("SELECT row_seq FROM logs WHERE id = 1").get() as { row_seq: number })
+      .row_seq;
+
+    applyMigrationFile(c, "0010_lucky_shooting_star");
+
+    // Re-running the backfill must not churn every log through the change feed for nothing.
+    expect(
+      (c.prepare("SELECT row_seq FROM logs WHERE id = 1").get() as { row_seq: number }).row_seq,
+    ).toBe(before);
     c.close();
   });
 });
