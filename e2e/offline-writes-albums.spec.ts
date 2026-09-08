@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readStore, syncFromSettings } from "./helpers/app";
+import { enterEditMode, readStore, syncFromSettings } from "./helpers/app";
 import { addAlbum, addLog, assertReplicaClean, bootstrap, feedWhere } from "./helpers/writes";
 
 /**
@@ -52,6 +52,7 @@ test("offline: add then remove an event on a synced album — nets to no link", 
 
   await context.setOffline(true);
   await openAlbum(page, `Toggle Album ${tag}`);
+  await enterEditMode(page);
   await page.getByPlaceholder(/find an event to add/i).fill(`Toggle ${tag}`);
   await page.getByRole("button", { name: new RegExp(`Toggle ${tag}`) }).first().click();
   await expect(page.getByRole("button", { name: new RegExp(`Remove Toggle ${tag} from album`, "i") })).toBeVisible();
@@ -73,6 +74,7 @@ test("offline: add a new person to a synced album, then sync", async ({ page, co
 
   await context.setOffline(true);
   await openAlbum(page, `People Album ${tag}`);
+  await enterEditMode(page);
   const input = page.getByPlaceholder(/add a person/i);
   await input.fill(`Album Pal ${tag}`);
   await input.press("Enter");
@@ -96,15 +98,15 @@ test("offline: rename a synced album twice, then sync — final name once", asyn
 
   await context.setOffline(true);
   await openAlbum(page, `Rename ${tag} v0`);
-  await page.getByRole("button", { name: "Edit" }).first().click();
-  await page.getByRole("textbox").first().fill(`Rename ${tag} v1`);
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: `Rename ${tag} v1` })).toBeVisible();
-
-  await page.getByRole("button", { name: "Edit" }).first().click();
-  await page.getByRole("textbox").first().fill(`Rename ${tag} v2`);
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: `Rename ${tag} v2` })).toBeVisible();
+  // Leaving edit mode is what puts the heading back, so each round trip proves the rename
+  // reached the album rather than just the form it was typed into.
+  for (const version of ["v1", "v2"]) {
+    await enterEditMode(page);
+    await page.getByRole("textbox", { name: "Album title" }).fill(`Rename ${tag} ${version}`);
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Done editing" }).click();
+    await expect(page.getByRole("heading", { name: `Rename ${tag} ${version}` })).toBeVisible();
+  }
   await context.setOffline(false);
   await syncFromSettings(page);
 
@@ -126,6 +128,7 @@ test("offline: build a whole album graph (new album + new log + link + new perso
   await page.getByRole("button", { name: /create album/i }).click();
   await expect(page).toHaveURL(/\/album\/-?\d+/);
 
+  await enterEditMode(page);
   const input = page.getByPlaceholder(/add a person/i);
   await input.fill(`Graph Person ${tag}`);
   await input.press("Enter");
@@ -156,10 +159,10 @@ test("offline: delete a synced album — tombstone, gone from the feed", async (
 
   await context.setOffline(true);
   await openAlbum(page, `Delete Album ${tag}`);
-  await page.getByRole("button", { name: "Delete" }).first().click();
+  await enterEditMode(page);
+  await page.getByRole("button", { name: "Delete album" }).click();
   await expect(page.getByText("Delete this album?")).toBeVisible();
-  // The Edit/Delete row stays visible next to the confirm row → the confirm button is the last one.
-  await page.getByRole("button", { name: /^Delete$/ }).last().click();
+  await page.getByRole("button", { name: /^Delete$/ }).click();
   await context.setOffline(false);
   await syncFromSettings(page);
   await page.reload();

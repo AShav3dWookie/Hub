@@ -113,7 +113,7 @@ describe("Gallery", () => {
     const fetchMock = fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
 
-    renderWithProviders(<Gallery />);
+    renderWithProviders(<Gallery />, { editing: true });
     await userEvent.click(await screen.findByRole("button", { name: "photo-5.jpg" }));
     await userEvent.click(await screen.findByRole("button", { name: "Delete photo" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -122,6 +122,16 @@ describe("Gallery", () => {
       "/api/gallery/5",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("offers no delete in the lightbox outside edit mode", async () => {
+    vi.mocked(repo.getGallery).mockResolvedValue({ photos: [photo(5)], nextCursor: null });
+
+    renderWithProviders(<Gallery />);
+    await userEvent.click(await screen.findByRole("button", { name: "photo-5.jpg" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete photo" })).not.toBeInTheDocument();
   });
 
   it("loads the next page when the sentinel scrolls into view", async () => {

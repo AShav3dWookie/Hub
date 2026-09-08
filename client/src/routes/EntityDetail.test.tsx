@@ -56,12 +56,12 @@ function setEntity(category: Category, logs: LogDTO[]) {
   });
 }
 
-function renderDetail() {
+function renderDetail({ editing = false } = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/entity/:id" element={<EntityDetail />} />
     </Routes>,
-    { route: "/entity/5" },
+    { route: "/entity/5", editing },
   );
 }
 
@@ -71,9 +71,9 @@ describe("EntityDetail photo gallery", () => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
-  it("shows the photo gallery for a movie log", async () => {
+  it("shows the photo gallery for a movie log in edit mode", async () => {
     setEntity("movie", [log({ photos: [] })]);
-    renderDetail();
+    renderDetail({ editing: true });
     expect(await screen.findByRole("button", { name: /add photos/i })).toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe("EntityDetail photo gallery", () => {
   it("renders no album line when the log has no albums", async () => {
     setEntity("movie", [log({ albums: [] })]);
     renderDetail();
-    await screen.findByRole("button", { name: /add photos/i });
+    await screen.findByRole("heading", { name: "A movie" });
     expect(screen.queryByText(/part of/i)).not.toBeInTheDocument();
   });
 
@@ -156,17 +156,27 @@ describe("EntityDetail photo gallery", () => {
       ],
     });
 
-  it("view mode shows the thumbnail + Add photos but no per-photo delete", async () => {
+  it("read mode shows the thumbnail and nothing that changes it", async () => {
     setEntity("movie", [withPhoto()]);
     renderDetail();
     expect(await screen.findByRole("img", { name: "dinner.jpg" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add photos/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete dinner.jpg" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });
 
-  it("the event editor exposes the per-photo delete (and keeps Add photos)", async () => {
+  it("edit mode exposes Add photos and the per-photo delete on the card", async () => {
     setEntity("movie", [withPhoto()]);
-    renderDetail();
+    renderDetail({ editing: true });
+    expect(await screen.findByRole("img", { name: "dinner.jpg" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete dinner.jpg" })).toBeInTheDocument();
+  });
+
+  it("the event editor keeps the per-photo delete and Add photos", async () => {
+    setEntity("movie", [withPhoto()]);
+    renderDetail({ editing: true });
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     expect(screen.getByRole("button", { name: "Delete dinner.jpg" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add photos/i })).toBeInTheDocument();
@@ -191,7 +201,7 @@ describe("EntityDetail log deletion with photos", () => {
 
   it("offers keep-vs-delete when the log has photos; 'keep' queues deletePhotos:false", async () => {
     setEntity("movie", [log({ photos: [photo] })]);
-    renderDetail();
+    renderDetail({ editing: true });
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /keep photos/i }));
@@ -205,7 +215,7 @@ describe("EntityDetail log deletion with photos", () => {
 
   it("'delete log & photos' queues deletePhotos:true", async () => {
     setEntity("movie", [log({ photos: [photo] })]);
-    renderDetail();
+    renderDetail({ editing: true });
 
     await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: /Delete log & 1 photo/ }));
@@ -246,7 +256,7 @@ describe("EntityDetail log edit mode", () => {
 
   it("edits a log's notes and queues a log.update", async () => {
     setEntity("movie", [log({ notes: "first viewing" })]);
-    renderDetail();
+    renderDetail({ editing: true });
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     const notes = screen
@@ -270,7 +280,7 @@ describe("EntityDetail log edit mode", () => {
       return Promise.resolve(jsonResponse({}));
     });
 
-    renderDetail();
+    renderDetail({ editing: true });
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));

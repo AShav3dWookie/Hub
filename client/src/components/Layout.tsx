@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, Settings } from "lucide-react";
+import { Check, ChevronLeft, Pencil, Settings } from "lucide-react";
 import { useLogout, useAuthStatus } from "../api/auth.js";
 import { BottomNav } from "./BottomNav.js";
 import { TAB_PATHS } from "../lib/tabs.js";
-import { ICON_BUTTON_CLASS } from "./ui.js";
+import { ICON_BUTTON_ACTIVE_CLASS, ICON_BUTTON_CLASS } from "./ui.js";
+import { useEditModeToggle } from "./EditModeProvider.js";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { data } = useAuthStatus();
   const logout = useLogout();
   const { pathname, key } = useLocation();
+  const { editing, supported: editable, toggle: toggleEditing } = useEditModeToggle();
   const navigate = useNavigate();
 
   // The tab bar owns the five roots, so a back arrow there would be a no-op. Everything
@@ -41,6 +43,23 @@ export function Layout({ children }: { children: ReactNode }) {
           >
             Logger
           </Link>
+          {/* Only the screens with something to change offer it — see EditModeProvider. */}
+          {editable && (
+            <button
+              type="button"
+              onClick={toggleEditing}
+              // Not just "Edit": the cards inside these screens have their own Edit buttons.
+              aria-label={editing ? "Done editing" : "Edit this screen"}
+              aria-pressed={editing}
+              className={editing ? `${ICON_BUTTON_CLASS} ${ICON_BUTTON_ACTIVE_CLASS}` : ICON_BUTTON_CLASS}
+            >
+              {editing ? (
+                <Check size={22} strokeWidth={2} aria-hidden />
+              ) : (
+                <Pencil size={20} strokeWidth={1.75} aria-hidden />
+              )}
+            </button>
+          )}
           <Link to="/settings" aria-label="Settings" className={ICON_BUTTON_CLASS}>
             <Settings size={22} strokeWidth={1.75} aria-hidden />
           </Link>

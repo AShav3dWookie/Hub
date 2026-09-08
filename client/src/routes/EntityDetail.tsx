@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CARD_ACTION_CLASS,
   CARD_ACTION_DANGER_CLASS,
@@ -18,11 +18,13 @@ import { PersonLinks } from "../components/PersonLinks.js";
 import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { PhotoGallery } from "../components/PhotoGallery.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useEditableRoute } from "../components/EditModeProvider.js";
 
 export function EntityDetail() {
   const { id } = useParams<{ id: string }>();
   const entityId = Number(id);
   const { data, isLoading } = useEntityDetail(entityId);
+  const editable = useEditableRoute();
 
   if (isLoading) return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   if (!data) return <p className="text-slate-500 dark:text-slate-400">Not found.</p>;
@@ -47,7 +49,13 @@ export function EntityDetail() {
 
       <div className="flex flex-col gap-3">
         {data.logs.map((log) => (
-          <LogRow key={log.id} log={log} fields={fields} category={data.category as LoggableCategory} />
+          <LogRow
+            key={log.id}
+            log={log}
+            fields={fields}
+            category={data.category as LoggableCategory}
+            editable={editable}
+          />
         ))}
       </div>
     </div>
@@ -58,12 +66,17 @@ function LogRow({
   log,
   fields,
   category,
+  editable,
 }: {
   log: LogDTO;
   fields: (typeof CATEGORY_FIELDS)[LoggableCategory];
   category: LoggableCategory;
+  /** The screen is in edit mode. Without it this card is a read-only summary. */
+  editable: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  // Edit mode reveals this card's controls; opening the form is still a per-log choice, so a
+  // page with eight logs does not become eight open forms.
+  const [formOpen, setFormOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [rating, setRating] = useState<number | null>(log.rating);
   const [date, setDate] = useState(log.date);
@@ -78,6 +91,14 @@ function LogRow({
   const deleteLog = useDeleteLog();
   const { showToast } = useToast();
 
+  // Leaving edit mode takes anything it opened with it, so Done never strands a half-typed form.
+  useEffect(() => {
+    if (!editable) {
+      setFormOpen(false);
+      setConfirmingDelete(false);
+    }
+  }, [editable]);
+
   async function handleSave() {
     const nextDate = fields.dateGranularity === "year" ? `${year}-01-01` : date;
     await updateLog.mutateAsync({
@@ -87,7 +108,7 @@ function LogRow({
       people: fields.hasPeople ? people : [],
       autoDelete: fields.hasAutoDelete ? autoDelete : false,
     });
-    setEditing(false);
+    setFormOpen(false);
     showToast("Log updated");
   }
 
@@ -101,7 +122,7 @@ function LogRow({
     }
   }
 
-  if (editing) {
+  if (formOpen) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
         {fields.hasRating && <StarRating value={rating} onChange={setRating} />}
@@ -126,7 +147,7 @@ function LogRow({
           </div>
         )}
         {fields.hasPeople && (
-          <PhotoGallery logId={log.id} photos={log.photos} allowDelete />
+          <PhotoGallery logId={log.id} photos={log.photos} editable />
         )}
         {fields.hasAutoDelete && (
           <label className="mt-2 flex items-center gap-2 text-sm">
@@ -154,7 +175,7 @@ function LogRow({
           </button>
           <button
             type="button"
-            onClick={() => setEditing(false)}
+            onClick={() => setFormOpen(false)}
             className={SECONDARY_BUTTON_CLASS}
           >
             Cancel
@@ -188,8 +209,8 @@ function LogRow({
           album{log.albums.length > 1 ? "s" : ""}
         </p>
       )}
-      {fields.hasPeople && <PhotoGallery logId={log.id} photos={log.photos} />}
-      {confirmingDelete ? (
+      {fields.hasPeople && <PhotoGallery logId={log.id} photos={log.photos} editable={editable} />}
+      {editable && confirmingDelete && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-slate-600 dark:text-slate-300">Delete this log?</span>
           {log.photos.length > 0 ? (
@@ -226,11 +247,12 @@ function LogRow({
             Cancel
           </button>
         </div>
-      ) : (
+      )}
+      {editable && !confirmingDelete && (
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => setFormOpen(true)}
             className={CARD_ACTION_CLASS}
           >
             Edit

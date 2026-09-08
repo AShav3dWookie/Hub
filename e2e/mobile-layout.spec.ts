@@ -25,7 +25,8 @@ const ROUTES: { path: string; ready: (page: Page) => Promise<unknown> }[] = [
   // there is no /album/:id here to check.
   { path: "/albums", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/entity/1", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
-  { path: "/person/1", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
+  // A real person: id 1 is a movie, and PersonProfile redirects it to /entity/1.
+  { path: "/person/2", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   // Renders outside Layout, so it has neither header nor tab bar and needs its own
   // safe-area handling — which is exactly why it is worth checking here.
@@ -125,6 +126,42 @@ test.describe("mobile layout", () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+
+  test("edit mode keeps the header and the revealed controls inside the viewport", async ({ page }) => {
+    // The header grows a fourth control in edit mode (back, title, pencil, settings, and a
+    // Log out button when auth is on), and each screen reveals a form the read-only pass
+    // above never renders. Neither is measured anywhere else.
+    const EDITABLE = ["/entity/1", "/person/2", "/gallery"];
+    const problems: string[] = [];
+
+    for (const path of EDITABLE) {
+      await page.goto(path);
+      await page.getByRole("heading", { level: 1 }).waitFor();
+      await page.getByRole("button", { name: "Edit this screen" }).click();
+      await expect(page.getByRole("button", { name: "Done editing" })).toBeVisible();
+      await page.screenshot({ path: `e2e/.artifacts/screens/${slug(path)}-editing.png`, fullPage: true });
+
+      const found = await page.evaluate(() => {
+        const wide = [...document.querySelectorAll<HTMLElement>("body *")]
+          .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+          .slice(0, 5)
+          .map((el) => `overflows: ${el.tagName.toLowerCase()}.${el.className}`.slice(0, 120));
+        const small = [...document.querySelectorAll<HTMLElement>("a,button,input,select,textarea")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            if (r.height === 0 || r.width === 0) return false;
+            if (el.matches(":disabled")) return false;
+            if (getComputedStyle(el).display === "inline") return false;
+            return r.height < 44 && r.height !== 36;
+          })
+          .map((el) => `under 44px: ${el.tagName.toLowerCase()} "${(el.textContent ?? "").trim().slice(0, 24)}" ${Math.round(el.getBoundingClientRect().height)}px`);
+        return [...wide, ...small];
+      });
+      problems.push(...found.map((f) => `${path}: ${f}`));
+    }
+
+    expect(problems).toEqual([]);
   });
 
   test("the people tag input's dropdown and pills also meet the 44px floor", async ({ page }) => {

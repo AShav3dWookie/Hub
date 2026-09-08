@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { SyncChangesResponse } from "@logger/shared";
-import { HOME_HEADING, gotoHome, readStore, serviceWorkerState } from "./helpers/app";
+import { HOME_HEADING, enterEditMode, gotoHome, readStore, serviceWorkerState } from "./helpers/app";
 
 /**
  * The writes tier end to end: with the network down, create / edit / delete across the
@@ -58,7 +58,8 @@ test("offline create / edit / delete, then reconnect and sync", async ({ page, c
   await page.getByRole("textbox").first().fill("Interstellar");
   await page.getByText("Interstellar").first().click();
   await expect(page).toHaveURL(/\/entity\/\d+/);
-  await page.getByRole("button", { name: "Edit" }).first().click();
+  await enterEditMode(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
   await page.locator("textarea").first().fill(`edited offline ${tag}`);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(`edited offline ${tag}`)).toBeVisible();
@@ -71,6 +72,7 @@ test("offline create / edit / delete, then reconnect and sync", async ({ page, c
   const logsBefore = (await readStore<{ _localDeleted?: boolean }>(page, "logger", "logs")).filter(
     (l) => !l._localDeleted,
   ).length;
+  await enterEditMode(page);
   await page.getByRole("button", { name: "Delete" }).first().click();
   await page.getByRole("button", { name: /^Delete$/ }).click();
   await expect

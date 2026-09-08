@@ -33,6 +33,9 @@ function photo(id: number, over: Partial<LogPhotoDTO> = {}): LogPhotoDTO {
 
 describe("PhotoGallery", () => {
   beforeEach(() => {
+    // The offline test spies on navigator.onLine; without this it leaks into the next test,
+    // which now has no file input to find because read-only mode does not render one.
+    vi.restoreAllMocks();
     vi.stubGlobal("fetch", vi.fn());
     vi.stubGlobal(
       "matchMedia",
@@ -99,11 +102,11 @@ describe("PhotoGallery", () => {
     expect(within(dialog).getByRole("img")).toHaveAttribute("src", "/api/photos/full-2.jpg");
   });
 
-  it("confirms before deleting and calls the delete endpoint (allowDelete)", async () => {
+  it("confirms before deleting and calls the delete endpoint (editable)", async () => {
     const fetchMock = fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
 
-    renderWithProviders(<PhotoGallery logId={7} photos={[photo(3)]} allowDelete />);
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(3)]} editable />);
 
     await userEvent.click(screen.getByRole("button", { name: "Delete photo-3.jpg" }));
     expect(screen.getByText("Delete this photo?")).toBeInTheDocument();
@@ -117,7 +120,7 @@ describe("PhotoGallery", () => {
   });
 
   it("hides the photo controls for a not-yet-synced entry (temp id)", () => {
-    renderWithProviders(<PhotoGallery logId={-3} photos={[photo(1)]} allowDelete />);
+    renderWithProviders(<PhotoGallery logId={-3} photos={[photo(1)]} editable />);
 
     expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
@@ -126,7 +129,7 @@ describe("PhotoGallery", () => {
 
   it("hides the photo controls while offline", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} allowDelete />);
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} editable />);
 
     expect(screen.queryByRole("button", { name: "Add photos" })).not.toBeInTheDocument();
     expect(screen.getByText(/reconnect to add or remove photos/i)).toBeInTheDocument();
@@ -142,11 +145,20 @@ describe("PhotoGallery", () => {
     expect(screen.queryByText("Delete this photo?")).not.toBeInTheDocument();
   });
 
+  it("offers no way to add photos outside edit mode", () => {
+    renderWithProviders(<PhotoGallery logId={7} photos={[photo(1)]} />);
+
+    expect(screen.queryByRole("button", { name: /add photos/i })).not.toBeInTheDocument();
+    // Not merely hidden: with no file input there is no upload path at all.
+    expect(screen.queryByTestId("photo-file-input")).not.toBeInTheDocument();
+    expect(screen.getByRole("img")).toBeInTheDocument();
+  });
+
   it("uploads picked files as multipart form data without a JSON content-type", async () => {
     const fetchMock = fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(jsonResponse([photo(9)], 201));
 
-    renderWithProviders(<PhotoGallery logId={7} photos={[]} />);
+    renderWithProviders(<PhotoGallery logId={7} photos={[]} editable />);
 
     const input = screen.getByTestId("photo-file-input");
     await userEvent.upload(input, new File(["x"], "beach.png", { type: "image/png" }));
@@ -162,7 +174,7 @@ describe("PhotoGallery", () => {
 
   it("hides the add control once the 10-photo limit is reached", () => {
     const photos = Array.from({ length: 10 }, (_, i) => photo(i + 1));
-    renderWithProviders(<PhotoGallery logId={7} photos={photos} />);
+    renderWithProviders(<PhotoGallery logId={7} photos={photos} editable />);
     expect(screen.queryByRole("button", { name: /add photos/i })).not.toBeInTheDocument();
   });
 });

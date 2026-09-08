@@ -3,12 +3,14 @@ import { useOnlineStatus } from "../api/localHooks.js";
 import { GalleryTabs } from "../components/GalleryTabs.js";
 import { PhotoStream } from "../components/PhotoStream.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useEditableRoute } from "../components/EditModeProvider.js";
 
 export function Gallery() {
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useGallery();
   const deletePhoto = useDeleteGalleryPhoto();
   const { showToast } = useToast();
   const online = useOnlineStatus();
+  const editing = useEditableRoute();
 
   const photos = data?.pages.flatMap((page) => page.photos) ?? [];
 
@@ -32,7 +34,7 @@ export function Gallery() {
         isFetchingNextPage={isFetchingNextPage}
         fetchNextPage={fetchNextPage}
         emptyText="No photos yet — add some from a movie or a meal."
-        onDelete={online ? handleDelete : undefined}
+        onDelete={editing && online ? handleDelete : undefined}
       />
     </div>
   );

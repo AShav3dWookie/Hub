@@ -47,6 +47,10 @@ export const DANGER_BUTTON_CLASS =
 export const ICON_BUTTON_CLASS =
   "flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800";
 
+/** The header edit toggle while edit mode is on — the filled counterpart to ICON_BUTTON_CLASS. */
+export const ICON_BUTTON_ACTIVE_CLASS =
+  "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-600 dark:text-white dark:hover:bg-slate-500";
+
 /** A selectable pill in a filter row or a category chooser. Pair with one of the two halves below. */
 export const CHIP_CLASS =
   "flex min-h-[44px] items-center justify-center rounded-md border px-3 text-sm font-medium";

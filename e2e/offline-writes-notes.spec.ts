@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { gotoTab, readStore, syncFromSettings } from "./helpers/app";
+import { enterEditMode, gotoTab, readStore, syncFromSettings } from "./helpers/app";
 import { addLog, assertReplicaClean, bootstrap, feedWhere } from "./helpers/writes";
 
 /**
@@ -21,6 +21,7 @@ test("offline: add a general note to a seeded person, then sync", async ({ page,
   const tag = `note-gen-${Date.now().toString(36)}`;
   await context.setOffline(true);
   await openPerson(page, "Bob");
+  await enterEditMode(page);
   await page.getByPlaceholder(/Conversation topics/i).fill(`remember: ${tag}`);
   await page.getByRole("button", { name: "Add note" }).click();
 
@@ -47,6 +48,7 @@ test("offline: an important-date note lands on the home widget and persists", as
 
   await context.setOffline(true);
   await openPerson(page, "Carol");
+  await enterEditMode(page);
   await page.getByRole("combobox").selectOption("important_date");
   await page.getByPlaceholder(/Tag \(e\.g\. Birthday\)/i).fill(`Anniversary ${tag}`);
   await page.locator('input[type="date"]').fill(eventDate);
@@ -71,6 +73,7 @@ test("offline: edit then delete a note across one offline session", async ({ pag
 
   // Seed a synced note.
   await openPerson(page, "Dave");
+  await enterEditMode(page);
   await page.getByPlaceholder(/Conversation topics/i).fill(`v1 ${tag}`);
   await page.getByRole("button", { name: "Add note" }).click();
   await syncFromSettings(page);
@@ -80,8 +83,9 @@ test("offline: edit then delete a note across one offline session", async ({ pag
 
   await context.setOffline(true);
   await openPerson(page, "Dave");
+  await enterEditMode(page);
   await page.getByRole("button", { name: /^General/ }).click();
-  await page.getByRole("button", { name: "Edit" }).first().click();
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
   await page.locator("textarea").first().fill(`v2 ${tag}`);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(`v2 ${tag}`)).toBeVisible();
@@ -111,6 +115,7 @@ test("offline: create a person and a note on that same new person", async ({ pag
   await addLog(page, "hang_out", { title: `Meet ${tag}`, date: "2026-09-09", person: `New Friend ${tag}` });
 
   await openPerson(page, `New Friend ${tag}`);
+  await enterEditMode(page);
   await page.getByPlaceholder(/Conversation topics/i).fill(`likes climbing ${tag}`);
   await page.getByRole("button", { name: "Add note" }).click();
   await context.setOffline(false);
