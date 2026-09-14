@@ -7,6 +7,7 @@ import {
   atMidnightUTC,
   bucketUpcomingEvents,
   toISODate,
+  type UpcomingEventLogRow,
   type UpcomingEventsResponse,
 } from "@logger/shared";
 
@@ -18,6 +19,14 @@ import {
  * `@logger/shared`, so the offline client's query layer agrees with this exactly.
  */
 export function getUpcomingEvents(db: AppDb, today: Date = new Date()): UpcomingEventsResponse {
+  return bucketUpcomingEvents(selectEventRows(db), today);
+}
+
+/**
+ * Every log in an event category with its tagged people — the rows both the home widget and the
+ * notification scheduler (`notificationScheduler`) apply their shared rules to.
+ */
+export function selectEventRows(db: AppDb): UpcomingEventLogRow[] {
   const rows = db
     .select({
       logId: logs.id,
@@ -38,10 +47,7 @@ export function getUpcomingEvents(db: AppDb, today: Date = new Date()): Upcoming
     rows.map((r) => r.logId),
   );
 
-  return bucketUpcomingEvents(
-    rows.map((row) => ({ ...row, people: peopleByLog.get(row.logId) ?? [] })),
-    today,
-  );
+  return rows.map((row) => ({ ...row, people: peopleByLog.get(row.logId) ?? [] }));
 }
 
 /**

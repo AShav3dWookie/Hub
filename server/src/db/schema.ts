@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, SyncEntityType } from "@logger/shared";
+import type { Category, NotificationSlot, SyncEntityType } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -247,3 +247,45 @@ export const appSettings = sqliteTable("app_settings", {
     .notNull()
     .default(sql`(current_timestamp)`),
 });
+
+/**
+ * One row per device that has turned push notifications on. `endpoint` is the push service URL
+ * the browser handed out and is the device's identity; `p256dh` + `auth` are the keys the payload
+ * is encrypted to. Server-only and non-syncable, like `app_settings`. A row is deleted when the
+ * push service reports the subscription gone (404/410). See `pushSubscriptionsService`.
+ */
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  label: text("label"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(current_timestamp)`),
+  lastSuccessAt: text("last_success_at"),
+});
+
+/**
+ * Which items each reminder slot has already announced, so a scheduler tick — every minute, and
+ * again after a restart — never repeats one. Per item rather than per slot, so something added
+ * after 9pm for tomorrow still gets a late notification of its own. Pruned after 30 days.
+ * See `notificationScheduler`.
+ */
+export const notificationDeliveries = sqliteTable(
+  "notification_deliveries",
+  {
+    slot: text("slot").$type<NotificationSlot>().notNull(),
+    /** The local date the slot fired on (`YYYY-MM-DD`), not the item's own date. */
+    firedOn: text("fired_on").notNull(),
+    itemKey: text("item_key").notNull(),
+    sentAt: text("sent_at").notNull(),
+  },
+  (table) => ({
+    uniqueDelivery: uniqueIndex("notification_deliveries_slot_fired_on_item_key_idx").on(
+      table.slot,
+      table.firedOn,
+      table.itemKey,
+    ),
+  }),
+);

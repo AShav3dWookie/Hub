@@ -178,6 +178,10 @@ Cloudflare terminates TLS for `hub.aaronhanna.uk` and forwards to your nginx, wh
 nginx-to-app detail. See [`docker/nginx.prod.conf`](../docker/nginx.prod.conf) for the vhost and
 [wan-security.md](wan-security.md) for the auth layers.
 
+Push notifications add nothing to this path: the server sends them **outbound** to the browser
+vendors' push services, which need no inbound route, location block or Cloudflare rule. The
+container does need outbound HTTPS. See [notifications.md](notifications.md).
+
 > **The published port bypasses nginx.** `http://<lan-ip>:8090` reaches the app directly, so it
 > also bypasses Authelia. The app's own password (`AUTH_ENABLED=true`) is the only thing guarding
 > that path — which is why it defaults to on here. To close it entirely, allow 8090 only from
@@ -193,3 +197,5 @@ nginx-to-app detail. See [`docker/nginx.prod.conf`](../docker/nginx.prod.conf) f
 | Container restarts in a loop, `SESSION_SECRET` in the logs | The startup guard, working as intended — set a real secret. |
 | Release build fails at `npm ci` with a lockfile error | `package-lock.json` is out of step with the `package.json` files. `npm install`, commit, re-tag. |
 | Settings shows `dev` after a deploy | Running an image built outside the release workflow. |
+| Container restarts in a loop, `NOTIFY_TIMEZONE` or `VAPID_SUBJECT` in the logs | A typo in the zone name, or a subject that isn't `mailto:`/`https://`. Clear it to use the default. |
+| No reminder notifications | See the troubleshooting table in [notifications.md](notifications.md). |

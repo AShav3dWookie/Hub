@@ -119,6 +119,28 @@ export const changePasswordSchema = z.object({
 });
 
 /**
+ * A push endpoint is a URL on a browser vendor's push service, which the server will POST to. Every
+ * real one is https; refusing anything else keeps a bogus subscription from pointing the scheduler
+ * at plain-HTTP or internal addresses.
+ */
+const pushEndpointUrlSchema = z
+  .string()
+  .max(2048)
+  .url()
+  .refine((u) => u.startsWith("https://"), "endpoint must be an https URL");
+
+export const pushEndpointSchema = z.object({ endpoint: pushEndpointUrlSchema });
+
+/** The browser's `PushSubscription.toJSON()`, less the fields the server has no use for. */
+export const pushSubscriptionSchema = z.object({
+  endpoint: pushEndpointUrlSchema,
+  keys: z.object({
+    p256dh: z.string().min(1).max(512),
+    auth: z.string().min(1).max(512),
+  }),
+});
+
+/**
  * An `important_date` note carries the recurrence instead of prose, so it needs a tag and a
  * date and may have an empty body; every other note needs a body. Create and update state the
  * same rule, so it is written once here.

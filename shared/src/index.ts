@@ -15,6 +15,7 @@ export * from "./rules/window.js";
 export * from "./rules/calendar.js";
 export * from "./rules/importantDates.js";
 export * from "./rules/upcomingEvents.js";
+export * from "./rules/notifications.js";
 export * from "./rules/gallery.js";
 export * from "./rules/search.js";
 export * from "./rules/personStats.js";

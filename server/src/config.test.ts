@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { DEV_SESSION_SECRET, assertSecureConfig, warnInsecureConfig, config } from "./config.js";
+import {
+  DEV_SESSION_SECRET,
+  assertNotificationConfig,
+  assertSecureConfig,
+  warnInsecureConfig,
+  config,
+} from "./config.js";
 
 type Config = typeof config;
 
@@ -134,5 +140,28 @@ describe("warnInsecureConfig", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     warnInsecureConfig(withConfig({ authEnabled: false, trustProxy: false, cookieSecure: false }));
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertNotificationConfig", () => {
+  it("times reminders in London and names the real site by default", () => {
+    expect(config.notifyTimezone).toBe("Europe/London");
+    expect(config.vapidSubject).toBe("https://hub.aaronhanna.uk");
+    expect(() => assertNotificationConfig(config)).not.toThrow();
+  });
+
+  it("refuses to start with a time zone Intl doesn't know", () => {
+    expect(() =>
+      assertNotificationConfig(withConfig({ notifyTimezone: "Europe/Londn" })),
+    ).toThrow(/NOTIFY_TIMEZONE/);
+  });
+
+  it("refuses to start with a VAPID subject push services would reject", () => {
+    expect(() =>
+      assertNotificationConfig(withConfig({ vapidSubject: "admin@example.com" })),
+    ).toThrow(/VAPID_SUBJECT/);
+    expect(() =>
+      assertNotificationConfig(withConfig({ vapidSubject: "mailto:admin@example.com" })),
+    ).not.toThrow();
   });
 });

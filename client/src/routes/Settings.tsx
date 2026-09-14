@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { DANGER_BUTTON_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS, SECTION_HEADING } from "../components/ui.js";
-import { AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff } from "lucide-react";
+import {
+  DANGER_BUTTON_CLASS,
+  FIELD_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS,
+  SECTION_HEADING,
+} from "../components/ui.js";
+import { AlertTriangle, Bell, BellOff, RefreshCw, Send, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   useOnlineStatus,
   useSyncStatus,
@@ -12,6 +18,14 @@ import {
   useClearThumbnailCache,
 } from "../api/localHooks.js";
 import { useAuthStatus, useChangePassword } from "../api/auth.js";
+import {
+  requestNotificationPermission,
+  useDisablePush,
+  useEnablePush,
+  usePushStatus,
+  useRefreshPushStatus,
+  useSendTestPush,
+} from "../api/notifications.js";
 import { useToast } from "../components/ToastProvider.js";
 import { ApiError } from "../api/client.js";
 
@@ -77,6 +91,138 @@ const SYNC_ERROR_LABEL: Record<string, string> = {
   network: "Couldn't reach the server",
   unknown: "Sync failed",
 };
+
+const PUSH_STATUS_LABEL: Record<string, string> = {
+  on: "On",
+  off: "Off",
+  denied: "Blocked",
+  "needs-install": "Needs the installed app",
+  insecure: "Needs a secure connection",
+  unsupported: "Not available on this browser",
+};
+
+const PUSH_STATUS_HINT: Record<string, string> = {
+  denied:
+    "Notifications are blocked for this site. Allow them in your browser's site settings, then come back here.",
+  "needs-install":
+    "On iPhone and iPad, notifications only work from the installed app. Tap Share → Add to Home Screen, then open it from there.",
+  insecure:
+    "Browsers only allow notifications over https. Open the app from its https address rather than a local IP.",
+  unsupported: "This browser doesn't support push notifications.",
+};
+
+/**
+ * Reminders for upcoming dates, per device. The server does the scheduling; this turns the
+ * device's subscription on and off. Online-only, like the password change.
+ */
+function NotificationsSection({ online }: { online: boolean }) {
+  const { data: status } = usePushStatus();
+  const enable = useEnablePush();
+  const disable = useDisablePush();
+  const sendTest = useSendTestPush();
+  const refreshStatus = useRefreshPushStatus();
+  const { showToast } = useToast();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleEnable() {
+    setError(null);
+    // First, before any other await — Safari only prompts inside the tap's user gesture.
+    const permission = await requestNotificationPermission();
+    if (permission !== "granted") {
+      await refreshStatus();
+      return;
+    }
+    try {
+      await enable.mutateAsync();
+      showToast("Notifications on");
+    } catch {
+      setError("Couldn't turn notifications on. Check your connection and try again.");
+    }
+  }
+
+  async function handleDisable() {
+    setError(null);
+    try {
+      await disable.mutateAsync();
+      showToast("Notifications off");
+    } catch {
+      setError("Couldn't reach the server — notifications are off on this device, but try again to tidy up.");
+    }
+  }
+
+  async function handleTest() {
+    setError(null);
+    try {
+      await sendTest.mutateAsync();
+      showToast("Test notification sent");
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Can't reach the server. Check your connection and try again.",
+      );
+    }
+  }
+
+  const busy = enable.isPending || disable.isPending;
+  const hint = status ? PUSH_STATUS_HINT[status] : undefined;
+
+  return (
+    <Section title="Notifications">
+      <Row label="This device" value={status ? (PUSH_STATUS_LABEL[status] ?? "Unknown") : "…"} />
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Reminders at 9pm the day before and 9am on the day, and a week&apos;s notice of birthdays.
+      </p>
+      {hint && <p className="text-sm text-amber-600 dark:text-amber-400">{hint}</p>}
+
+      {status === "off" && (
+        <button
+          type="button"
+          onClick={handleEnable}
+          disabled={busy || !online}
+          className={`flex items-center justify-center gap-2 text-sm font-medium ${PRIMARY_BUTTON_CLASS}`}
+        >
+          <Bell size={16} aria-hidden />
+          {enable.isPending ? "Turning on…" : "Turn on notifications"}
+        </button>
+      )}
+
+      {status === "on" && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={sendTest.isPending || !online}
+            className={`flex flex-1 items-center justify-center gap-2 font-medium disabled:opacity-50 ${SECONDARY_BUTTON_CLASS}`}
+          >
+            <Send size={16} aria-hidden />
+            {sendTest.isPending ? "Sending…" : "Send test notification"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDisable}
+            disabled={busy || !online}
+            className={`flex flex-1 items-center justify-center gap-2 font-medium disabled:opacity-50 ${SECONDARY_BUTTON_CLASS}`}
+          >
+            <BellOff size={16} aria-hidden />
+            {disable.isPending ? "Turning off…" : "Turn off"}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+      {!online && (status === "on" || status === "off") && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Reconnect to change notification settings.
+        </p>
+      )}
+    </Section>
+  );
+}
 
 /**
  * Change the login password. Only rendered when the server actually requires one, so a LAN
@@ -325,6 +471,8 @@ export function Settings() {
           Clear thumbnails
         </button>
       </Section>
+
+      <NotificationsSection online={online} />
 
       {authStatus?.authRequired && <PasswordSection online={online} />}
 
