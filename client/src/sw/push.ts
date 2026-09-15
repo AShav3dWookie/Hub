@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { ApiError, api } from "../api/client.js";
 
 /**
  * Web Push on this device: whether it can be turned on, and turning it on and off.
@@ -104,10 +104,20 @@ export async function disablePush(): Promise<void> {
   }
 }
 
+/**
+ * A 404 means the server has no such device — the push service reported it gone, or the row was
+ * lost. The browser's copy is then useless too (re-sending it would only be refused again), so it is
+ * dropped, which turns Settings back to "Turn on notifications" for a clean re-subscribe.
+ */
 export async function sendTestPush(): Promise<void> {
   const subscription = await currentSubscription();
   if (!subscription) throw new Error("This device is not subscribed");
-  await api.post("/notifications/test", { endpoint: subscription.endpoint });
+  try {
+    await api.post("/notifications/test", { endpoint: subscription.endpoint });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) await subscription.unsubscribe();
+    throw err;
+  }
 }
 
 /**

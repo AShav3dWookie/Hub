@@ -73,7 +73,7 @@ export function createNotificationsRouter(db: AppDb, push?: PushOptions): Router
           throw new NotFoundError("This device's subscription has expired — turn notifications on again");
         }
         if (result === "failed") {
-          throw new AppError(502, "The push service didn't accept the notification");
+          throw new AppError(502, "The push service didn't accept the notification — try again in a moment");
         }
         res.status(204).send();
       })

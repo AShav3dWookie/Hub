@@ -338,6 +338,8 @@ describe("Settings", () => {
       await userEvent.click(screen.getByRole("button", { name: /send test notification/i }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/turn notifications on again/);
+      // The expired subscription is dropped, so the status is re-read to offer Turn on again.
+      expect(refreshPushStatus).toHaveBeenCalledOnce();
     });
 
     it.each<[PushStatus, RegExp]>([

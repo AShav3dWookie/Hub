@@ -53,8 +53,26 @@ export function getSubscription(db: AppDb, endpoint: string): StoredSubscription
 }
 
 /**
- * Send one payload to each device in parallel. A device the push service reports gone is deleted;
- * the rest get `last_success_at` stamped. Returns how many devices accepted it.
+ * How long a new subscription is trusted over the push service's word that it is gone.
+ *
+ * FCM can answer the first send to a subscription only seconds old with 410 "unsubscribed or
+ * expired", then accept the very next one — seen live, about one fresh subscription in three.
+ * Believing it deleted a working device the moment someone pressed "Send test notification".
+ */
+export const NEW_SUBSCRIPTION_GRACE_MS = 5 * 60_000;
+
+/** `created_at` is SQLite's `current_timestamp`: UTC, `YYYY-MM-DD HH:MM:SS`. */
+function registeredAtMs(device: StoredSubscription): number {
+  return Date.parse(`${device.createdAt.replace(" ", "T")}Z`);
+}
+
+/**
+ * Send one payload to each device in parallel. A device the push service reports gone is deleted,
+ * unless it subscribed within `NEW_SUBSCRIPTION_GRACE_MS` (then it is left to be retried); the rest
+ * get `last_success_at` stamped. Returns how many devices accepted it.
+ *
+ * `nowMs` is wall-clock time, deliberately separate from a scheduler tick's `now`: the grace period
+ * is about the push service catching up, not about which slot is open.
  */
 export async function sendToDevices(
   db: AppDb,
@@ -62,15 +80,20 @@ export async function sendToDevices(
   payload: PushPayload,
   ttlSeconds: number,
   send: PushSender,
+  nowMs: number = Date.now(),
 ): Promise<number> {
   const results = await Promise.all(
     devices.map(async (device) => ({ device, result: await send(device, payload, { ttlSeconds }) })),
   );
 
   const delivered = results.filter((r) => r.result === "ok").map((r) => r.device.endpoint);
-  const gone = results.filter((r) => r.result === "gone").map((r) => r.device.endpoint);
+  const gone = results
+    .filter((r) => r.result === "gone" && nowMs - registeredAtMs(r.device) >= NEW_SUBSCRIPTION_GRACE_MS)
+    .map((r) => r.device.endpoint);
 
   if (gone.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(`[push] removing ${gone.length} subscription(s) the push service reports gone`);
     db.delete(pushSubscriptions).where(inArray(pushSubscriptions.endpoint, gone)).run();
   }
   if (delivered.length > 0) {
@@ -86,12 +109,14 @@ export type TestNotificationResult = "ok" | "gone" | "failed";
 
 /**
  * "Send test notification" from Settings: a notification to the one device asking. `gone` means
- * the push service no longer recognises it, and the row has been removed.
+ * the push service no longer recognises it, and the row has been removed; a brand-new
+ * subscription it rejects is `failed` instead (see `NEW_SUBSCRIPTION_GRACE_MS`).
  */
 export async function sendTestNotification(
   db: AppDb,
   endpoint: string,
   send: PushSender,
+  nowMs: number = Date.now(),
 ): Promise<TestNotificationResult> {
   const device = getSubscription(db, endpoint);
   const payload: PushPayload = {
@@ -100,6 +125,6 @@ export async function sendTestNotification(
     url: "/settings",
     tag: "test",
   };
-  if ((await sendToDevices(db, [device], payload, 60, send)) === 1) return "ok";
+  if ((await sendToDevices(db, [device], payload, 60, send, nowMs)) === 1) return "ok";
   return listSubscriptions(db).some((s) => s.endpoint === endpoint) ? "failed" : "gone";
 }

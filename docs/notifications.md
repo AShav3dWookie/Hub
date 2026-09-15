@@ -45,7 +45,10 @@ Settings → **Notifications** → *Turn on notifications*, on each device you w
   notices the new key the next time the app is opened and re-subscribes by itself; until then it
   gets nothing.
 - **Devices** live in `push_subscriptions`. The app re-sends its subscription on every launch, and
-  a device the push service reports gone (404/410) is deleted.
+  a device the push service reports gone (404/410) is deleted — except in its first 5 minutes.
+  Google's service has been seen answering 410 to the very first send to a seconds-old
+  subscription and accepting the next, so a brand-new device is retried rather than dropped.
+  Each removal logs `[push] removing N subscription(s)`.
 - **Never twice.** Each announced item is recorded per slot in `notification_deliveries`.
 - **Late, same day only.** If the server was down at 9pm or you add something for tomorrow at
   10pm, the evening slot still sends until midnight, and the morning slots until midday. Anything
@@ -70,7 +73,8 @@ Settings → **Notifications** → *Turn on notifications*, on each device you w
 | No *Turn on* button, "Needs a secure connection" | You're on the LAN IP over http. Open the https address. |
 | "Needs the installed app" | iOS in Safari. Add to Home Screen, open it from there. |
 | "Blocked" | Permission was denied. Re-allow in the browser's / OS's site notification settings. |
-| Test says the subscription expired | The push service dropped it (reinstall, cleared data). Turn notifications on again. |
+| Test says the subscription expired | The push service dropped it (reinstall, cleared data). The button flips back to *Turn on notifications* — press it. |
+| Test says "try again in a moment" right after turning it on | Normal for a seconds-old subscription on Google's service. Try again. |
 | Test works, reminders don't arrive | Is the item planned ahead? A log created on or after its own date is history, not a reminder. Is the phone's OS-level notification permission / focus mode on? |
 | Reminder at the wrong hour | `NOTIFY_TIMEZONE`. `docker exec hub-app-1 printenv NOTIFY_TIMEZONE`. |
 | Nothing at all, any device | Container can't reach the internet (`[push] send failed` in the logs), or the database was recreated (new keys) — open the app once on each device. |

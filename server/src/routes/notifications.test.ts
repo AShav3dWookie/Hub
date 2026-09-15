@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import { createTestDb } from "../testUtils/testDb.js";
+import { pushSubscriptions } from "../db/schema.js";
 import { listSubscriptions, upsertSubscription } from "../services/pushSubscriptionsService.js";
 import type { PushSendResult } from "../lib/webPush.js";
 
@@ -17,6 +18,7 @@ describe("notifications routes", () => {
 
   afterEach(() => {
     ctx?.cleanup();
+    vi.restoreAllMocks();
     delete process.env.AUTH_ENABLED;
     delete process.env.AUTH_PASSWORD_HASH;
   });
@@ -108,12 +110,25 @@ describe("notifications routes", () => {
   it("forgets the device and says so when the push service reports its subscription gone", async () => {
     const { app } = await appWith("gone");
     upsertSubscription(ctx.db, { endpoint: ENDPOINT, p256dh: "k", auth: "a" });
+    ctx.db.update(pushSubscriptions).set({ createdAt: "2026-01-01 00:00:00" }).run();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const res = await request(app).post("/api/notifications/test").send({ endpoint: ENDPOINT });
 
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/turn notifications on again/);
     expect(listSubscriptions(ctx.db)).toEqual([]);
+  });
+
+  it("keeps a device that only just subscribed when the push service calls it gone, and asks for a retry", async () => {
+    const { app } = await appWith("gone");
+    upsertSubscription(ctx.db, { endpoint: ENDPOINT, p256dh: "k", auth: "a" });
+
+    const res = await request(app).post("/api/notifications/test").send({ endpoint: ENDPOINT });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/try again in a moment/);
+    expect(listSubscriptions(ctx.db)).toHaveLength(1);
   });
 
   it("reports a push service that refused the test, keeping the device", async () => {

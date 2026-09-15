@@ -5,6 +5,7 @@ import {
   enablePush,
   pushStatus,
   refreshPushSubscription,
+  sendTestPush,
 } from "./push.js";
 
 const ANDROID_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/126 Mobile";
@@ -75,7 +76,8 @@ function stubDevice({
   const fetchMock = vi.fn(async (url: string) => ({
     ok: true,
     status: url.endsWith("vapid-public-key") ? 200 : 204,
-    json: async () => ({ publicKey: SERVER_KEY }),
+    statusText: "OK",
+    json: async (): Promise<unknown> => ({ publicKey: SERVER_KEY }),
   }));
   vi.stubGlobal("fetch", fetchMock);
 
@@ -208,6 +210,46 @@ describe("push", () => {
 
       await expect(disablePush()).rejects.toThrow();
       expect(existing.unsubscribe).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("sendTestPush", () => {
+    it("asks the server to notify this device", async () => {
+      const { fetchMock } = stubDevice({ subscription: fakeSubscription("https://push.example/1") });
+
+      await sendTestPush();
+
+      expect(requestsTo(fetchMock)).toEqual([
+        { url: "/api/notifications/test", method: "POST", body: { endpoint: "https://push.example/1" } },
+      ]);
+    });
+
+    it("drops a subscription the server says has expired, so it can be turned on afresh", async () => {
+      const existing = fakeSubscription("https://push.example/1");
+      const { fetchMock } = stubDevice({ subscription: existing });
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        json: async () => ({ error: "This device's subscription has expired — turn notifications on again" }),
+      });
+
+      await expect(sendTestPush()).rejects.toThrow(/expired/);
+      expect(existing.unsubscribe).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the subscription when the push service only refused this once", async () => {
+      const existing = fakeSubscription("https://push.example/1");
+      const { fetchMock } = stubDevice({ subscription: existing });
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: async () => ({ error: "try again in a moment" }),
+      });
+
+      await expect(sendTestPush()).rejects.toThrow();
+      expect(existing.unsubscribe).not.toHaveBeenCalled();
     });
   });
 

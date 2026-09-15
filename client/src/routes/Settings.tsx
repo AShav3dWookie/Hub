@@ -161,6 +161,8 @@ function NotificationsSection({ online }: { online: boolean }) {
           ? err.message
           : "Can't reach the server. Check your connection and try again.",
       );
+      // An expired subscription is dropped by the failed test; show the Turn on button again.
+      await refreshStatus();
     }
   }
 

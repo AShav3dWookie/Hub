@@ -201,6 +201,9 @@ has no timetable of its own.
 - `startNotificationScheduler` runs a `setInterval` and is called **only from `index.ts`**, never
   `createApp`, so no test ever starts a timer.
 
+A push service's 404/410 deletes a device, **except within `NEW_SUBSCRIPTION_GRACE_MS` of it
+subscribing**: FCM was seen, live, answering 410 to the first send to a seconds-old subscription
+and 201 to the next. The grace check uses wall-clock time, not the tick's `now`.
 `lib/webPush.ts` is the only importer of `web-push`; everything else takes a `PushSender`, so tests
 pass a fake. `createApp(db, photosDir, push?)`: without `push`, the notifications router makes keys
 and a real sender lazily on first use.

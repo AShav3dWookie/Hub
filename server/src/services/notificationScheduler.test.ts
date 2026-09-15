@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../testUtils/testDb.js";
 import type { AppDb } from "../db/client.js";
-import { logs, notificationDeliveries } from "../db/schema.js";
+import { logs, notificationDeliveries, pushSubscriptions } from "../db/schema.js";
 import type { PushPayload, PushSendResult, PushSender } from "../lib/webPush.js";
 import { findOrCreateEntity } from "./entityService.js";
 import { createEntityNote } from "./entityNotesService.js";
@@ -35,6 +35,11 @@ function fakeSender(result: PushSendResult | ((endpoint: string) => PushSendResu
 
 function subscribe(db: AppDb, endpoint = "https://push.example/device-1") {
   upsertSubscription(db, { endpoint, p256dh: "p256dh-key", auth: "auth-secret" });
+}
+
+/** Make every subscription older than the new-subscription grace period. */
+function subscribedLongAgo(db: AppDb) {
+  db.update(pushSubscriptions).set({ createdAt: "2026-01-01 00:00:00" }).run();
 }
 
 function birthday(db: AppDb, name: string, eventDate: string, tag = "Birthday") {
@@ -240,6 +245,8 @@ describe("notificationScheduler", () => {
     ctx = createTestDb();
     subscribe(ctx.db, "https://push.example/uninstalled");
     subscribe(ctx.db, "https://push.example/phone");
+    subscribedLongAgo(ctx.db);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     plannedEvent(ctx.db, "Dentist", "2026-09-15");
     const { send } = fakeSender((endpoint) => (endpoint.endsWith("uninstalled") ? "gone" : "ok"));
 
@@ -248,6 +255,22 @@ describe("notificationScheduler", () => {
     const remaining = listSubscriptions(ctx.db);
     expect(remaining.map((s) => s.endpoint)).toEqual(["https://push.example/phone"]);
     expect(remaining[0].lastSuccessAt).not.toBeNull();
+  });
+
+  it("doesn't believe a push service that calls a moments-old subscription gone, and retries it", async () => {
+    ctx = createTestDb();
+    subscribe(ctx.db, "https://push.example/just-subscribed");
+    plannedEvent(ctx.db, "Dentist", "2026-09-15");
+    // FCM really does this: 410 for the first send to a fresh subscription, then 201.
+    let first = true;
+    const { send, sent } = fakeSender(() => (first ? ((first = false), "gone") : "ok"));
+
+    await runNotificationTick(ctx.db, at("2026-09-14T20:00:00Z"), { timeZone: TZ, send });
+    expect(listSubscriptions(ctx.db)).toHaveLength(1);
+
+    await runNotificationTick(ctx.db, at("2026-09-14T20:01:00Z"), { timeZone: TZ, send });
+    expect(sent).toHaveLength(2);
+    expect(listSubscriptions(ctx.db)[0].lastSuccessAt).not.toBeNull();
   });
 
   it("does not remind about a hang-out logged after it happened", async () => {
