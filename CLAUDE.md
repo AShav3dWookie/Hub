@@ -203,7 +203,8 @@ has no timetable of its own.
 
 A push service's 404/410 deletes a device, **except within `NEW_SUBSCRIPTION_GRACE_MS` of it
 subscribing**: FCM was seen, live, answering 410 to the first send to a seconds-old subscription
-and 201 to the next. The grace check uses wall-clock time, not the tick's `now`.
+and 201 to the next. The grace check uses wall-clock time, not the tick's `now`. For the same
+reason `sendTestNotification` retries a new device once after `TEST_RETRY_DELAY_MS`.
 `lib/webPush.ts` is the only importer of `web-push`; everything else takes a `PushSender`, so tests
 pass a fake. `createApp(db, photosDir, push?)`: without `push`, the notifications router makes keys
 and a real sender lazily on first use.

@@ -149,6 +149,10 @@ npm run docker:auth:reset    # tear down + wipe when done
     → log in with `recovered-pw-456`; the previous password is rejected.
 14. `npm run docker:auth:reset && npm run docker:auth` → `test-password` works again (the volume
     was wiped, so the env seed is back in effect).
+15. Notifications (Chrome/Edge; `localhost` counts as a secure origin): Settings → **Notifications**
+    → *Turn on notifications* → allow → *Send test notification* → a notification appears.
+    Log out: `/api/notifications/*` answers 401 and the app shows no error. Log back in and the
+    subscription is re-sent on load (a `POST /api/notifications/subscriptions` 201 in DevTools).
 
 ## Rollout checklist
 

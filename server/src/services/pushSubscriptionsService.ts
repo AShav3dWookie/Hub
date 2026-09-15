@@ -107,16 +107,23 @@ export async function sendToDevices(
 
 export type TestNotificationResult = "ok" | "gone" | "failed";
 
+/** Long enough for FCM to stop refusing a fresh subscription — it accepted within ~1.3s live. */
+export const TEST_RETRY_DELAY_MS = 2000;
+
 /**
  * "Send test notification" from Settings: a notification to the one device asking. `gone` means
  * the push service no longer recognises it, and the row has been removed; a brand-new
  * subscription it rejects is `failed` instead (see `NEW_SUBSCRIPTION_GRACE_MS`).
+ *
+ * The test is usually pressed seconds after turning notifications on — exactly when FCM may refuse
+ * a subscription it hasn't finished setting up — so a new device's refusal is retried once, after
+ * `retryDelayMs`, before the user is told anything.
  */
 export async function sendTestNotification(
   db: AppDb,
   endpoint: string,
   send: PushSender,
-  nowMs: number = Date.now(),
+  { nowMs = Date.now(), retryDelayMs = TEST_RETRY_DELAY_MS }: { nowMs?: number; retryDelayMs?: number } = {},
 ): Promise<TestNotificationResult> {
   const device = getSubscription(db, endpoint);
   const payload: PushPayload = {
@@ -125,6 +132,12 @@ export async function sendTestNotification(
     url: "/settings",
     tag: "test",
   };
+  const stillSubscribed = () => listSubscriptions(db).some((s) => s.endpoint === endpoint);
+
   if ((await sendToDevices(db, [device], payload, 60, send, nowMs)) === 1) return "ok";
-  return listSubscriptions(db).some((s) => s.endpoint === endpoint) ? "failed" : "gone";
+  if (stillSubscribed() && nowMs - registeredAtMs(device) < NEW_SUBSCRIPTION_GRACE_MS) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    if ((await sendToDevices(db, [device], payload, 60, send, nowMs + retryDelayMs)) === 1) return "ok";
+  }
+  return stillSubscribed() ? "failed" : "gone";
 }

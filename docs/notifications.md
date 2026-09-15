@@ -74,7 +74,8 @@ Settings → **Notifications** → *Turn on notifications*, on each device you w
 | "Needs the installed app" | iOS in Safari. Add to Home Screen, open it from there. |
 | "Blocked" | Permission was denied. Re-allow in the browser's / OS's site notification settings. |
 | Test says the subscription expired | The push service dropped it (reinstall, cleared data). The button flips back to *Turn on notifications* — press it. |
-| Test says "try again in a moment" right after turning it on | Normal for a seconds-old subscription on Google's service. Try again. |
+| Test says "try again in a moment" right after turning it on | Google's service can refuse a seconds-old subscription; the server already retried once after 2s. Try again. |
+| Test succeeds but no notification appears | The push service accepted it, which is all the server can see. Check the OS notification settings / focus mode for the installed app. |
 | Test works, reminders don't arrive | Is the item planned ahead? A log created on or after its own date is history, not a reminder. Is the phone's OS-level notification permission / focus mode on? |
 | Reminder at the wrong hour | `NOTIFY_TIMEZONE`. `docker exec hub-app-1 printenv NOTIFY_TIMEZONE`. |
 | Nothing at all, any device | Container can't reach the internet (`[push] send failed` in the logs), or the database was recreated (new keys) — open the app once on each device. |
