@@ -140,6 +140,16 @@ npm run auth:set-password -- 'your password'                          # local ch
 docker compose exec app node dist/scripts/setPassword.js 'your password'   # running container
 ```
 
+## Push notifications
+
+Reminders for upcoming dates — 9pm the evening before, 9am on the day, and a week's notice of
+birthdays — turned on per device in **Settings → Notifications**. Delivery is outbound only, so the
+reverse proxy needs no changes. [docs/notifications.md](docs/notifications.md) is the full guide.
+
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md), one section per released tag.
+
 ## Reverse-proxy / WAN deployment
 
 [docs/wan-security.md](docs/wan-security.md) covers running the app at a public hostname behind
