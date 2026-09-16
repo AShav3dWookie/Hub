@@ -48,7 +48,7 @@ I have a few questions first.
 
 
 ### Push notifications 
-Let's add push notifications to the app, The app should notify about upcoming events/appointments/anything with an upcoming date. It should do all events at 9pm the day before, and 9am the morning of. Birthday's should additionally be notified 7 days before the event. For context, this app will be running on a home server on a docker container and will have WAN access via nginx reverse proxy and cloudflare. The site will be called hub.aaronhanna.uk. This is not yet set up as we are still in development phase. Also the app will be behind a passworded page when accessed via WAN. I don;t know if this is relevant but I'm giving you the context just incase.
+Let's add push notifications to the app, The app should notify about upcoming events/appointments/anything with an upcoming date. It should do all events at 9pm the day before, and 9am the morning of. Birthday's should additionally be notified 7 days before the event. For context, this app will be running on a home server on a docker container and will have WAN access via nginx reverse proxy and cloudflare. The site is called hub.aaronhanna.uk. Also the app will be behind a passworded page when accessed via WAN. I don't know if this is relevant but I'm giving you the context just incase.
 
  Let's plan this. 
 
