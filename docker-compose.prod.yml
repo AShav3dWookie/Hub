@@ -56,6 +56,10 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-1}
       - COOKIE_SECURE=${COOKIE_SECURE:-}
       - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-}
+      # Push notifications (docs/notifications.md). Both have working defaults — Europe/London and
+      # https://hub.aaronhanna.uk — so these only matter if you move house or domain.
+      - NOTIFY_TIMEZONE=${NOTIFY_TIMEZONE:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
     # The SQLite database and the uploaded photos, together. Set DATA_DIR to an absolute host
     # path and this becomes a bind mount; leave it unset and it is the `hub-data` named volume.
     #

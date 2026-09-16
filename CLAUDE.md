@@ -74,6 +74,8 @@ Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd c
 - **`entity_notes`** — freeform notes on any entity. The `important_date` category (with `tag` +
   `eventDate`) powers the home-screen "upcoming dates" widget (`importantDatesService`, annual
   month/day recurrence).
+- **`push_subscriptions`** / **`notification_deliveries`** — server-only, non-syncable (like
+  `app_settings`). See *Push notifications*.
 - **`log_photos`** — photo attachments. `logId` is **nullable with `ON DELETE SET NULL`**: deleting a
   log keeps its photos as "gallery orphans" by default (`?deletePhotos=true` on the delete removes
   them + files).
@@ -177,6 +179,49 @@ The app is deliberately **Authelia-unaware**: Authelia gates at nginx, the app k
 separate password. `docs/wan-security.md` is the full guide; `npm run docker:auth` is a
 production-shaped rig (nginx in front, auth on, `X-Forwarded-Proto: https`) on `:3300` with
 password `test-password` for testing the login flow locally.
+
+### Push notifications
+
+Web Push (VAPID, `web-push`) reminders for what Home's "What's on" lists. `docs/notifications.md`
+is the user guide. `NOTIFICATION_SLOTS` in `shared/src/rules/notifications.ts` decides what fires
+and when, and it reuses the widget's own qualification rules (`nextAnnualOccurrence`,
+`isPlannedAhead`) so the two cannot disagree:
+- 9pm "Tomorrow".
+- 9am "Today".
+- 9am "In a week", for birthday-tagged important dates only.
+
+`server/src/services/notificationScheduler.ts` `runNotificationTick(db, now, { timeZone, send })`
+has no timetable of its own.
+- Each tick sends whatever the currently open slots cover that `notification_deliveries` (dedup is
+  per item) hasn't recorded. That one rule handles the on-time send, a restart catch-up and a late
+  addition alike.
+- Slots close at midday and at midnight.
+- Deliveries are recorded only when at least one device accepted, and nothing is recorded when no
+  device is subscribed.
+- `startNotificationScheduler` runs a `setInterval` and is called **only from `index.ts`**, never
+  `createApp`, so no test ever starts a timer.
+
+A push service's 404/410 deletes a device, **except within `NEW_SUBSCRIPTION_GRACE_MS` of it
+subscribing**: FCM was seen, live, answering 410 to the first send to a seconds-old subscription
+and 201 to the next. The grace check uses wall-clock time, not the tick's `now`. For the same
+reason `sendTestNotification` retries a new device once after `TEST_RETRY_DELAY_MS`.
+`lib/webPush.ts` is the only importer of `web-push`; everything else takes a `PushSender`, so tests
+pass a fake. `createApp(db, photosDir, push?)`: without `push`, the notifications router makes keys
+and a real sender lazily on first use.
+
+- **Time zone.** Slot times use `lib/localClock.ts` (`Intl`, `NOTIFY_TIMEZONE`, default
+  Europe/London). Keep this separate from the UTC date maths in `shared/src/dates.ts`, which
+  answers a different question.
+- **VAPID keys** are generated once into `app_settings`. Regenerating them orphans every device,
+  though a device re-subscribes by itself on its next launch (`refreshPushSubscription` →
+  `enablePush` compares keys).
+- **Outbound only.** No nginx/Cloudflare change is needed.
+- **Subscribing needs a secure context,** so the http LAN IP can't turn it on. iOS allows push only
+  for the installed app. `pushStatus()` in `client/src/sw/push.ts` reports both cases.
+- **Permission prompt.** `Notification.requestPermission()` must be the first await in the click
+  handler (Safari's user-gesture rule), which is why Settings calls it before the mutation.
+- **Service worker.** The `push`, `notificationclick` and `pushsubscriptionchange` handlers live in
+  `client/src/sw/sw.ts`, which `vite dev` doesn't register. Try push against a production build.
 
 ### Photos & video storage
 

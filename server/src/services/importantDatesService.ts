@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { entityNotes, entities } from "../db/schema.js";
-import { bucketImportantDates, type UpcomingImportantDatesResponse } from "@logger/shared";
+import {
+  bucketImportantDates,
+  type ImportantDateNoteRow,
+  type UpcomingImportantDatesResponse,
+} from "@logger/shared";
 
 /**
  * All "important_date" notes, bucketed into ones landing today and ones landing within the
@@ -14,7 +18,15 @@ export function getUpcomingImportantDates(
   db: AppDb,
   today: Date = new Date(),
 ): UpcomingImportantDatesResponse {
-  const rows = db
+  return bucketImportantDates(selectImportantDateRows(db), today);
+}
+
+/**
+ * Every `important_date` note joined to its entity's name — the rows both the home widget and
+ * the notification scheduler (`notificationScheduler`) apply their shared rules to.
+ */
+export function selectImportantDateRows(db: AppDb): ImportantDateNoteRow[] {
+  return db
     .select({
       noteId: entityNotes.id,
       entityId: entityNotes.entityId,
@@ -27,6 +39,4 @@ export function getUpcomingImportantDates(
     .innerJoin(entities, eq(entityNotes.entityId, entities.id))
     .where(eq(entityNotes.category, "important_date"))
     .all();
-
-  return bucketImportantDates(rows, today);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { Settings } from "./Settings.js";
@@ -20,10 +20,31 @@ vi.mock("../api/auth.js");
 import { useAuthStatus, useChangePassword } from "../api/auth.js";
 import { ApiError } from "../api/client.js";
 
+vi.mock("../api/notifications.js");
+import {
+  requestNotificationPermission,
+  useDisablePush,
+  useEnablePush,
+  usePushStatus,
+  useRefreshPushStatus,
+  useSendTestPush,
+} from "../api/notifications.js";
+import type { PushStatus } from "../sw/push.js";
+
 const forceSyncMutate = vi.fn();
 const clearMutate = vi.fn();
 const discardMutate = vi.fn();
 const changePasswordMutate = vi.fn();
+const enablePushMutate = vi.fn();
+const disablePushMutate = vi.fn();
+const testPushMutate = vi.fn();
+const refreshPushStatus = vi.fn();
+
+function withPushStatus(status: PushStatus) {
+  vi.mocked(usePushStatus).mockReturnValue({ data: status } as ReturnType<typeof usePushStatus>);
+}
+
+const notifications = () => screen.getByRole("heading", { name: "Notifications" }).parentElement!;
 
 /** Turn the password section on; it only renders when the server requires a login. */
 function withAuthRequired() {
@@ -78,6 +99,26 @@ beforeEach(() => {
   clearMutate.mockClear();
   discardMutate.mockClear();
   changePasswordMutate.mockClear();
+
+  withPushStatus("off");
+  for (const mock of [enablePushMutate, disablePushMutate, testPushMutate, refreshPushStatus]) {
+    mock.mockReset();
+    mock.mockResolvedValue(undefined);
+  }
+  vi.mocked(requestNotificationPermission).mockResolvedValue("granted");
+  vi.mocked(useEnablePush).mockReturnValue({
+    mutateAsync: enablePushMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useEnablePush>);
+  vi.mocked(useDisablePush).mockReturnValue({
+    mutateAsync: disablePushMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useDisablePush>);
+  vi.mocked(useSendTestPush).mockReturnValue({
+    mutateAsync: testPushMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useSendTestPush>);
+  vi.mocked(useRefreshPushStatus).mockReturnValue(refreshPushStatus);
 });
 
 describe("Settings", () => {
@@ -237,5 +278,89 @@ describe("Settings", () => {
 
     expect(screen.getByRole("button", { name: /change password/i })).toBeDisabled();
     expect(screen.getByText(/reconnect to change your password/i)).toBeInTheDocument();
+  });
+
+  describe("notifications", () => {
+    it("explains when reminders arrive", () => {
+      renderWithProviders(<Settings />);
+      expect(within(notifications()).getByText(/9pm the day before and 9am on the day/)).toBeInTheDocument();
+    });
+
+    it("asks for permission, then turns notifications on", async () => {
+      renderWithProviders(<Settings />);
+
+      await userEvent.click(screen.getByRole("button", { name: /turn on notifications/i }));
+
+      expect(requestNotificationPermission).toHaveBeenCalledOnce();
+      expect(enablePushMutate).toHaveBeenCalledOnce();
+      expect(await screen.findByText("Notifications on")).toBeInTheDocument();
+    });
+
+    it("doesn't subscribe when permission is refused, and re-reads the status", async () => {
+      vi.mocked(requestNotificationPermission).mockResolvedValue("denied");
+      renderWithProviders(<Settings />);
+
+      await userEvent.click(screen.getByRole("button", { name: /turn on notifications/i }));
+
+      expect(enablePushMutate).not.toHaveBeenCalled();
+      expect(refreshPushStatus).toHaveBeenCalledOnce();
+    });
+
+    it("reports a failure to turn notifications on", async () => {
+      enablePushMutate.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      renderWithProviders(<Settings />);
+
+      await userEvent.click(screen.getByRole("button", { name: /turn on notifications/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't turn notifications on/i);
+    });
+
+    it("sends a test notification and turns notifications off once they're on", async () => {
+      withPushStatus("on");
+      renderWithProviders(<Settings />);
+
+      expect(within(notifications()).getByText("On")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: /send test notification/i }));
+      expect(testPushMutate).toHaveBeenCalledOnce();
+      expect(await screen.findByText("Test notification sent")).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /turn off/i }));
+      expect(disablePushMutate).toHaveBeenCalledOnce();
+    });
+
+    it("shows the server's reason when a test notification fails", async () => {
+      withPushStatus("on");
+      testPushMutate.mockRejectedValueOnce(
+        new ApiError(404, "This device's subscription has expired — turn notifications on again"),
+      );
+      renderWithProviders(<Settings />);
+
+      await userEvent.click(screen.getByRole("button", { name: /send test notification/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/turn notifications on again/);
+      // The expired subscription is dropped, so the status is re-read to offer Turn on again.
+      expect(refreshPushStatus).toHaveBeenCalledOnce();
+    });
+
+    it.each<[PushStatus, RegExp]>([
+      ["needs-install", /Add to Home Screen/],
+      ["denied", /blocked for this site/],
+      ["insecure", /only allow notifications over https/],
+      ["unsupported", /doesn't support push notifications/],
+    ])("explains what to do when the status is %s, with no button to press", (status, hint) => {
+      withPushStatus(status);
+      renderWithProviders(<Settings />);
+
+      expect(within(notifications()).getByText(hint)).toBeInTheDocument();
+      expect(within(notifications()).queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("cannot be turned on while offline", () => {
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+      renderWithProviders(<Settings />);
+
+      expect(screen.getByRole("button", { name: /turn on notifications/i })).toBeDisabled();
+      expect(screen.getByText(/reconnect to change notification settings/i)).toBeInTheDocument();
+    });
   });
 });

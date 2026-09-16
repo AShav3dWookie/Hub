@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isValidTimeZone } from "./lib/localClock.js";
 
 const dbPath = process.env.DB_PATH ?? "./data/logger.db";
 
@@ -84,7 +85,33 @@ export const config = {
   // after being away this long. `|| 90` also catches an empty-string env var (compose passes
   // `SESSION_MAX_AGE_DAYS=` when the host has not set it).
   sessionMaxAgeDays: Number(process.env.SESSION_MAX_AGE_DAYS || 90) || 90,
+  // The zone reminder notifications are timed in ("9pm the day before"). The container clock is
+  // UTC, so this has to be explicit; an IANA zone name handles BST/GMT by itself. `||` catches an
+  // empty compose passthrough, as above.
+  notifyTimezone: process.env.NOTIFY_TIMEZONE || "Europe/London",
+  // The contact push services associate with this server's VAPID key: a `mailto:` or `https:` URL.
+  // Apple rejects `localhost`, so the default is the real site.
+  vapidSubject: process.env.VAPID_SUBJECT || "https://hub.aaronhanna.uk",
 };
+
+/**
+ * Refuse to start with notification settings that would fail later and quietly: an unknown time
+ * zone would throw on every scheduler tick, and a malformed VAPID subject makes every push service
+ * reject every send. Called from the entrypoint, like `assertSecureConfig`.
+ */
+export function assertNotificationConfig(cfg: typeof config = config): void {
+  if (!isValidTimeZone(cfg.notifyTimezone)) {
+    throw new Error(
+      `NOTIFY_TIMEZONE "${cfg.notifyTimezone}" is not a recognised IANA time zone ` +
+        "(for example Europe/London).",
+    );
+  }
+  if (!/^(mailto:|https:\/\/)/.test(cfg.vapidSubject)) {
+    throw new Error(
+      `VAPID_SUBJECT "${cfg.vapidSubject}" must be a mailto: address or an https:// URL.`,
+    );
+  }
+}
 
 /**
  * Refuse to start in a configuration that only looks secure.

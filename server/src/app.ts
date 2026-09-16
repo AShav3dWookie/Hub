@@ -17,10 +17,15 @@ import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
 import { createSyncRouter } from "./routes/sync.js";
 import { createAuthRouter } from "./routes/auth.js";
+import { createNotificationsRouter, type PushOptions } from "./routes/notifications.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
-export function createApp(db: AppDb, photosDir: string = config.photosDir): Express {
+export function createApp(
+  db: AppDb,
+  photosDir: string = config.photosDir,
+  push?: PushOptions,
+): Express {
   const app = express();
 
   // Ensure the uploaded-photos directory exists (shares the DB's persistent volume).
@@ -73,6 +78,7 @@ export function createApp(db: AppDb, photosDir: string = config.photosDir): Expr
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
   app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
+  app.use("/api/notifications", requireAuth, createNotificationsRouter(db, push));
   app.use("/api/photos", requireAuth, express.static(photosDir));
 
   const clientDist = path.resolve(process.cwd(), "public");
