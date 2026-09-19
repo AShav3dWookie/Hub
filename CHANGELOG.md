@@ -3,6 +3,26 @@
 Notable changes to Logger, newest first. Versions are the tags `npm run release` pushes, each of
 which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/deployment.md).
 
+## [1.2.0] — 2026-09-19
+
+### Fixed
+
+- **A lost sign-in no longer strands the app.** When a device's session ended, the app kept showing
+  your data from its own saved copy while nothing actually reached the server — Settings reported
+  the server as unreachable, new entries never synced, and there was no way back to the login
+  screen. The app was reading its own cached "signed in" answer, so it could never notice. Logging
+  out was the obvious escape, and it did nothing, because that needs the server too. An incognito
+  window, having none of that saved, worked perfectly — which is what made it look like a server
+  problem.
+  - Any request the server turns away now returns you to the login screen, whichever part of the
+    app made it, and the app remembers that across a restart.
+  - **Log out always works**, whether or not the server answers, and no longer hangs on a request
+    that never comes back.
+  - A device already stuck fixes itself on this version — no need to clear site data, so anything
+    waiting in the outbox survives.
+  - Opening the app offline is unchanged: a server you simply can't reach still shows your saved
+    data and does not sign you out. Only an actual refusal does.
+
 ## [1.1.0] — 2026-09-16
 
 ### Added
