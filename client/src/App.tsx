@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { useSync } from "./sync/useSync.js";
+import { useSessionExpiry } from "./api/auth.js";
 import { useRegisterServiceWorker } from "./sw/useRegisterServiceWorker.js";
 import { Layout } from "./components/Layout.js";
 import { ProtectedRoute } from "./components/ProtectedRoute.js";
@@ -18,6 +19,7 @@ import { Settings } from "./routes/Settings.js";
 
 export function App() {
   useSync();
+  useSessionExpiry();
   useRegisterServiceWorker();
   return (
     <Routes>

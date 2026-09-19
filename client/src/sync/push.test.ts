@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { pushOutbox } from "./push.js";
-import { getDB, type OutboxRecord } from "../local/db.js";
+import { getDB, getMeta, setMeta, META_AUTH_STATUS, type OutboxRecord } from "../local/db.js";
 import { listOutbox, pendingOutbox } from "../local/outbox.js";
 import { makeAlbum, makeEntity, makeLog, resetFixtureCounters } from "../test/seedLocalDb.js";
 
@@ -102,6 +102,16 @@ describe("pushOutbox", () => {
 
     expect(await pushOutbox()).toEqual({ pushed: 0, dead: 0, error: "auth" });
     expect(await pendingOutbox()).toHaveLength(2);
+  });
+
+  it("a 401 sends the app back to signed out", async () => {
+    await seedTwoCreates();
+    await setMeta(META_AUTH_STATUS, { authRequired: true, authenticated: true });
+    vi.stubGlobal("fetch", fetchReturning({ error: "no session" }, { ok: false, status: 401 }));
+
+    await pushOutbox();
+
+    expect(await getMeta(META_AUTH_STATUS)).toEqual({ authRequired: true, authenticated: false });
   });
 
   it("leaves the queue intact on a network error", async () => {

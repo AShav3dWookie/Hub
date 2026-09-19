@@ -7,6 +7,7 @@ import {
   META_LAST_SYNC_AT,
   META_LAST_SYNC_ERROR,
 } from "../local/db.js";
+import { markSignedOut } from "../api/session.js";
 import { applyChanges, countChanges } from "./apply.js";
 import { warmThumbnails } from "./thumbnailCache.js";
 
@@ -80,6 +81,10 @@ async function runPull(): Promise<PullResult> {
   } catch (err) {
     const kind = classify(err);
     await setMeta(META_LAST_SYNC_ERROR, kind);
+    // A 401 is the authoritative signal that this device's session is gone. Recording it as the
+    // cached auth status is what gets the user back to /login — the status read itself answers
+    // from that cache when the network is down, so it can never discover this on its own.
+    if (kind === "auth") await markSignedOut();
     throw new SyncError(kind, `sync pull failed (${kind})`, err);
   }
 

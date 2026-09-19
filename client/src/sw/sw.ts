@@ -2,7 +2,7 @@
 import { clientsClaim } from "workbox-core";
 import { createHandlerBoundToURL, precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { CacheFirst, NetworkOnly } from "workbox-strategies";
 import { THUMB_CACHE } from "../sync/thumbnailCache.js";
 import { pullChanges } from "../sync/pull.js";
 import { PERIODIC_SYNC_TAG } from "./periodicSync.js";
@@ -47,15 +47,28 @@ registerRoute(
   new CacheFirst({ cacheName: THUMB_CACHE }),
 );
 
-// Auth status: prefer fresh, fall back to the last good response (the app also keeps its own
-// copy in IndexedDB — this just avoids a hang on a slow network).
-registerRoute(
-  ({ url }) => url.pathname === "/api/auth/status",
-  new NetworkFirst({ cacheName: "logger-auth", networkTimeoutSeconds: 3 }),
-);
+// `/api/auth/status` is deliberately NOT cached, and falls through to the NetworkOnly rule
+// below. It used to be a NetworkFirst with a 3-second timeout, which on a slow-but-working
+// connection served a stale answer — and with no expiration plugin that answer stuck forever.
+// A cached `authenticated: true` is the worst case: the app renders as signed in, every request
+// 401s, and the read that would notice is the one being answered from the cache. The app keeps
+// its own last-known copy in IndexedDB for the offline launch, and a 401 now corrects it, so
+// this route only needs to tell the truth or fail honestly.
 
 // Everything else under /api (mutations, photos for now) is online-only.
 registerRoute(({ url }) => url.pathname.startsWith("/api/"), new NetworkOnly());
+
+// Caches this app used to write and no longer does. `cleanupOutdatedCaches()` only knows about
+// Workbox's own precaches, so a retired runtime cache would otherwise outlive the build that
+// created it — and `logger-auth` in particular could keep a device wedged in a signed-in state
+// it can't get out of. Dropping it here heals those devices on the next activation.
+const RETIRED_CACHES = ["logger-auth"];
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    Promise.all(RETIRED_CACHES.map((name) => caches.delete(name).catch(() => false))),
+  );
+});
 
 // Push notifications. The server decides what to say and when (notificationScheduler); this only
 // shows it. Every push must show a notification — browsers revoke push for sites that don't.

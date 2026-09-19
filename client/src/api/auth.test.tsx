@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fetchAuthStatus, useLogin, useChangePassword } from "./auth.js";
+import { fetchAuthStatus, useLogin, useChangePassword, useLogout, useSessionExpiry } from "./auth.js";
+import { markSignedOut, SIGNED_OUT } from "./session.js";
 import { getMeta, setMeta, META_AUTH_STATUS } from "../local/db.js";
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
@@ -89,5 +90,65 @@ describe("useChangePassword", () => {
         body: JSON.stringify({ currentPassword: "old-one", newPassword: "brand-new-one" }),
       }),
     );
+  });
+});
+
+describe("useLogout", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderLogout(client: QueryClient) {
+    return renderHook(() => useLogout(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+  }
+
+  it("signs the user out even when the server never answers", async () => {
+    // The state someone is actually in when they reach for Log out: requests are failing.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["auth-status"], { authRequired: true, authenticated: true });
+
+    const { result } = renderLogout(client);
+    await result.current.mutateAsync();
+
+    await waitFor(() => expect(client.getQueryData(["auth-status"])).toEqual(SIGNED_OUT));
+    expect(await getMeta(META_AUTH_STATUS)).toEqual(SIGNED_OUT);
+  });
+
+  it("signs the user out when the server does answer", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, status: 204, json: async () => undefined })),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["auth-status"], { authRequired: true, authenticated: true });
+
+    const { result } = renderLogout(client);
+    await result.current.mutateAsync();
+
+    await waitFor(() => expect(client.getQueryData(["auth-status"])).toEqual(SIGNED_OUT));
+  });
+
+});
+
+describe("useSessionExpiry", () => {
+  it("drops the app to signed out when something reports an expired session", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["auth-status"], { authRequired: true, authenticated: true });
+
+    renderHook(() => useSessionExpiry(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await markSignedOut();
+
+    await waitFor(() => expect(client.getQueryData(["auth-status"])).toEqual(SIGNED_OUT));
   });
 });
