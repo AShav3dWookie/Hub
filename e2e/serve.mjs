@@ -17,6 +17,10 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.E2E_PORT ?? "3100";
+// The published image always bakes a version in (Dockerfile APP_VERSION -> VITE_APP_VERSION for
+// the bundle, APP_VERSION for /api/health). Match that here: `ensureCurrentShell` compares the
+// two and deliberately does nothing on a "dev" build, so a rig without one cannot exercise it.
+const APP_VERSION = process.env.E2E_APP_VERSION ?? "9.9.9";
 const artifactsDir = path.join(root, "e2e", ".artifacts");
 const dbPath = path.join(artifactsDir, "e2e.db");
 
@@ -27,8 +31,8 @@ const sh = (cmd, args, opts = {}) =>
 const npm = "npm";
 
 if (process.env.E2E_SKIP_BUILD !== "1") {
-  console.log("[e2e] building shared + server + client…");
-  sh(npm, ["run", "build"]);
+  console.log(`[e2e] building shared + server + client… (version ${APP_VERSION})`);
+  sh(npm, ["run", "build"], { env: { ...process.env, VITE_APP_VERSION: APP_VERSION } });
 }
 
 console.log("[e2e] copying client/dist → server/public");
@@ -53,7 +57,14 @@ console.log(`[e2e] starting server on :${PORT}`);
 const server = spawn(process.execPath, [path.join("dist", "index.js")], {
   cwd: path.join(root, "server"),
   stdio: "inherit",
-  env: { ...process.env, DB_PATH: dbPath, PORT, AUTH_ENABLED: "false", NODE_ENV: "production" },
+  env: {
+    ...process.env,
+    DB_PATH: dbPath,
+    PORT,
+    AUTH_ENABLED: "false",
+    NODE_ENV: "production",
+    APP_VERSION,
+  },
 });
 
 const shutdown = () => {
