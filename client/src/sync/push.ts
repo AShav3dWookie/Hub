@@ -2,7 +2,6 @@ import type { MutationEnvelope, MutationResult, SyncMutationsResponse } from "@l
 import { api, ApiError } from "../api/client.js";
 import { getDB, setMeta, META_LAST_SYNC_ERROR, SYNC_STORES } from "../local/db.js";
 import { markDeadLetter, pendingOutbox, removeOutbox } from "../local/outbox.js";
-import { markSignedOut } from "../api/session.js";
 import { reconcileIds } from "./reconcile.js";
 
 export interface PushResult {
@@ -67,9 +66,6 @@ async function runPush(): Promise<PushResult> {
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       await setMeta(META_LAST_SYNC_ERROR, "auth");
-      // Same as the pull: the session is gone, so correct the cached auth status rather than
-      // leaving the app rendering as signed in with every write stuck in the outbox.
-      await markSignedOut();
       return { pushed: 0, dead: 0, error: "auth" };
     }
     return { pushed: 0, dead: 0, error: "network" };
