@@ -9,6 +9,7 @@ vi.mock("./thumbnailCache.js", async (orig) => ({
 
 import { pullChanges, SyncError } from "./pull.js";
 import {
+  META_AUTH_STATUS,
   getDB,
   getMeta,
   setMeta,
@@ -113,6 +114,32 @@ describe("pullChanges", () => {
     expect(await getMeta(META_LAST_SYNC_ERROR)).toBe("auth");
     expect(await getMeta<string>(META_SYNC_CURSOR)).toBe("5");
     expect(await db.count("entities")).toBe(1);
+  });
+
+  it("a 401 sends the app back to signed out", async () => {
+    // Otherwise the cached auth status keeps saying "signed in", ProtectedRoute never redirects,
+    // and the user is stuck in an app where nothing reaches the server.
+    await setMeta(META_AUTH_STATUS, { authRequired: true, authenticated: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 401, json: async () => ({ error: "nope" }) })),
+    );
+
+    await expect(pullChanges()).rejects.toMatchObject({ kind: "auth" });
+
+    expect(await getMeta(META_AUTH_STATUS)).toEqual({ authRequired: true, authenticated: false });
+  });
+
+  it("a network failure does not sign the user out", async () => {
+    await setMeta(META_AUTH_STATUS, { authRequired: true, authenticated: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+
+    await expect(pullChanges()).rejects.toMatchObject({ kind: "network" });
+
+    expect(await getMeta(META_AUTH_STATUS)).toEqual({ authRequired: true, authenticated: true });
   });
 
   it("warms the thumbnail cache with every photo it pulls", async () => {
