@@ -187,6 +187,47 @@ test.describe("mobile layout", () => {
     expect((await removeButton.boundingBox())?.height).toBe(36);
   });
 
+  test("the tab bar's second row opens inside the viewport at the 44px floor", async ({ page }) => {
+    // Another state the default pass never renders. The row overlays the page instead of
+    // growing --nav-h, so the bar must stay pinned to the bottom with nothing off-screen.
+    await page.goto("/");
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    const nav = page.getByRole("navigation", { name: "Navigation" });
+    const closedTop = (await nav.boundingBox())!.y;
+    await page.getByRole("button", { name: "More tabs" }).click();
+    const shopping = nav.getByRole("link", { name: "Shopping" });
+    await expect(shopping).toBeVisible();
+    await page.screenshot({ path: "e2e/.artifacts/screens/nav-more-open.png", fullPage: false });
+
+    const viewport = page.viewportSize()!;
+    const navBox = (await nav.boundingBox())!;
+    expect(navBox.y + navBox.height, "the bar left the bottom edge").toBeCloseTo(viewport.height, 0);
+    expect(navBox.y, "the second row didn't grow the bar upwards").toBeLessThan(closedTop);
+    for (const control of [shopping, page.getByRole("button", { name: "More tabs" })]) {
+      const box = (await control.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    }
+    // The first row's tabs are untouched: still 44px+, still all five.
+    for (const label of ["Home", "Search", "Add", "Calendar", "Gallery"]) {
+      expect((await nav.getByRole("link", { name: label }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("the handle takes no taps meant for the Add tab beneath it", async ({ page }) => {
+    // Its 44px target dips 6px into the bar; Add's icon and label must sit below that.
+    await page.goto("/");
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    const handle = (await page.getByRole("button", { name: "More tabs" }).boundingBox())!;
+    const icon = (await page
+      .getByRole("navigation", { name: "Navigation" })
+      .getByRole("link", { name: "Add" })
+      .locator("svg")
+      .boundingBox())!;
+    expect(icon.y).toBeGreaterThanOrEqual(handle.y + handle.height);
+  });
+
   test("a shopping list's quick-add opens inside the viewport at the 44px floor", async ({ page }) => {
     // Like the tag dropdown above, it only exists once the + is tapped.
     await page.goto("/shopping");
