@@ -17,6 +17,17 @@ export interface VoiceCommandRequest {
  */
 export type VoiceParsedBy = "model" | "rules";
 
+/**
+ * `GET /api/voice/status` — the companion app's "Test connection". Proves the token works
+ * without adding anything to a list, and says which parser commands will get.
+ */
+export interface VoiceStatusResponse {
+  /** The device the token belongs to; null when called from a signed-in browser. */
+  device: string | null;
+  /** "model" when the server has an Anthropic key, "rules" when it will use the backup. */
+  parser: VoiceParsedBy;
+}
+
 export interface VoiceCommandResponse {
   action: "add";
   list: { id: number; name: string };

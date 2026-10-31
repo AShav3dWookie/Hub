@@ -103,3 +103,57 @@ jobs:
             echo 'On the server: set `IMAGE_TAG` in `.env`, then'
             echo '`docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The Android companion app's APK, signed with the app's release key and attached to a GitHub
+  # release for the tag — that release page is where the phone downloads it from (see
+  # companion-app/README.md). Built in the app's own container, as `npm run companion:build` does.
+  companion-apk:
+    name: companion app apk
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HAS_KEY: ${{ secrets.COMPANION_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Without the signing secrets an APK would be unsigned (uninstallable) or signed with a
+      # throwaway key (unable to update the installed app), so skip it and say why.
+      - name: No signing key
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo "### Companion APK skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo 'The COMPANION_KEYSTORE_* secrets are not set — see companion-app/README.md "Releases".' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the signed APK
+        if: env.HAS_KEY == 'true'
+        env:
+          # Through env, never interpolated into the script text.
+          KEYSTORE_BASE64: ${{ secrets.COMPANION_KEYSTORE_BASE64 }}
+          COMPANION_KEYSTORE_PASSWORD: ${{ secrets.COMPANION_KEYSTORE_PASSWORD }}
+          COMPANION_KEY_ALIAS: ${{ secrets.COMPANION_KEY_ALIAS }}
+          COMPANION_KEY_PASSWORD: ${{ secrets.COMPANION_KEY_PASSWORD }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/hub-companion.jks"
+          COMPANION_KEYSTORE="$RUNNER_TEMP/hub-companion.jks" npm run companion:build
+          rm -f "$RUNNER_TEMP/hub-companion.jks"
+
+      - name: Attach it to the release
+        if: env.HAS_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          apk="$RUNNER_TEMP/hub-companion-$version.apk"
+          cp "companion-app/dist/hub-companion-$version-release.apk" "$apk"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$apk" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$apk" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+          echo "### Companion APK attached to $GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"

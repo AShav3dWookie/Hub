@@ -241,6 +241,29 @@ Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` store
 passes, a present-but-wrong one is a 401 even with auth off, no token falls through to
 `requireAuth`. `/api/device-tokens` is session-only, so a device can never mint tokens.
 
+### Android companion app (`companion-app/`)
+
+A small native Kotlin app (minSdk 31): a pairing screen and a home-screen mic widget that sends
+the phone's speech-recognised text to `/api/voice` with a device token. Not an npm workspace;
+`companion-app/README.md` is the user's install guide and covers signing and releases.
+
+- **Everything Android runs in a container** (`companion-app/docker/Dockerfile`: JDK 21, Android
+  SDK 37, Gradle pinned in the image — there's no Gradle wrapper). `scripts/run.sh <gradle task>`
+  builds the image when its Dockerfile hash changes and mounts the whole repo at `/repo` (the
+  app's version is read from the root `package.json`). Never install the Android SDK on the host.
+- The `companion:*` scripts drive Docker, so like `docker:*` they run from a **host** terminal.
+- `npm run companion:test` (unit + Robolectric, `testDebugUnitTest` — not `test`, which runs
+  every variant and rejects `--tests`), `companion:contract` (the app's `HubClient` against a hub
+  container built from this repo), `companion:build` (APK into `companion-app/dist/`).
+- **The contract hub must never get `ANTHROPIC_API_KEY`** — the script passes an explicit empty
+  one and `HubContractTest` fails if `/api/voice/status` reports the model. That's what keeps it
+  free and in the regression suite.
+- Robolectric on SDK 37 + JDK 21 needs `--add-exports=java.base/jdk.internal.access` (set in
+  `app/build.gradle.kts`). Main-thread results from `Dispatchers.IO` work need `waitUntil`
+  (`TestSupport.kt`) because Robolectric's looper only runs when idled.
+- Releases sign with one key kept outside the repo (`COMPANION_KEYSTORE*` env vars / Actions
+  secrets); `release.yml`'s `companion-apk` job skips cleanly without them.
+
 ### Photos & video storage
 
 `config.photosDir` derives from `path.dirname(config.dbPath) + "/photos"` so it shares the DB's

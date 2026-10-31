@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hub</string>
+    <string name="widget_name">Hub voice</string>
+    <string name="widget_description">Tap to add to your shopping lists by voice</string>
+    <string name="mic_description">Add to a shopping list by voice</string>
+</resources>

@@ -63,3 +63,20 @@ jobs:
       # scripts/docker-smoke-test.sh rather than being restated here. Swap in buildx with a
       # gha cache if the few minutes start to hurt, and accept that duplication then.
       - run: npm run docker:test
+
+  # The Android companion app: its unit and Robolectric tests, then its API client against a
+  # hub container built from this commit. Both run in the app's own build container, exactly as
+  # `npm run companion:test` / `companion:contract` do locally. The contract hub never gets an
+  # ANTHROPIC_API_KEY, so nothing here calls (or pays for) the real model.
+  companion:
+    name: companion app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm run companion:test
+      - run: npm run companion:contract

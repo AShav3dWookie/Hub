@@ -1,0 +1,86 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id("com.android.application")
+}
+
+// One version for the whole repo: the app reads the root package.json that `npm run release`
+// bumps, so a release tag, the server image and the APK always agree. 1.2.3 -> code 10203.
+val repoVersion = (JsonSlurper().parse(rootDir.resolve("../package.json")) as Map<*, *>)["version"] as String
+val (major, minor, patch) = repoVersion.split(".").map { it.toInt() }
+
+// Release signing comes from the environment (scripts/run.sh, or CI secrets) and never from the
+// repo. Without it the release APK is unsigned — buildable, but not installable.
+val keystorePath: String? = System.getenv("COMPANION_KEYSTORE")
+
+android {
+    namespace = "uk.aaronhanna.hub.companion"
+    compileSdk {
+        version = release(37)
+    }
+
+    defaultConfig {
+        applicationId = "uk.aaronhanna.hub.companion"
+        // Android 12: the Pixel 6 shipped with it, and it brings the widget and speech APIs used.
+        minSdk = 31
+        targetSdk = 37
+        versionCode = major * 10_000 + minor * 100 + patch
+        versionName = repoVersion
+    }
+
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("COMPANION_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("COMPANION_KEY_ALIAS")
+                keyPassword = System.getenv("COMPANION_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        // Robolectric needs the merged resources to inflate layouts and widgets.
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// The contract test talks to a real hub at HUB_URL (scripts/contract-test.sh sets it). It is
+// not an input Gradle knows about, so without this a contract run after a normal one would be
+// skipped as up to date.
+tasks.withType<Test>().configureEach {
+    // Robolectric's Android 17 framework (ApplicationSharedMemory) reaches into a JDK-internal
+    // package; JDK 21 refuses unless the test JVM exports it.
+    jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+
+    val hubUrl = System.getenv("HUB_URL") ?: ""
+    inputs.property("hubUrl", hubUrl)
+    if (hubUrl.isNotEmpty()) outputs.upToDateWhen { false }
+}
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.activity:activity-ktx:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.1")
+    // android.jar's org.json is a stub on the plain JVM; the real one for the non-Robolectric tests.
+    testImplementation("org.json:json:20260814")
+}

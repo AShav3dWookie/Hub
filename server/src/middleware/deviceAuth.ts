@@ -19,7 +19,10 @@ export function requireDeviceOrSession(db: AppDb): RequestHandler {
       return;
     }
     const match = /^Bearer\s+(\S+)$/i.exec(header);
-    if (match && authenticateDeviceToken(db, match[1])) {
+    const device = match ? authenticateDeviceToken(db, match[1]) : null;
+    if (device) {
+      // For routes that answer "which device is this?" — GET /api/voice/status.
+      res.locals.device = device;
       next();
       return;
     }

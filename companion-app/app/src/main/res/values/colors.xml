@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The hub's slate palette (Tailwind slate-900 / emerald-700 / red-600). -->
+    <color name="brand">#0F172A</color>
+    <color name="on_brand">#FFFFFF</color>
+    <color name="ok">#047857</color>
+    <color name="error">#DC2626</color>
+    <color name="warning">#B45309</color>
+</resources>

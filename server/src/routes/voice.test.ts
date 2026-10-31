@@ -58,6 +58,34 @@ describe("POST /api/voice", () => {
     expect(parser).toHaveBeenCalledWith("add eggs and milk", expect.any(Array));
   });
 
+  describe("GET /api/voice/status — the companion app's Test connection", () => {
+    it("names the device and says it would use the rules backup without a model", async () => {
+      const { app, token } = await setup({ auth: true });
+      const res = await request(app).get("/api/voice/status").set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ device: "Pixel 6", parser: "rules" });
+    });
+
+    it("says it would use the model when there is one", async () => {
+      const { app, token } = await setup({ parser: vi.fn() });
+      const res = await request(app).get("/api/voice/status").set("Authorization", `Bearer ${token}`);
+      expect(res.body).toEqual({ device: "Pixel 6", parser: "model" });
+    });
+
+    it("adds nothing to any list", async () => {
+      const { app, token } = await setup();
+      await request(app).get("/api/voice/status").set("Authorization", `Bearer ${token}`);
+      const lists = (await request(app).get("/api/lists")).body as { itemCount: number }[];
+      expect(lists.every((l) => l.itemCount === 0)).toBe(true);
+    });
+
+    it("refuses a wrong token, so a bad pairing shows up before the first command", async () => {
+      const { app } = await setup({ auth: true });
+      const res = await request(app).get("/api/voice/status").set("Authorization", "Bearer hub_wrong");
+      expect(res.status).toBe(401);
+    });
+  });
+
   it("answers 422 when nothing in the command can be added", async () => {
     const { app, token } = await setup();
     const res = await say(app, "add", token);
