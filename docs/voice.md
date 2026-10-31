@@ -84,13 +84,28 @@ time it falls back.
   path, and make sure `AUTH_ENABLED=true` (the production default). The app's own token check is
   then what protects it. With auth off, a request with *no* token would also be let through.
 
-## Checking the prompt
+## Checking it works: `npm run voice:check`
 
-`server/src/lib/voiceModel.live.test.ts` runs a handful of real phrases against the real model.
-It is skipped unless a key is set, so it never runs in CI:
+A manual check against the real model. It costs money (well under a penny a run), so it is
+**not** a test: nothing in `npm test`, coverage or CI runs it. Run it after setting up a key,
+changing the prompt in `server/src/lib/voiceModel.ts`, or changing `VOICE_MODEL`.
+
+It reads `ANTHROPIC_API_KEY` from the shell or from the repo-root `.env`, the file the dev
+`docker compose` also reads, so one line sets up both.
 
 ```bash
-cd server && ANTHROPIC_API_KEY=sk-ant-... npx vitest run voiceModel.live
+npm run voice:check
 ```
 
-Run it after changing the prompt in `voiceModel.ts` or `VOICE_MODEL`. It costs well under a penny.
+That sends about a dozen phrases ("eggs and milk", "fish and chips", "sains brees", a shop name
+inside an item, a command with nothing to add) and prints each answer, pass or fail, its
+latency, and what the run cost. It exits non-zero if any phrase fails.
+
+Add `--server` and a device token to also send one command through a running server, which
+proves the *server* has the key (`"parsedBy": "model"`):
+
+```bash
+npm run voice:check -- --server http://localhost:3000 --token hub_...
+```
+
+That really adds *Voice check* to the main list, so tick it off afterwards.

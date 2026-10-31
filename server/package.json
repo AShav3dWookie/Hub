@@ -14,6 +14,7 @@
     "lint": "eslint src",
     "db:migrate": "tsx src/db/migrate.ts",
     "seed:test-data": "tsx src/scripts/seedTestData.ts",
+    "voice:check": "tsx src/scripts/voiceCheck.ts",
     "auth:hash": "tsx src/scripts/hashPassword.ts",
     "auth:set-password": "tsx src/scripts/setPassword.ts"
   },

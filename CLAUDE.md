@@ -233,7 +233,8 @@ writes. `lib/voiceModel.ts` is the only importer of `@anthropic-ai/sdk` (Haiku, 
 output via a plain JSON schema, not the SDK's zod helper, which needs zod v4 while the server is
 on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from config
 (`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means rules only, tests pass a fake.
-`voiceModel.live.test.ts` hits the real API and is skipped without a key.
+`npm run voice:check` (`scripts/voiceCheck.ts`) runs real phrases against the real API: a
+**manual** script, never part of `npm test` or CI, because it costs money.
 
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` alone: a valid token

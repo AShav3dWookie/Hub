@@ -65,9 +65,16 @@ export interface ModelVoiceParserOptions {
   model: string;
   /** Test seam: anything with the SDK's `messages.create`. */
   client?: { messages: Pick<Anthropic["messages"], "create"> };
+  /** Told each response's token usage — the manual check script reports cost with it. */
+  onUsage?: (usage: Anthropic.Usage) => void;
 }
 
-export function createModelVoiceParser({ apiKey, model, client }: ModelVoiceParserOptions): VoiceParser {
+export function createModelVoiceParser({
+  apiKey,
+  model,
+  client,
+  onUsage,
+}: ModelVoiceParserOptions): VoiceParser {
   // A spoken command should feel instant; a slow answer is worse than the rules backup.
   const anthropic = client ?? new Anthropic({ apiKey, timeout: 10_000, maxRetries: 1 });
 
@@ -86,6 +93,7 @@ export function createModelVoiceParser({ apiKey, model, client }: ModelVoicePars
       output_config: { effort: "low", format: { type: "json_schema", schema: COMMAND_JSON_SCHEMA } },
     });
 
+    onUsage?.(response.usage);
     if (response.stop_reason === "refusal") throw new VoiceModelError("The model declined the command");
     if (response.stop_reason === "max_tokens") throw new VoiceModelError("The model's answer was cut off");
 
