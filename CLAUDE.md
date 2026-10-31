@@ -454,4 +454,6 @@ Host ports in use: 3000 (dev), 3099 (smoke test), 3100 (e2e), 3200/3210 (pwa rig
 - `test-env/` and `data/` are gitignored scratch dirs (seeded DBs, local Docker mounts).
 - `docker-compose.yml`'s `./test-env:/app/data` bind mount **is committed** — it is the dev
   arrangement. Production uses the `hub-data` named volume in `docker-compose.prod.yml`.
-- `photos-plan.txt` and `Future_features.md` at the root are feature design notes.
+- `photos-plan.txt` at the root holds feature design notes.
+- `Future_features.md` is the user's private prompt-drafting file: untracked and gitignored. Don't
+  read, edit or act on it. Planned work lives in the GitHub issue tracker.
