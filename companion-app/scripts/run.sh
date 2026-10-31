@@ -1,49 +1,28 @@
 #!/usr/bin/env bash
 # Run Gradle for the companion app inside its build container.
 #
-#   bash companion-app/scripts/run.sh testDebugUnitTest    # unit + Robolectric tests
-#   bash companion-app/scripts/run.sh assembleRelease      # the APK (see "Signing" below)
+#   bash companion-app/scripts/run.sh testDebugUnitTest    # what `npm run companion:test` does
 #
-# Builds the image the first time (or when docker/Dockerfile changes). Gradle's and
-# Robolectric's downloads live in named volumes, so only the first run is slow.
+# The other companion scripts call this. Gradle's and Robolectric's downloads live in named
+# volumes, so only the first run is slow. When the release keystore exists (see lib.sh's
+# load_signing_env and README.md "Signing") it is mounted read-only and release builds are
+# signed with it.
 #
-# Signing: a release build is signed when these are set (see companion-app/README.md):
-#   COMPANION_KEYSTORE           path to the .jks on this machine (mounted read-only)
-#   COMPANION_KEYSTORE_PASSWORD  COMPANION_KEY_ALIAS  COMPANION_KEY_PASSWORD
-# Without them a release build comes out unsigned, which a phone will refuse to install.
-#
-# Extra docker run options can be passed in COMPANION_DOCKER_ARGS (the contract test uses it to
-# join the hub container's network).
+# COMPANION_DOCKER_ARGS adds docker run options (the contract test uses it to join the hub's
+# network).
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-IMAGE="hub-companion-builder"
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
-
-# Git Bash on Windows rewrites anything that looks like a /path; docker needs them as written.
-export MSYS_NO_PATHCONV=1
-host_path() { (cd "$1" && (pwd -W 2>/dev/null || pwd)); }
-
-# Rebuild the image only when its Dockerfile changed (the hash is stored as a label).
-dockerfile="$repo/companion-app/docker/Dockerfile"
-want="$(sha256sum "$dockerfile" | cut -c1-16)"
-have="$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "dockerfile-hash" }}' 2>/dev/null || true)"
-if [ "$want" != "$have" ]; then
-  echo "==> Building the $IMAGE image (first run, or the Dockerfile changed)..."
-  docker build --label "dockerfile-hash=$want" -t "$IMAGE" "$(host_path "$repo/companion-app/docker")"
-fi
+ensure_image
+load_signing_env
 
 args=(--rm
   -v "$(host_path "$repo"):/repo"
   -v hub-companion-gradle:/cache/gradle
   -v hub-companion-m2:/root/.m2)
 
-if [ -n "${COMPANION_KEYSTORE:-}" ]; then
-  # Set from PowerShell it's a C:\ path, which dirname can't split; cygpath (Git Bash) can.
-  keystore="$(cygpath -u "$COMPANION_KEYSTORE" 2>/dev/null || echo "$COMPANION_KEYSTORE")"
-  [ -f "$keystore" ] || { echo "COMPANION_KEYSTORE: no file at $COMPANION_KEYSTORE" >&2; exit 1; }
-  keystore_dir="$(host_path "$(dirname "$keystore")")"
-  args+=(-v "$keystore_dir/$(basename "$keystore"):/keystore/release.jks:ro"
+if [ -f "$COMPANION_KEYSTORE" ] && [ -n "${COMPANION_KEYSTORE_PASSWORD:-}" ]; then
+  args+=(-v "$(host_path "$(dirname "$COMPANION_KEYSTORE")")/$(basename "$COMPANION_KEYSTORE"):/keystore/release.jks:ro"
     -e COMPANION_KEYSTORE=/keystore/release.jks
     -e COMPANION_KEYSTORE_PASSWORD -e COMPANION_KEY_ALIAS -e COMPANION_KEY_PASSWORD)
 fi

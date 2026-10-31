@@ -263,6 +263,14 @@ the phone's speech-recognised text to `/api/voice` with a device token. Not an n
   (`TestSupport.kt`) because Robolectric's looper only runs when idled.
 - Releases sign with one key kept outside the repo (`COMPANION_KEYSTORE*` env vars / Actions
   secrets); `release.yml`'s `companion-apk` job skips cleanly without them.
+- **The user runs everything from Git Bash or WSL2 and wants one command per job, configured by
+  env vars** — never PowerShell, never a list of steps. `keygen`, `install`, `pair` and `secrets`
+  exist for that. All scripts source `scripts/lib.sh`, whose `load_env` falls back to the root
+  `.env` by *parsing* it (it holds `$$`-escaped compose values, so never `source` it).
+- **Git Bash gotchas** (each one bit): `lib.sh` exports `MSYS_NO_PATHCONV=1` for docker, so
+  native `.exe`s (`curl`, `adb`, `gh`) get paths untranslated — pass them `native_path`
+  (`cygpath -m`) output, and don't hand them `/dev/null` (curl `-o /dev/null` fails with exit 23).
+  A `grep` with no match inside `$( … | … )` trips `set -e -o pipefail` and exits silently.
 
 ### Photos & video storage
 

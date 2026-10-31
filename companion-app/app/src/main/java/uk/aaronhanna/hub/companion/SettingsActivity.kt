@@ -1,5 +1,7 @@
 package uk.aaronhanna.hub.companion
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -14,6 +16,10 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** `hubcompanion://pair?url=…&token=…` — see [SettingsActivity.offerPairingLink]. */
+internal const val PAIR_SCHEME = "hubcompanion"
+internal const val PAIR_HOST = "pair"
 
 /** What Test connection says when it works. */
 internal fun describeStatus(status: VoiceStatus): String {
@@ -64,6 +70,38 @@ class SettingsActivity : ComponentActivity() {
         findViewById<Button>(R.id.save).setOnClickListener { save() }
         testButton.setOnClickListener { save()?.let(::test) }
         updateWarning()
+        if (savedInstanceState == null) offerPairingLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        offerPairingLink(intent)
+    }
+
+    /**
+     * A `hubcompanion://pair?url=…&token=…` link — what `npm run companion:pair` sends over adb.
+     * It is never applied silently: any app or web page could open such a link, so the phone's
+     * owner always sees where it points and confirms.
+     */
+    private fun offerPairingLink(intent: Intent?) {
+        val link = intent?.data ?: return
+        if (link.scheme != PAIR_SCHEME || link.host != PAIR_HOST) return
+        val url = link.getQueryParameter("url")?.let(PairingRules::normaliseUrl)
+        val token = link.getQueryParameter("token")?.trim()
+        if (url == null || token == null || PairingRules.tokenProblem(token) != null) {
+            showResult("That pairing link isn't complete. Run npm run companion:pair again.", isError = true)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Pair with this hub?")
+            .setMessage("Voice commands will go to $url.")
+            .setPositiveButton("Pair") { _, _ ->
+                urlField.setText(url)
+                tokenField.setText(token)
+                save()?.let(::test)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /** Validate and store what's typed. Returns the pairing, or null with the problem shown. */
