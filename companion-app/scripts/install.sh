@@ -28,7 +28,7 @@ if [ -n "${COMPANION_ADB_DEVICE:-}" ]; then
   adb connect "$COMPANION_ADB_DEVICE" | grep -q "connected" || die "adb couldn't connect to $COMPANION_ADB_DEVICE (is wireless debugging on, and the port current?)."
   export ANDROID_SERIAL="$COMPANION_ADB_DEVICE"
 fi
-adb get-state > /dev/null 2>&1 || die "adb can't see a phone. Plug it in with USB debugging on, or set COMPANION_ADB_DEVICE (README.md \"Installing\")."
+require_phone
 
 bash "$here/build.sh"
 apk="$app/dist/hub-companion-$(repo_version)-release.apk"

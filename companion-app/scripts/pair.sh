@@ -26,7 +26,7 @@ if [ -n "${COMPANION_ADB_DEVICE:-}" ]; then
   adb connect "$COMPANION_ADB_DEVICE" > /dev/null
   export ANDROID_SERIAL="$COMPANION_ADB_DEVICE"
 fi
-adb get-state > /dev/null 2>&1 || die "adb can't see a phone (see README.md \"Installing\")."
+require_phone
 adb shell pm path uk.aaronhanna.hub.companion | grep -q package: || die "the app isn't on the phone — run npm run companion:install first."
 
 name="${COMPANION_DEVICE_NAME:-$(adb shell getprop ro.product.model | tr -d '\r')}"

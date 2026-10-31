@@ -70,3 +70,16 @@ ensure_image() {
 need_adb() {
   command -v adb > /dev/null || die "adb isn't on your PATH. Install Android platform-tools: https://developer.android.com/tools/releases/platform-tools"
 }
+
+# Stop unless adb has exactly one phone it's allowed to use, saying which fix applies.
+require_phone() {
+  local state
+  state="$(adb get-state 2>&1 || true)"
+  case "$state" in
+    device) ;;
+    *unauthorized*) die "the phone hasn't allowed this computer yet. Unlock it and tap Allow on \"Allow USB debugging?\" (tick \"Always allow from this computer\"). No prompt? Unplug and replug the cable; if it still doesn't appear, Developer options > Revoke USB debugging authorizations, then replug." ;;
+    *"more than one"*) die "adb sees more than one device — set COMPANION_ADB_DEVICE to the one to use (adb devices lists them)." ;;
+    *offline*) die "the phone shows as offline to adb — unplug and replug it (or toggle wireless debugging)." ;;
+    *) die "adb can't see a phone. Plug it in with USB debugging on, or set COMPANION_ADB_DEVICE for wireless debugging (README.md \"Getting it onto the phone\")." ;;
+  esac
+}
