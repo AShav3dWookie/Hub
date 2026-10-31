@@ -10,8 +10,9 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-app="$here/.."
-version="$(node -p "require('$app/../package.json').version" 2>/dev/null || grep -m1 '"version"' "$app/../package.json" | cut -d'"' -f4)"
+app="$(cd "$here/.." && pwd)"
+# The repo's version, which the APK carries too (app/build.gradle.kts reads the same file).
+version="$(grep -m1 '"version"' "$app/../package.json" | cut -d'"' -f4)"
 
 if [ -n "${COMPANION_KEYSTORE:-}" ]; then
   variant=release

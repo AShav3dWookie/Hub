@@ -28,7 +28,8 @@ the items.
    device*. Copy the token into the companion app straight away: it is shown once, and the server
    keeps only a hash of it. A lost token can't be recovered. Remove the device and add it again.
 
-3. **Point the device at the hub.** The companion app (#4) sends each command as:
+3. **Pair the device.** For the Android companion app, [companion-app/README.md](../companion-app/README.md)
+   walks through installing it, pairing and adding the widget. Under the hood each command is:
 
    ```bash
    curl -X POST https://hub.aaronhanna.uk/api/voice \

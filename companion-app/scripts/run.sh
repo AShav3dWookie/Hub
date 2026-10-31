@@ -39,8 +39,11 @@ args=(--rm
   -v hub-companion-m2:/root/.m2)
 
 if [ -n "${COMPANION_KEYSTORE:-}" ]; then
-  keystore_dir="$(host_path "$(dirname "$COMPANION_KEYSTORE")")"
-  args+=(-v "$keystore_dir/$(basename "$COMPANION_KEYSTORE"):/keystore/release.jks:ro"
+  # Set from PowerShell it's a C:\ path, which dirname can't split; cygpath (Git Bash) can.
+  keystore="$(cygpath -u "$COMPANION_KEYSTORE" 2>/dev/null || echo "$COMPANION_KEYSTORE")"
+  [ -f "$keystore" ] || { echo "COMPANION_KEYSTORE: no file at $COMPANION_KEYSTORE" >&2; exit 1; }
+  keystore_dir="$(host_path "$(dirname "$keystore")")"
+  args+=(-v "$keystore_dir/$(basename "$keystore"):/keystore/release.jks:ro"
     -e COMPANION_KEYSTORE=/keystore/release.jks
     -e COMPANION_KEYSTORE_PASSWORD -e COMPANION_KEY_ALIAS -e COMPANION_KEY_PASSWORD)
 fi

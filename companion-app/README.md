@@ -115,28 +115,34 @@ bumped by `npm run release`.
 Android only installs an update signed with the same key as the app already on the phone. So
 the app has one release key, made once, kept **outside the repo**, and used for every release.
 
-**Make it once** (needs a JDK's `keytool`; the build image has one):
+**Make it once.** It needs a JDK's `keytool`, and the build image has one — run
+`npm run companion:test` once first so the image exists. In PowerShell:
 
-```bash
-mkdir -p ~/keys
-docker run --rm -it -v ~/keys:/keys hub-companion-builder \
-  keytool -genkeypair -v -keystore /keys/hub-companion.jks -alias hub-companion \
+```powershell
+mkdir $HOME\keys
+docker run --rm -it -v "$HOME\keys:/keys" hub-companion-builder `
+  keytool -genkeypair -v -keystore /keys/hub-companion.jks -alias hub-companion `
     -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-It asks for a password and a name; remember the password. **Back the `.jks` file and its password
-up somewhere safe** (a password manager takes file attachments). Lose them, and the next release
-can't update the installed app — you'd have to uninstall and pair again.
+It asks for a password (twice) and a name — anything, e.g. your own — then confirms with `yes`.
+`keytool` uses the same password for the key.
 
-**Build a signed APK locally:**
+**Back up `hub-companion.jks` and its password together** (a password manager takes file
+attachments). Lose either and the next release can't update the installed app: you'd have to
+uninstall and pair again. Never commit it — `*.jks` is gitignored here for that reason.
 
-```bash
-export COMPANION_KEYSTORE=~/keys/hub-companion.jks
-export COMPANION_KEYSTORE_PASSWORD='…'  COMPANION_KEY_ALIAS=hub-companion  COMPANION_KEY_PASSWORD='…'
+**Build a signed APK locally** (PowerShell):
+
+```powershell
+$env:COMPANION_KEYSTORE = "$HOME\keys\hub-companion.jks"
+$env:COMPANION_KEY_ALIAS = "hub-companion"
+$env:COMPANION_KEYSTORE_PASSWORD = "…"
+$env:COMPANION_KEY_PASSWORD = $env:COMPANION_KEYSTORE_PASSWORD
 npm run companion:build
 ```
 
-(`keytool` uses the store password for the key too unless you gave it a different one.)
+That writes `companion-app/dist/hub-companion-<version>-release.apk`.
 
 ## Releases
 
@@ -149,9 +155,16 @@ variables → Actions → *New repository secret*):
 
 | Secret | Value |
 | --- | --- |
-| `COMPANION_KEYSTORE_BASE64` | the `.jks` file, base64-encoded: `base64 -w0 ~/keys/hub-companion.jks` |
-| `COMPANION_KEYSTORE_PASSWORD` | the store password |
+| `COMPANION_KEYSTORE_BASE64` | the `.jks` file as base64 — see below |
+| `COMPANION_KEYSTORE_PASSWORD` | the password |
 | `COMPANION_KEY_ALIAS` | `hub-companion` |
-| `COMPANION_KEY_PASSWORD` | the key password (the store password, unless you set another) |
+| `COMPANION_KEY_PASSWORD` | the password again |
 
-Without them the release still publishes the server image; it just skips the APK and says so.
+To get the base64 onto the clipboard, ready to paste into the secret (PowerShell):
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\keys\hub-companion.jks")) | Set-Clipboard
+```
+
+Without the secrets a release still publishes the server image; it just skips the APK and says
+so in the run's summary.
