@@ -8,6 +8,9 @@ import {
   updateAlbumSchema,
   createEntityNoteSchema,
   updateEntityNoteSchema,
+  createListSchema,
+  updateListSchema,
+  createListItemSchema,
 } from "./validation.js";
 
 /**
@@ -31,6 +34,11 @@ export const MUTATION_TYPES = [
   "note.create",
   "note.update",
   "note.delete",
+  "list.create",
+  "list.update",
+  "list.delete",
+  "listItem.create",
+  "listItem.delete",
 ] as const;
 
 export const mutationTypeSchema = z.enum(MUTATION_TYPES);
@@ -68,4 +76,9 @@ export const mutationPayloadSchemas = {
   "note.create": z.intersection(z.object({ entityId: posId }), createEntityNoteSchema),
   "note.update": z.intersection(z.object({ noteId: posId }), updateEntityNoteSchema),
   "note.delete": z.object({ noteId: posId }),
+  "list.create": createListSchema,
+  "list.update": z.intersection(z.object({ listId: posId }), updateListSchema),
+  "list.delete": z.object({ listId: posId }),
+  "listItem.create": z.intersection(z.object({ listId: posId }), createListItemSchema),
+  "listItem.delete": z.object({ listId: posId, itemId: posId }),
 } satisfies Record<(typeof MUTATION_TYPES)[number], z.ZodType>;

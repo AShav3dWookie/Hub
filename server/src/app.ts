@@ -16,6 +16,7 @@ import { createLogPhotosRouter } from "./routes/logPhotos.js";
 import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
 import { createSyncRouter } from "./routes/sync.js";
+import { createListsRouter } from "./routes/lists.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createNotificationsRouter, type PushOptions } from "./routes/notifications.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -77,6 +78,7 @@ export function createApp(
   app.use("/api/calendar", requireAuth, createCalendarRouter(db));
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
+  app.use("/api/lists", requireAuth, createListsRouter(db));
   app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
   app.use("/api/notifications", requireAuth, createNotificationsRouter(db, push));
   app.use("/api/photos", requireAuth, express.static(photosDir));

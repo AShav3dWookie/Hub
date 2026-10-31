@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, NotificationSlot, SyncEntityType } from "@logger/shared";
+import type { Category, ListKind, NotificationSlot, SyncEntityType } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -189,6 +189,55 @@ export const entityNotes = sqliteTable(
   (table) => ({
     entityIdIdx: index("entity_notes_entity_id_idx").on(table.entityId),
     rowSeqIdx: index("entity_notes_row_seq_idx").on(table.rowSeq),
+  }),
+);
+
+/**
+ * General-purpose lists (shopping is the only kind so far). Unique by normalized name within a
+ * kind, so a spoken list name can never match two lists; the partial unique index allows
+ * exactly one default ("main") list per kind. Migration 0012 seeds the main shopping list.
+ */
+export const lists = sqliteTable(
+  "lists",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").$type<ListKind>().notNull(),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    ...syncColumns,
+  },
+  (table) => ({
+    kindNameIdx: uniqueIndex("lists_kind_normalized_name_idx").on(table.kind, table.normalizedName),
+    oneDefaultIdx: uniqueIndex("lists_one_default_per_kind_idx")
+      .on(table.kind)
+      .where(sql`${table.isDefault} = 1`),
+    rowSeqIdx: index("lists_row_seq_idx").on(table.rowSeq),
+  }),
+);
+
+/** A list's entries. Unique by normalized text within a list — adding a duplicate is a no-op. */
+export const listItems = sqliteTable(
+  "list_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    normalizedText: text("normalized_text").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    ...syncColumns,
+  },
+  (table) => ({
+    listTextIdx: uniqueIndex("list_items_list_id_normalized_text_idx").on(
+      table.listId,
+      table.normalizedText,
+    ),
+    rowSeqIdx: index("list_items_row_seq_idx").on(table.rowSeq),
   }),
 );
 

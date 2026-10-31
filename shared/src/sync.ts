@@ -1,5 +1,6 @@
 import type { Category } from "./categories.js";
 import type { NoteCategory } from "./notes.js";
+import type { ListKind } from "./lists.js";
 
 /**
  * The delta-sync change-feed contract (`GET /api/sync/changes`).
@@ -14,7 +15,14 @@ import type { NoteCategory } from "./notes.js";
  */
 
 /** The tables the change-feed replicates. */
-export type SyncEntityType = "entity" | "log" | "log_photo" | "album" | "entity_note";
+export type SyncEntityType =
+  | "entity"
+  | "log"
+  | "log_photo"
+  | "album"
+  | "entity_note"
+  | "list"
+  | "list_item";
 
 /** Opaque pagination token for `GET /api/sync/changes`. Currently a `rowSeq` high-watermark. */
 export type SyncCursor = string;
@@ -92,6 +100,29 @@ export interface EntityNoteSyncDTO extends SyncMeta {
   updatedAt: string;
 }
 
+export interface ListSyncDTO extends SyncMeta {
+  id: number;
+  kind: ListKind;
+  name: string;
+  normalizedName: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A list's items are their own rows rather than an id array on the list, because adding or
+ * ticking off an item is the common write and shouldn't re-send the whole list.
+ */
+export interface ListItemSyncDTO extends SyncMeta {
+  id: number;
+  listId: number;
+  text: string;
+  normalizedText: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A deleted row. The client drops its local copy (and any children it can no longer reach). */
 export interface SyncTombstone {
   entityType: SyncEntityType;
@@ -122,7 +153,12 @@ export type MutationType =
   | "album.removePerson"
   | "note.create"
   | "note.update"
-  | "note.delete";
+  | "note.delete"
+  | "list.create"
+  | "list.update"
+  | "list.delete"
+  | "listItem.create"
+  | "listItem.delete";
 
 /**
  * One queued write. `payload` mirrors the matching REST body but its id references may be
@@ -166,6 +202,8 @@ export interface SyncChangesResponse {
     photos: PhotoSyncDTO[];
     albums: AlbumSyncDTO[];
     entityNotes: EntityNoteSyncDTO[];
+    lists: ListSyncDTO[];
+    listItems: ListItemSyncDTO[];
   };
   /** Deletions since the cursor, ordered by `rowSeq` ascending. */
   deletions: SyncTombstone[];
