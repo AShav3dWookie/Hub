@@ -15,3 +15,6 @@ server/public/
 e2e/.artifacts/
 playwright-report/
 test-results/
+
+# The user's private prompt-drafting notes. Kept locally, never committed.
+Future_features.md
