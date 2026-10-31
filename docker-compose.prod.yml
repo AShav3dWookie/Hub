@@ -60,6 +60,9 @@ services:
       # https://hub.aaronhanna.uk — so these only matter if you move house or domain.
       - NOTIFY_TIMEZONE=${NOTIFY_TIMEZONE:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # Voice commands (docs/voice.md). Without a key a simple backup parser is used.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VOICE_MODEL=${VOICE_MODEL:-}
     # The SQLite database and the uploaded photos, together. Set DATA_DIR to an absolute host
     # path and this becomes a bind mount; leave it unset and it is the `hub-data` named volume.
     #

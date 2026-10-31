@@ -6,6 +6,8 @@ export * from "./calendar.js";
 export * from "./search.js";
 export * from "./notes.js";
 export * from "./lists.js";
+export * from "./devices.js";
+export * from "./voice.js";
 export * from "./sync.js";
 export * from "./normalize.js";
 export * from "./dates.js";

@@ -316,6 +316,21 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
 });
 
 /**
+ * Non-browser callers allowed to use the API — the Android companion app's voice widget now,
+ * location triggers later. Each is named after its device and authenticates with
+ * `Authorization: Bearer <token>`. Only the token's SHA-256 is kept: tokens are 256 random bits,
+ * so a slow hash buys nothing, and a fast one lets the lookup be a plain indexed equality.
+ * Server-only and non-syncable, like `push_subscriptions`. See `deviceTokensService`.
+ */
+export const deviceTokens = sqliteTable("device_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: text("created_at").notNull(),
+  lastUsedAt: text("last_used_at"),
+});
+
+/**
  * Which items each reminder slot has already announced, so a scheduler tick — every minute, and
  * again after a restart — never repeats one. Per item rather than per slot, so something added
  * after 9pm for tomorrow still gets a late notification of its own. Pruned after 30 days.
