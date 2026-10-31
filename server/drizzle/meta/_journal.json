@@ -92,6 +92,13 @@
       "when": 1793464696612,
       "tag": "0012_closed_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793475487687,
+      "tag": "0013_mighty_manta",
+      "breakpoints": true
     }
   ]
 }

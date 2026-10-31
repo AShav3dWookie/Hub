@@ -17,6 +17,9 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-}
       - COOKIE_SECURE=${COOKIE_SECURE:-}
       - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-}
+      # Voice commands (docs/voice.md). Without a key a simple backup parser is used.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VOICE_MODEL=${VOICE_MODEL:-}
     volumes:
       - ./test-env:/app/data
     restart: unless-stopped

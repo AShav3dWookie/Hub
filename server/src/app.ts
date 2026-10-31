@@ -17,6 +17,10 @@ import { createGalleryRouter } from "./routes/gallery.js";
 import { createAlbumsRouter } from "./routes/albums.js";
 import { createSyncRouter } from "./routes/sync.js";
 import { createListsRouter } from "./routes/lists.js";
+import { createDeviceTokensRouter } from "./routes/deviceTokens.js";
+import { createVoiceRouter } from "./routes/voice.js";
+import { requireDeviceOrSession } from "./middleware/deviceAuth.js";
+import type { VoiceParser } from "./lib/voiceModel.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createNotificationsRouter, type PushOptions } from "./routes/notifications.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -26,6 +30,11 @@ export function createApp(
   db: AppDb,
   photosDir: string = config.photosDir,
   push?: PushOptions,
+  /**
+   * How voice commands are understood. Omitted: built from config on first use (the real model
+   * when ANTHROPIC_API_KEY is set, otherwise none). `null`: no model, rules only. Tests pass a fake.
+   */
+  voiceParser?: VoiceParser | null,
 ): Express {
   const app = express();
 
@@ -79,6 +88,9 @@ export function createApp(
   app.use("/api/gallery", requireAuth, createGalleryRouter(db, photosDir));
   app.use("/api/albums", requireAuth, createAlbumsRouter(db, photosDir));
   app.use("/api/lists", requireAuth, createListsRouter(db));
+  app.use("/api/device-tokens", requireAuth, createDeviceTokensRouter(db));
+  // A device token or a session: the companion app's widget calls this, not a browser.
+  app.use("/api/voice", requireDeviceOrSession(db), createVoiceRouter(db, voiceParser));
   app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
   app.use("/api/notifications", requireAuth, createNotificationsRouter(db, push));
   app.use("/api/photos", requireAuth, express.static(photosDir));

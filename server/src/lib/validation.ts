@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
 import { daysInMonth, daysBetween } from "@logger/shared";
 import { LIST_KINDS, LIST_ITEM_MAX_LENGTH, LIST_NAME_MAX_LENGTH } from "@logger/shared";
+import { DEVICE_NAME_MAX_LENGTH, VOICE_TEXT_MAX_LENGTH } from "@logger/shared";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
 export const categorySchema = z.enum(CATEGORIES);
@@ -85,6 +86,14 @@ export const updateListSchema = z
 
 export const createListItemSchema = z.object({
   text: z.string().trim().min(1).max(LIST_ITEM_MAX_LENGTH),
+});
+
+export const createDeviceTokenSchema = z.object({
+  name: z.string().trim().min(1).max(DEVICE_NAME_MAX_LENGTH),
+});
+
+export const voiceCommandSchema = z.object({
+  text: z.string().trim().min(1).max(VOICE_TEXT_MAX_LENGTH),
 });
 
 export const listsQuerySchema = z.object({

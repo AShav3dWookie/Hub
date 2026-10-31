@@ -223,6 +223,23 @@ and a real sender lazily on first use.
 - **Service worker.** The `push`, `notificationclick` and `pushsubscriptionchange` handlers live in
   `client/src/sw/sw.ts`, which `vite dev` doesn't register. Try push against a production build.
 
+### Voice commands & device tokens
+
+`POST /api/voice { text }` adds spoken items to the shopping lists; `docs/voice.md` is the guide.
+`voiceService.handleVoiceCommand` asks the model parser first and falls back to
+`lib/voiceRules.ts` on *any* failure, so a command is never lost. The parser only proposes
+`{ listId | null, items }`; the service validates the id (unknown → main list), dedupes and
+writes. `lib/voiceModel.ts` is the only importer of `@anthropic-ai/sdk` (Haiku, structured
+output via a plain JSON schema, not the SDK's zod helper, which needs zod v4 while the server is
+on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from config
+(`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means rules only, tests pass a fake.
+`voiceModel.live.test.ts` hits the real API and is skipped without a key.
+
+Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
+(server-only, not synced). `requireDeviceOrSession` guards `/api/voice` alone: a valid token
+passes, a present-but-wrong one is a 401 even with auth off, no token falls through to
+`requireAuth`. `/api/device-tokens` is session-only, so a device can never mint tokens.
+
 ### Photos & video storage
 
 `config.photosDir` derives from `path.dirname(config.dbPath) + "/photos"` so it shares the DB's
