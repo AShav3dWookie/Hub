@@ -3,6 +3,8 @@ import type {
   AlbumSyncDTO,
   EntityNoteSyncDTO,
   EntitySyncDTO,
+  ListItemSyncDTO,
+  ListSyncDTO,
   LogSyncDTO,
   MutationType,
   PhotoSyncDTO,
@@ -19,7 +21,7 @@ import type {
  */
 
 export const DB_NAME = "logger";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export interface MetaRecord {
   key: string;
@@ -42,6 +44,8 @@ export type LocalLog = LogSyncDTO & LocalWriteMeta;
 export type LocalPhoto = PhotoSyncDTO & LocalWriteMeta;
 export type LocalAlbum = AlbumSyncDTO & LocalWriteMeta;
 export type LocalEntityNote = EntityNoteSyncDTO & LocalWriteMeta;
+export type LocalList = ListSyncDTO & LocalWriteMeta;
+export type LocalListItem = ListItemSyncDTO & LocalWriteMeta;
 
 export type OutboxStatus = "pending" | "dead";
 
@@ -91,6 +95,16 @@ export interface LoggerDBSchema extends DBSchema {
     value: LocalEntityNote;
     indexes: { "by-entity": number; "by-rowSeq": number };
   };
+  lists: {
+    key: number;
+    value: LocalList;
+    indexes: { "by-kind": string; "by-rowSeq": number };
+  };
+  listItems: {
+    key: number;
+    value: LocalListItem;
+    indexes: { "by-list": number; "by-rowSeq": number };
+  };
   outbox: {
     key: string;
     value: OutboxRecord;
@@ -105,7 +119,15 @@ export interface LoggerDBSchema extends DBSchema {
 export type LoggerDB = IDBPDatabase<LoggerDBSchema>;
 
 /** The syncable object stores, in the order the change-feed lists them. */
-export const SYNC_STORES = ["entities", "logs", "photos", "albums", "entityNotes"] as const;
+export const SYNC_STORES = [
+  "entities",
+  "logs",
+  "photos",
+  "albums",
+  "entityNotes",
+  "lists",
+  "listItems",
+] as const;
 export type SyncStore = (typeof SYNC_STORES)[number];
 
 /** Every store a local write may touch, for the one big `applyLocalMutation` transaction. */
@@ -121,7 +143,7 @@ let dbPromise: Promise<LoggerDB> | null = null;
 export function getDB(): Promise<LoggerDB> {
   if (!dbPromise) {
     dbPromise = openDB<LoggerDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           const entities = db.createObjectStore("entities", { keyPath: "id" });
           entities.createIndex("by-category", "category");
@@ -152,6 +174,22 @@ export function getDB(): Promise<LoggerDB> {
           // untyped optional fields on the sync stores — no schema change, no index.
           const outbox = db.createObjectStore("outbox", { keyPath: "mutationId" });
           outbox.createIndex("by-seq", "seq");
+        }
+
+        if (oldVersion < 3) {
+          // Lists.
+          const lists = db.createObjectStore("lists", { keyPath: "id" });
+          lists.createIndex("by-kind", "kind");
+          lists.createIndex("by-rowSeq", "rowSeq");
+
+          const items = db.createObjectStore("listItems", { keyPath: "id" });
+          items.createIndex("by-list", "listId");
+          items.createIndex("by-rowSeq", "rowSeq");
+
+          // A device still on the previous build can pull a page that carries list rows,
+          // ignore them, and move its cursor past them for good. Re-pull from the start once
+          // so they land. Applying is an upsert and skips locally-dirty rows, so it is safe.
+          if (oldVersion >= 1) void tx.objectStore("meta").delete(META_SYNC_CURSOR);
         }
       },
     });

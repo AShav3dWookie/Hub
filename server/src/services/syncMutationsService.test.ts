@@ -8,6 +8,7 @@ import { applyMutations } from "./syncMutationsService.js";
 import { createLog, getLogById } from "./logService.js";
 import { findOrCreateEntity } from "./entityService.js";
 import { createAlbum } from "./albumService.js";
+import { addListItem, createList, deleteListItem, getList, listLists } from "./listService.js";
 import type { ParsedMutationEnvelope } from "../lib/syncValidation.js";
 
 /**
@@ -329,5 +330,82 @@ describe("applyMutations", () => {
     ]);
 
     expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+  });
+
+  describe("lists", () => {
+    const mainId = () => listLists(ctx.db).find((l) => l.isDefault)!.id;
+
+    it("adds items to a list created offline in the same batch", () => {
+      setup();
+      const results = run([
+        env({ mutationId: "l1", type: "list.create", tempId: -1, payload: { name: "Tesco" } }),
+        env({
+          mutationId: "i1",
+          type: "listItem.create",
+          tempId: -2,
+          payload: { listId: -1, text: "Eggs" },
+        }),
+      ]);
+
+      expect(results.map((r) => r.status)).toEqual(["applied", "applied"]);
+      const listId = results[0].idMap![-1];
+      expect(getList(ctx.db, listId).items.map((i) => i.text)).toEqual(["Eggs"]);
+    });
+
+    it("merges two devices' offline lists of the same name into one", () => {
+      setup();
+      const tesco = createList(ctx.db, { name: "Tesco" });
+      const [result] = run([
+        env({ type: "list.create", tempId: -1, payload: { name: "tesco" } }),
+      ]);
+
+      expect(result).toMatchObject({ status: "applied", idMap: { [-1]: tesco.id } });
+      expect(listLists(ctx.db)).toHaveLength(2);
+    });
+
+    it("maps a duplicate item onto the one already on the list", () => {
+      setup();
+      const eggs = addListItem(ctx.db, mainId(), { text: "Eggs" });
+      const [result] = run([
+        env({ type: "listItem.create", tempId: -5, payload: { listId: mainId(), text: "EGGS" } }),
+      ]);
+
+      expect(result.idMap?.[-5]).toBe(eggs.id);
+      expect(getList(ctx.db, mainId()).items).toHaveLength(1);
+    });
+
+    it("treats ticking off an item that is already gone as done", () => {
+      setup();
+      const eggs = addListItem(ctx.db, mainId(), { text: "Eggs" });
+      deleteListItem(ctx.db, mainId(), eggs.id);
+
+      const [result] = run([
+        env({ type: "listItem.delete", payload: { listId: mainId(), itemId: eggs.id } }),
+      ]);
+      expect(result.status).toBe("applied");
+    });
+
+    it("renames and makes main, reporting the new version", () => {
+      setup();
+      const tesco = createList(ctx.db, { name: "Tesco" });
+      const [result] = run([
+        env({
+          type: "list.update",
+          baseVersion: 1,
+          payload: { listId: tesco.id, name: "Tesco Bangor", isDefault: true },
+        }),
+      ]);
+
+      expect(result.status).toBe("applied");
+      expect(result.serverVersion).toBeGreaterThan(1);
+      expect(getList(ctx.db, tesco.id)).toMatchObject({ name: "Tesco Bangor", isDefault: true });
+    });
+
+    it("reports deleting the main list as an error", () => {
+      setup();
+      const [result] = run([env({ type: "list.delete", payload: { listId: mainId() } })]);
+      expect(result.status).toBe("error");
+      expect(listLists(ctx.db)).toHaveLength(1);
+    });
   });
 });

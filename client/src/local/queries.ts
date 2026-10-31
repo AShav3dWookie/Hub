@@ -19,9 +19,12 @@
  *   server/src/services/calendarService.ts       → getCalendarRange
  *   server/src/services/importantDatesService.ts → getUpcomingImportantDates
  *   server/src/services/upcomingEventsService.ts → getUpcomingEvents
+ *   server/src/services/listService.ts           → listLists / getList
  */
 import {
   DEFAULT_GALLERY_LIMIT,
+  assembleList,
+  summariseLists,
   EVENT_CATEGORIES,
   bucketImportantDates,
   computePersonStats,
@@ -55,6 +58,9 @@ import {
   type EntityWithLogsDTO,
   type GalleryPhotoDTO,
   type GalleryResponse,
+  type ListDTO,
+  type ListKind,
+  type ListSummaryDTO,
   type LoggableCategory,
   type LogDTO,
   type LogPhotoDTO,
@@ -476,6 +482,18 @@ export function listEntityNotes(snap: LocalSnapshot, entityId: number): EntityNo
     .filter((n) => n.entityId === entityId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id)
     .map(toEntityNoteDTO);
+}
+
+// ---- lists ----------------------------------------------------------
+
+export function listLists(snap: LocalSnapshot, kind: ListKind = "shopping"): ListSummaryDTO[] {
+  return summariseLists(snap.lists, snap.listItems, kind);
+}
+
+export function getList(snap: LocalSnapshot, id: number): ListDTO {
+  const list = snap.lists.find((l) => l.id === id);
+  if (!list) throw new LocalNotFoundError(`List ${id} not found`);
+  return assembleList(list, snap.listItems);
 }
 
 // ---- calendar -------------------------------------------------------

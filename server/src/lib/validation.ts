@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
 import { daysInMonth, daysBetween } from "@logger/shared";
+import { LIST_KINDS, LIST_ITEM_MAX_LENGTH, LIST_NAME_MAX_LENGTH } from "@logger/shared";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
 export const categorySchema = z.enum(CATEGORIES);
@@ -62,6 +63,32 @@ export const updateAlbumSchema = z.object({
 
 export const albumEventSchema = z.object({
   logId: z.number().int().positive(),
+});
+
+const listNameSchema = z.string().trim().min(1).max(LIST_NAME_MAX_LENGTH);
+
+export const listKindSchema = z.enum(LIST_KINDS);
+
+export const createListSchema = z.object({
+  kind: listKindSchema.optional().default("shopping"),
+  name: listNameSchema,
+});
+
+export const updateListSchema = z
+  .object({
+    name: listNameSchema.optional(),
+    isDefault: z.literal(true).optional(),
+  })
+  .refine((v) => v.name != null || v.isDefault != null, {
+    message: "Nothing to update — pass name and/or isDefault",
+  });
+
+export const createListItemSchema = z.object({
+  text: z.string().trim().min(1).max(LIST_ITEM_MAX_LENGTH),
+});
+
+export const listsQuerySchema = z.object({
+  kind: listKindSchema.optional().default("shopping"),
 });
 
 export const searchQuerySchema = z.object({

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
-import { albums, entityNotes, logs, syncAppliedMutations } from "../db/schema.js";
+import { albums, entityNotes, lists, logs, syncAppliedMutations } from "../db/schema.js";
 import { AppError, BadRequestError, NotFoundError } from "../lib/errors.js";
 import { mutationPayloadSchemas, type ParsedMutationEnvelope } from "../lib/syncValidation.js";
 import { findOrCreateEntity } from "./entityService.js";
@@ -16,6 +16,13 @@ import {
 } from "./albumService.js";
 import { createEntityNote, updateEntityNote, deleteEntityNote } from "./entityNotesService.js";
 import { deletePhotosForAlbum, deletePhotosForLog } from "./logPhotosService.js";
+import {
+  findOrCreateList,
+  updateList,
+  deleteList,
+  addListItem,
+  deleteListItem,
+} from "./listService.js";
 import type { MutationResult, MutationType } from "@logger/shared";
 
 type MutationEnvelope = ParsedMutationEnvelope;
@@ -108,13 +115,23 @@ function rewriteNegIds(
     case "note.delete":
       p.noteId = resolve(p.noteId, idMap, `${type}.noteId`);
       break;
+    case "list.update":
+    case "list.delete":
+    case "listItem.create":
+      p.listId = resolve(p.listId, idMap, `${type}.listId`);
+      break;
+    case "listItem.delete":
+      p.listId = resolve(p.listId, idMap, "listItem.delete.listId");
+      p.itemId = resolve(p.itemId, idMap, "listItem.delete.itemId");
+      break;
     case "entity.create":
+    case "list.create":
       break;
   }
   return p;
 }
 
-type VersionedTable = typeof logs | typeof albums | typeof entityNotes;
+type VersionedTable = typeof logs | typeof albums | typeof entityNotes | typeof lists;
 
 /** A dispatch outcome before the mutation id is attached. */
 type Outcome = Omit<MutationResult, "mutationId">;
@@ -286,6 +303,36 @@ function dispatchOne(
     case "note.delete": {
       const p = mutationPayloadSchemas["note.delete"].parse(raw);
       return { ...base, ...runOrTreatMissingAsDone(() => deleteEntityNote(db, p.noteId)) };
+    }
+    case "list.create": {
+      const p = mutationPayloadSchemas["list.create"].parse(raw);
+      const list = findOrCreateList(db, p);
+      if (env.tempId != null) idMap.set(env.tempId, list.id);
+      return mapResult(list.id);
+    }
+    case "list.update": {
+      const p = mutationPayloadSchemas["list.update"].parse(raw);
+      return {
+        ...base,
+        ...applyVersionedUpdate(db, lists, p.listId, env.baseVersion, () =>
+          updateList(db, p.listId, p),
+        ),
+      };
+    }
+    case "list.delete": {
+      const p = mutationPayloadSchemas["list.delete"].parse(raw);
+      return { ...base, ...runOrTreatMissingAsDone(() => deleteList(db, p.listId)) };
+    }
+    case "listItem.create": {
+      // A duplicate collapses into the item already on the list, like entity.create's dedupe.
+      const p = mutationPayloadSchemas["listItem.create"].parse(raw);
+      const item = addListItem(db, p.listId, p);
+      if (env.tempId != null) idMap.set(env.tempId, item.id);
+      return mapResult(item.id);
+    }
+    case "listItem.delete": {
+      const p = mutationPayloadSchemas["listItem.delete"].parse(raw);
+      return { ...base, ...runOrTreatMissingAsDone(() => deleteListItem(db, p.listId, p.itemId)) };
     }
   }
 }

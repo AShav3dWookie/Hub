@@ -16,6 +16,8 @@ import { AlbumDetail } from "./routes/AlbumDetail.js";
 import { Calendar } from "./routes/Calendar.js";
 import { Login } from "./routes/Login.js";
 import { Settings } from "./routes/Settings.js";
+import { Shopping } from "./routes/Shopping.js";
+import { ShoppingList } from "./routes/ShoppingList.js";
 
 export function App() {
   useSync();
@@ -41,6 +43,8 @@ export function App() {
                 <Route path="/album/:id" element={<AlbumDetail />} />
                 <Route path="/entity/:id" element={<EntityDetail />} />
                 <Route path="/person/:id" element={<PersonProfile />} />
+                <Route path="/shopping" element={<Shopping />} />
+                <Route path="/shopping/:id" element={<ShoppingList />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

@@ -19,6 +19,9 @@ import type {
   CreateAlbumRequest,
   UpdateAlbumRequest,
   PersonTagInput,
+  CreateListRequest,
+  ListKind,
+  UpdateListRequest,
 } from "@logger/shared";
 import { api } from "./client.js";
 import { repo } from "../local/repo.js";
@@ -165,6 +168,21 @@ export function useUpcomingEvents() {
   });
 }
 
+export function useLists(kind: ListKind = "shopping") {
+  return useQuery({
+    queryKey: ["lists", kind],
+    queryFn: () => repo.listLists(kind),
+  });
+}
+
+export function useList(id: number | undefined) {
+  return useQuery({
+    queryKey: ["list", id],
+    queryFn: () => repo.getList(id as number),
+    enabled: id != null && Number.isInteger(id),
+  });
+}
+
 // ---- Writes: entities, logs and notes ----
 
 export function useCreateEntity() {
@@ -250,6 +268,39 @@ export function useAddAlbumPerson(id: number) {
 export function useRemoveAlbumPerson(id: number) {
   return useRefreshingMutation((personId: number) =>
     applyLocalMutation({ type: "album.removePerson", input: { albumId: id, personId } }),
+  );
+}
+
+// ---- Writes: lists ----
+
+export function useCreateList() {
+  return useRefreshingMutation((input: CreateListRequest) =>
+    applyLocalMutation({ type: "list.create", input }),
+  );
+}
+
+export function useUpdateList(id: number) {
+  return useRefreshingMutation((input: UpdateListRequest) =>
+    applyLocalMutation({ type: "list.update", input: { ...input, listId: id } }),
+  );
+}
+
+export function useDeleteList() {
+  return useRefreshingMutation((listId: number) =>
+    applyLocalMutation({ type: "list.delete", input: { listId } }),
+  );
+}
+
+/** Not bound to one list, so the lists screen can quick-add to any row with one hook. */
+export function useAddListItem() {
+  return useRefreshingMutation(({ listId, text }: { listId: number; text: string }) =>
+    applyLocalMutation({ type: "listItem.create", input: { listId, text } }),
+  );
+}
+
+export function useDeleteListItem() {
+  return useRefreshingMutation(({ listId, itemId }: { listId: number; itemId: number }) =>
+    applyLocalMutation({ type: "listItem.delete", input: { listId, itemId } }),
   );
 }
 

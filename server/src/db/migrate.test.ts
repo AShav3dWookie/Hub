@@ -167,9 +167,11 @@ describe("migrations", () => {
     const db = runMigrations(tmpDb());
     const client = db.$client;
 
+    // 0012's seeded main shopping list is the only row a fresh database starts with, so it
+    // claimed row_seq 1.
     expect(client.prepare("SELECT * FROM sync_state").get()).toMatchObject({
       id: 1,
-      next_row_seq: 1,
+      next_row_seq: 2,
     });
 
     const triggers = (
@@ -188,6 +190,12 @@ describe("migrations", () => {
       "log_photos_parent_au",
       "album_events_sync_ad",
       "log_people_sync_ai",
+      "lists_sync_ai",
+      "lists_sync_au",
+      "lists_sync_ad",
+      "list_items_sync_ai",
+      "list_items_sync_au",
+      "list_items_sync_ad",
     ]) {
       expect(triggers).toContain(t);
     }
@@ -245,6 +253,10 @@ describe("migrations", () => {
     const c = db.$client;
     const seq = (t: string, id: number) =>
       (c.prepare(`SELECT row_seq FROM ${t} WHERE id = ?`).get(id) as { row_seq: number }).row_seq;
+    // Later migrations seed rows of their own (0012's main list), so count from wherever the
+    // counter starts rather than from 1.
+    const base = (c.prepare("SELECT next_row_seq FROM sync_state").get() as { next_row_seq: number })
+      .next_row_seq;
 
     c.prepare(
       "INSERT INTO entities (category, title, normalized_title) VALUES ('movie', 'Heat', 'heat')",
@@ -255,33 +267,52 @@ describe("migrations", () => {
     c.prepare("INSERT INTO logs (entity_id, date) VALUES (1, '2024-01-01')").run();
 
     // Inserts claimed increasing row_seq; the counter moved past them.
-    expect(seq("entities", 1)).toBe(1);
-    expect(seq("entities", 2)).toBe(2);
-    expect(seq("logs", 1)).toBe(3);
-    expect(c.prepare("SELECT next_row_seq FROM sync_state").get()).toMatchObject({ next_row_seq: 4 });
+    expect(seq("entities", 1)).toBe(base);
+    expect(seq("entities", 2)).toBe(base + 1);
+    expect(seq("logs", 1)).toBe(base + 2);
+    expect(c.prepare("SELECT next_row_seq FROM sync_state").get()).toMatchObject({
+      next_row_seq: base + 3,
+    });
 
     // Update bumps row_seq and version.
     c.prepare("UPDATE logs SET rating = 5 WHERE id = 1").run();
-    expect(seq("logs", 1)).toBe(4);
+    expect(seq("logs", 1)).toBe(base + 3);
     expect(c.prepare("SELECT version FROM logs WHERE id = 1").get()).toMatchObject({ version: 2 });
 
     // Tagging a person on the log bumps the log via its parent trigger.
     c.prepare("INSERT INTO log_people (log_id, person_entity_id) VALUES (1, 2)").run();
-    expect(seq("logs", 1)).toBe(5);
+    expect(seq("logs", 1)).toBe(base + 4);
 
     // Deleting the log writes a tombstone with a fresh row_seq.
-    c.prepare("INSERT INTO albums (title) VALUES ('Trip')").run(); // row_seq 6
-    c.prepare("INSERT INTO album_events (album_id, log_id) VALUES (1, 1)").run(); // bumps album → 7
-    expect(seq("albums", 1)).toBe(7);
+    c.prepare("INSERT INTO albums (title) VALUES ('Trip')").run(); // base + 5
+    c.prepare("INSERT INTO album_events (album_id, log_id) VALUES (1, 1)").run(); // bumps album → base + 6
+    expect(seq("albums", 1)).toBe(base + 6);
 
     c.prepare("DELETE FROM logs WHERE id = 1").run();
     const tomb = c
       .prepare("SELECT * FROM sync_deletions WHERE entity_type = 'log' AND entity_id = 1")
       .get() as { row_seq: number; deleted_at: string };
-    expect(tomb.row_seq).toBeGreaterThan(7);
+    expect(tomb.row_seq).toBeGreaterThan(base + 6);
     expect(tomb.deleted_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     // The cascade removed album_events(1,1); the album was re-sequenced past its pre-delete value.
-    expect(seq("albums", 1)).toBeGreaterThan(7);
+    expect(seq("albums", 1)).toBeGreaterThan(base + 6);
+
+    c.close();
+  });
+
+  it("0012 seeds one main shopping list and allows only one main list per kind", () => {
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+
+    expect(c.prepare("SELECT kind, name, is_default, row_seq FROM lists").all()).toEqual([
+      { kind: "shopping", name: "Shopping", is_default: 1, row_seq: 1 },
+    ]);
+    const insert = c.prepare(
+      "INSERT INTO lists (kind, name, normalized_name, is_default, created_at, updated_at) VALUES ('shopping', ?, ?, ?, 'x', 'x')",
+    );
+    expect(() => insert.run("Tesco", "tesco", 1)).toThrow(/UNIQUE/);
+    expect(() => insert.run("shopping", "shopping", 0)).toThrow(/UNIQUE/);
+    insert.run("Tesco", "tesco", 0);
 
     c.close();
   });

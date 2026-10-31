@@ -26,6 +26,8 @@ function feed(over: FeedOverrides = {}): SyncChangesResponse {
       photos: [],
       albums: [],
       entityNotes: [],
+      lists: [],
+      listItems: [],
       ...over.changes,
     },
     deletions: over.deletions ?? [],
