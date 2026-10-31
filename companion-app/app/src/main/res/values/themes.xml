@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Platform themes only: no AppCompat or Material library for one settings screen. -->
+    <style name="Theme.Hub" parent="@android:style/Theme.DeviceDefault.DayNight" />
+
+    <!-- VoiceActivity shows nothing itself; the speech prompt and a toast are all you see. -->
+    <style name="Theme.Hub.Invisible" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>
