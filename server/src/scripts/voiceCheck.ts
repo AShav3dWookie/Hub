@@ -92,7 +92,10 @@ async function checkParser(): Promise<boolean> {
     try {
       const got = await parse(c.say, LISTS);
       const ms = Date.now() - started;
-      const listOk = c.list === undefined || got.listId === c.list;
+      // Compare where the items land, as voiceService resolves it: null and the main list's own
+      // id both mean the main list ("the shopping list" when the main list is called Shopping).
+      const lands = (id: number | null) => id ?? LISTS.find((l) => l.isDefault)!.id;
+      const listOk = c.list === undefined || lands(got.listId) === lands(c.list);
       const itemsOk =
         JSON.stringify(got.items.map(loose)) === JSON.stringify(c.items.map(loose));
       const ok = listOk && itemsOk;
