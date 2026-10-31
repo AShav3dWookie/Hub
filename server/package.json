@@ -26,11 +26,11 @@
     "cookie-session": "^2.1.0",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.45.2",
-    "express": "^4.21.1",
-    "multer": "^2.2.0",
-    "sharp": "^0.35.4",
+    "express": "^4.22.3",
+    "multer": "^2.5.0",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
