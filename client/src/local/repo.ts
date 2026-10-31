@@ -5,7 +5,7 @@
  * Branch 4 swaps the TanStack Query `queryFn`s over to these (the query keys stay the same).
  * Nothing here writes — the lite tier's replica is a pure projection of server state.
  */
-import type { Category, GalleryQuery, SearchQuery } from "@logger/shared";
+import type { Category, GalleryQuery, ListKind, SearchQuery } from "@logger/shared";
 import { loadSnapshot } from "./snapshot.js";
 import * as q from "./queries.js";
 
@@ -52,6 +52,14 @@ export const repo = {
 
   async getUpcomingEvents() {
     return q.getUpcomingEvents(await loadSnapshot());
+  },
+
+  async listLists(kind?: ListKind) {
+    return q.listLists(await loadSnapshot(), kind);
+  },
+
+  async getList(id: number) {
+    return q.getList(await loadSnapshot(), id);
   },
 };
 

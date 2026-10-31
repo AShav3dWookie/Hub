@@ -10,6 +10,7 @@ import { getUpcomingImportantDates as serverImportantDates } from "../server/src
 import { getUpcomingEvents as serverUpcomingEvents } from "../server/src/services/upcomingEventsService.js";
 import { listAlbums as serverListAlbums, getAlbumById } from "../server/src/services/albumService.js";
 import { listEntityNotes as serverListNotes } from "../server/src/services/entityNotesService.js";
+import { listLists as serverListLists, getList as serverGetList } from "../server/src/services/listService.js";
 import {
   getEntityWithLogs,
   getPersonProfile,
@@ -168,6 +169,20 @@ describe("server and offline client read parity", () => {
     it("agrees on each album's detail", () => {
       for (const album of fx.snap.albums) {
         expect(local.getAlbum(fx.snap, album.id)).toEqual(getAlbumById(fx.db, album.id));
+      }
+    });
+  });
+
+  describe("lists", () => {
+    it("agrees on the lists screen", () => {
+      const lists = local.listLists(fx.snap);
+      expect(lists.length).toBeGreaterThan(1);
+      expect(lists).toEqual(serverListLists(fx.db));
+    });
+
+    it("agrees on each list's items", () => {
+      for (const list of fx.snap.lists) {
+        expect(local.getList(fx.snap, list.id)).toEqual(serverGetList(fx.db, list.id));
       }
     });
   });

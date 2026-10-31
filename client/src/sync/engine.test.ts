@@ -7,7 +7,7 @@ const emptyPage = {
   ok: true,
   status: 200,
   json: async () => ({
-    changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [] },
+    changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [], lists: [], listItems: [] },
     deletions: [],
     nextCursor: "3",
     hasMore: false,
