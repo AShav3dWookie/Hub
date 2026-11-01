@@ -242,7 +242,9 @@ companion app's shopping lists with their shop locations, `PUT …/location` to 
 `DELETE …/items/:itemId` for Got it) and
 nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
 token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
-never mint tokens.
+never mint tokens. Over the WAN those two paths skip Authelia through a regex `location` in nginx
+(`^/api/(voice|device)(/|$)`, in `docker/nginx.prod.conf` and `docs/voice.md`), never a prefix,
+which would also expose `/api/device-tokens`.
 
 ### Android companion app (`companion-app/`)
 

@@ -88,6 +88,38 @@ time it falls back.
   paths (`/api/voice` and `/api/device`), and make sure `AUTH_ENABLED=true` (the production default). The app's own token check is
   then what protects it. With auth off, a request with *no* token would also be let through.
 
+### The Authelia bypass
+
+A `location` beside the site's `location /`, without its `auth_request`. nginx checks a regex
+location before `location /`, so these two paths skip Authelia and nothing else does
+(`docker/nginx.prod.conf` has it too):
+
+```nginx
+location ~ ^/api/(voice|device)(/|$) {
+    proxy_pass http://192.168.1.3:8090;   # the same upstream as location /
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Connection "";
+}
+```
+
+Use `(/|$)`, not a prefix: `location /api/device` would also match `/api/device-tokens`, which
+creates tokens and must stay behind Authelia.
+
+To check it, from anywhere:
+
+```bash
+curl -si https://hub.aaronhanna.uk/api/voice/status | head -1   # 401 from the hub: bypassed
+curl -si https://hub.aaronhanna.uk/api/device-tokens | head -1  # 302 to auth.aaronhanna.uk: still gated
+```
+
+A `302` on the first means the new location isn't being used. A Cloudflare challenge page means
+Cloudflare's bot protection is stopping non-browser requests and needs a skip rule for the same
+paths.
+
 ## Checking it works: `npm run voice:check`
 
 A manual check against the real model. It costs money (well under a penny a run), so it is
