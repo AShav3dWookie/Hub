@@ -101,15 +101,17 @@ class SettingsActivity : ComponentActivity() {
             showResult("That pairing link isn't complete. Run npm run companion:pair again.", isError = true)
             return
         }
+        if (store.linkAlreadyHandled(token)) return
         AlertDialog.Builder(this)
             .setTitle("Pair with this hub?")
             .setMessage("Voice commands will go to $url.")
             .setPositiveButton("Pair") { _, _ ->
+                store.markLinkHandled(token)
                 urlField.setText(url)
                 tokenField.setText(token)
                 save()?.let(::test)
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("Cancel") { _, _ -> store.markLinkHandled(token) }
             .show()
     }
 

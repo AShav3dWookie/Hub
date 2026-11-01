@@ -146,6 +146,27 @@ class SettingsActivityTest {
         assertEquals(Pairing("http://192.168.1.20:8090", token), store.load())
     }
 
+    /** Seen on a Pixel 6: Android rebuilds the task from the link that opened it after the app is killed. */
+    @Test
+    fun `reopening from the same pairing link doesn't ask again, whichever way it was answered`() {
+        server.enqueue(MockResponse().setBody("""{"device":"Pixel 6","parser":"model"}"""))
+        val paired = pairLink(serverUrl, token)
+        openWithLink(paired)
+        (ShadowAlertDialog.getLatestAlertDialog() as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        ShadowAlertDialog.reset()
+        openWithLink(paired)
+        assertNull("the link it paired with", ShadowAlertDialog.getLatestAlertDialog())
+
+        val refused = pairLink("http://evil.example", "hub_" + "e".repeat(43))
+        openWithLink(refused)
+        (ShadowAlertDialog.getLatestAlertDialog() as AlertDialog).getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        ShadowAlertDialog.reset()
+        openWithLink(refused)
+        assertNull("the link it was told to ignore", ShadowAlertDialog.getLatestAlertDialog())
+    }
+
     @Test
     fun `an incomplete pairing link says so instead of asking`() {
         val screen = openWithLink("hubcompanion://pair?url=${Uri.encode(serverUrl)}&token=nope")
