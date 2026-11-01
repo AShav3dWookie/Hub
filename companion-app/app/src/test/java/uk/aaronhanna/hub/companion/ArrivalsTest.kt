@@ -66,7 +66,7 @@ class ArrivalsTest {
         assertEquals("Are you at Sainsbury's?", asked.title())
         assertEquals(listOf("Yes", "No"), asked.actions.map { it.title.toString() })
         assertNull("the items wait for a yes", asked.lines())
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED, now), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED, now), store.visit(3))
     }
 
     @Test
@@ -97,7 +97,7 @@ class ArrivalsTest {
         assertTrue(list.actions.isNullOrEmpty())
         val opens = shadowOf(list.contentIntent).savedIntent
         assertEquals("${server.url("/").toString().trimEnd('/')}/shopping/3", opens.dataString)
-        assertEquals(ShopStore.VisitState.CONFIRMED, store.visit()!!.state)
+        assertEquals(ShopStore.VisitState.CONFIRMED, store.visit(3)!!.state)
     }
 
     @Test
@@ -118,7 +118,7 @@ class ArrivalsTest {
         answer(Arrivals.ACTION_NO)
 
         waitUntil { shown() == null }
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE, now), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE, now), store.visit(3))
         assertEquals("No talks to nobody", 0, server.requestCount)
     }
 

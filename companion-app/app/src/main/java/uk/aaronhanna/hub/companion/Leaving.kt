@@ -52,10 +52,15 @@ object Leaving {
             return true
         }
 
+        // Grouped, Android shows only the items, each with its buttons folded away until it's
+        // expanded (seen on the Pixel): so each names the shop in its header line, and the
+        // heading — shown where the group alerts — says where the buttons are, not a count that
+        // goes stale as items are dealt with.
         list.items.forEachIndexed { index, item ->
             val each = base(context)
                 .setContentTitle(item.text)
                 .setContentText("Still on your ${list.name} list")
+                .setSubText("You left ${list.name}")
                 .setGroup(group(listId))
                 .setSortKey("%03d".format(index)) // list order, not newest first
                 .setContentIntent(checkoutIntent(context, listId))
@@ -63,7 +68,7 @@ object Leaving {
                 .addAction(0, "Still need", itemIntent(context, ACTION_STILL_NEED, listId, item.id))
             manager.notify(TAG_ITEM, item.id, each.build())
         }
-        heading.setContentText("$things still on the list")
+        heading.setContentText("Expand an item for Got it or Still need.")
             .setGroup(group(listId))
             .setGroupSummary(true)
         manager.notify(TAG_HEADING, listId, heading.build())

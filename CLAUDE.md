@@ -259,9 +259,11 @@ at X?" first (`Arrivals`); Yes shows the items, No records a false alarm. One ar
 per hour. Notifications are native, not web push. `BootReceiver` re-registers after a reboot,
 since Play Services forgets geofences.
 
-**Leaving (#6).** An EXIT reminds only through `ShopStore.leave`, which claims the visit under a
-lock: it must be the current visit's shop, answered **Yes** (unanswered or No stays quiet), not
-already reminded, and within 3 h of arriving. That gate matters because the geofences use
+**Leaving (#6).** An EXIT reminds only through `ShopStore.leave`, which claims visits under a
+lock. Visits are kept **per shop** — overlapping shops arrive in one geofence event (seen on the
+Pixel), and a single "current visit" silently dropped the first one's Yes. A shop reminds if its
+visit was answered **Yes** (unanswered or No stays quiet), hasn't already reminded, and began
+within 3 h. That gate matters because the geofences use
 `INITIAL_TRIGGER_EXIT`, so *every* registration reports an exit for every shop the phone is
 outside — which is also what lets `companion:leave` work and lets a shop left while nothing was
 watching still remind. `Leaving` posts one notification per item (≤ 5) with Got it / Still

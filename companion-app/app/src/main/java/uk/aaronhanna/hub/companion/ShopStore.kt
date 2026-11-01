@@ -7,7 +7,9 @@ import org.json.JSONException
  * What the app remembers about shops between runs, in its private preferences:
  *  - the lists, copied from the hub, so "Are you at …?" and the item list work with no signal;
  *  - when each shop last raised an arrival, for the one-hour cooldown;
- *  - the visit in progress and whether it was confirmed, which decides the leave reminder;
+ *  - each shop's latest visit and whether it was confirmed, which decides the leave reminder.
+ *    Per shop, not one current visit: shops close enough to overlap (a retail park) arrive in
+ *    the same geofence event, and a Yes to either must count;
  *  - "Got it" taps not yet sent to the hub (see [Outbox]).
  *
  * Receivers run on their own threads, so a read-then-write goes through [lock].
@@ -42,37 +44,38 @@ class ShopStore(context: Context) {
     fun markArrival(listId: Int, now: Long) {
         prefs.edit()
             .putLong(KEY_LAST_ARRIVAL + listId, now)
-            .putInt(KEY_VISIT_LIST, listId)
-            .putString(KEY_VISIT_STATE, VisitState.ASKED.name)
+            .putString(KEY_VISIT_STATE + listId, VisitState.ASKED.name)
             .apply()
     }
 
-    /** The shop the phone last arrived at, and how the "Are you at …?" question was answered. */
-    fun visit(): Visit? {
-        val listId = prefs.getInt(KEY_VISIT_LIST, -1).takeIf { it >= 0 } ?: return null
-        val state = prefs.getString(KEY_VISIT_STATE, null)?.let { runCatching { VisitState.valueOf(it) }.getOrNull() }
-            ?: return null
+    /** The phone's latest visit to [listId]'s shop, and how "Are you at …?" was answered. */
+    fun visit(listId: Int): Visit? {
+        val state = prefs.getString(KEY_VISIT_STATE + listId, null)
+            ?.let { runCatching { VisitState.valueOf(it) }.getOrNull() } ?: return null
         return Visit(listId, state, prefs.getLong(KEY_LAST_ARRIVAL + listId, 0))
     }
 
     fun answerVisit(listId: Int, state: VisitState): Unit = synchronized(lock) {
-        val visit = visit()
-        if (visit?.listId != listId) return // an old notification for a visit that's been replaced
+        val visit = visit(listId) ?: return
         if (visit.state == VisitState.LEFT) return // already reminded; a late tap mustn't re-arm it
-        prefs.edit().putString(KEY_VISIT_STATE, state.name).apply()
+        prefs.edit().putString(KEY_VISIT_STATE + listId, state.name).apply()
     }
 
     /**
-     * Ends the visit if the phone has just left its shop, it was confirmed, and it began within
-     * [LEAVE_WINDOW_MS]. Returns that shop's id; null means no reminder. Only one caller can win,
-     * so a second exit (GPS wobble, a re-registered geofence) stays quiet.
+     * Ends the visits to the shops in [listIds] that the phone has just left: those confirmed,
+     * begun within [LEAVE_WINDOW_MS], and not already ended. Returns their ids, the shops to
+     * remind about. Each visit is ended once, so a second exit (GPS wobble, a re-registered
+     * geofence) stays quiet.
      */
-    fun leave(listIds: Collection<Int>, now: Long): Int? = synchronized(lock) {
-        val visit = visit() ?: return null
-        if (visit.listId !in listIds || visit.state != VisitState.CONFIRMED) return null
-        if (now - visit.arrivedAt > LEAVE_WINDOW_MS) return null
-        prefs.edit().putString(KEY_VISIT_STATE, VisitState.LEFT.name).commit()
-        visit.listId
+    fun leave(listIds: Collection<Int>, now: Long): List<Int> = synchronized(lock) {
+        val left = listIds.distinct().filter { id ->
+            val visit = visit(id)
+            visit != null && visit.state == VisitState.CONFIRMED && now - visit.arrivedAt <= LEAVE_WINDOW_MS
+        }
+        val edit = prefs.edit()
+        left.forEach { edit.putString(KEY_VISIT_STATE + it, VisitState.LEFT.name) }
+        edit.commit()
+        left
     }
 
     /** "Got it": off the saved copy now, and queued for the hub. */
@@ -134,8 +137,7 @@ class ShopStore(context: Context) {
 
         private const val KEY_LISTS = "lists"
         private const val KEY_LAST_ARRIVAL = "last_arrival_"
-        private const val KEY_VISIT_LIST = "visit_list"
-        private const val KEY_VISIT_STATE = "visit_state"
+        private const val KEY_VISIT_STATE = "visit_state_"
         private const val KEY_WATCHED = "watched_ids"
         private const val KEY_PENDING = "pending_ticks"
     }

@@ -47,9 +47,10 @@ class GeofenceReceiver : BroadcastReceiver() {
 
         fun leave(context: Context, listIds: List<Int>, now: Long = System.currentTimeMillis()) {
             // Claimed before the refresh: its re-registration reports exits of its own.
-            val listId = ShopStore(context).leave(listIds, now) ?: return
+            val left = ShopStore(context).leave(listIds, now)
+            if (left.isEmpty()) return
             Shops.refresh(context, QUICK_REFRESH_MS) // anything ticked off in the browser meanwhile
-            Leaving.remind(context, listId)
+            left.forEach { Leaving.remind(context, it) }
         }
     }
 }

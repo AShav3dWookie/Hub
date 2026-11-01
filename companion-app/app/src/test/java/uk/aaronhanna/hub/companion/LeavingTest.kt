@@ -88,8 +88,13 @@ class LeavingTest {
         GeofenceReceiver.leave(context, listOf(3), later)
 
         assertEquals("You left Sainsbury's", heading()!!.title())
-        assertEquals("2 things still on the list", heading()!!.text())
+        assertEquals("Expand an item for Got it or Still need.", heading()!!.text())
         assertEquals(listOf("Eggs", "Milk"), listOf(item(1)!!.title(), item(2)!!.title()))
+        assertEquals(
+            "each names the shop, since Android hides the heading in a group",
+            "You left Sainsbury's",
+            item(1)!!.extras.getCharSequence(Notification.EXTRA_SUB_TEXT).toString(),
+        )
         assertEquals(listOf("Got it", "Still need"), item(1)!!.actions.map { it.title.toString() })
         assertTrue("grouped under the heading", heading()!!.flags and Notification.FLAG_GROUP_SUMMARY != 0)
         assertEquals(heading()!!.group, item(2)!!.group)
@@ -133,6 +138,30 @@ class LeavingTest {
         assertNull("a late Yes doesn't re-arm it", heading())
     }
 
+    /** Seen on the Pixel: two shops close together asked in the same geofence event. */
+    @Test
+    fun `two shops arrived at together each remind if they got a Yes`() {
+        val tesco = ShopList(4, "Tesco", sainsburys.location, items("Bread", firstId = 7))
+        store.saveLists(listOf(sainsburys, tesco))
+        store.markArrival(3, arrived)
+        store.markArrival(4, arrived)
+        store.answerVisit(3, ShopStore.VisitState.CONFIRMED)
+        hubLists(sainsburys, tesco)
+        GeofenceReceiver.leave(context, listOf(3, 4), later)
+        assertEquals("You left Sainsbury's", heading()!!.title())
+        assertNull("Tesco was never answered", notifications.getNotification(Leaving.TAG_HEADING, 4))
+
+        manager.cancelAll()
+        store.markArrival(3, later)
+        store.markArrival(4, later)
+        store.answerVisit(3, ShopStore.VisitState.CONFIRMED)
+        store.answerVisit(4, ShopStore.VisitState.CONFIRMED)
+        hubLists(sainsburys, tesco)
+        GeofenceReceiver.leave(context, listOf(3, 4), later + 20 * 60_000)
+        assertEquals("You left Sainsbury's", heading()!!.title())
+        assertEquals("You left Tesco", notifications.getNotification(Leaving.TAG_HEADING, 4)!!.title())
+    }
+
     @Test
     fun `another shop's exit, or one hours after the visit, stays quiet`() {
         shopped()
@@ -148,7 +177,7 @@ class LeavingTest {
         hubLists(sainsburys.copy(items = items("Milk", firstId = 2)))
         GeofenceReceiver.leave(context, listOf(3), later)
         assertNull(item(1))
-        assertEquals("1 thing still on the list", heading()!!.text())
+        assertEquals("Milk", item(2)!!.title())
 
         manager.cancelAll()
         shopped()
