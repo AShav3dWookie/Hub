@@ -54,6 +54,12 @@ object PairingRules {
         return uri.scheme == "http" && !isLocalHost(uri.host ?: return false)
     }
 
+    /** Whether the hub is on the home network — which Android 17 gates behind a permission. */
+    fun isLocalNetwork(url: String): Boolean {
+        val host = runCatching { URI(url).host }.getOrNull() ?: return false
+        return isLocalHost(host)
+    }
+
     private fun isLocalHost(host: String): Boolean {
         val h = host.lowercase()
         if (h == "localhost" || h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home.arpa")) return true

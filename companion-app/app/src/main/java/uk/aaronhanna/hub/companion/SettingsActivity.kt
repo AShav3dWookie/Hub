@@ -9,6 +9,7 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
@@ -44,6 +45,14 @@ class SettingsActivity : ComponentActivity() {
     private lateinit var warning: TextView
     private lateinit var result: TextView
     private lateinit var testButton: Button
+
+    /** The pairing waiting on the local-network permission prompt, tested once it's answered. */
+    private var awaitingPermission: Pairing? = null
+    private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val pairing = awaitingPermission ?: return@registerForActivityResult
+        awaitingPermission = null
+        if (granted) test(pairing) else showResult(LocalNetwork.DENIED_MESSAGE, isError = true)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,6 +133,11 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun test(pairing: Pairing) {
+        if (LocalNetwork.needsPermission(this, pairing.hubUrl)) {
+            awaitingPermission = pairing
+            askLocalNetwork.launch(LocalNetwork.PERMISSION)
+            return
+        }
         testButton.isEnabled = false
         showResult("Testing…", isError = false)
         lifecycleScope.launch {

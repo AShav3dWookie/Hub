@@ -54,6 +54,8 @@ android {
     testOptions {
         // Robolectric needs the merged resources to inflate layouts and widgets.
         unitTests.isIncludeAndroidResources = true
+        // HubClient logs a failed connection with android.util.Log, a stub on the plain JVM.
+        unitTests.isReturnDefaultValues = true
     }
 }
 

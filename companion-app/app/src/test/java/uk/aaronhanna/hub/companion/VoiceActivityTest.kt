@@ -16,18 +16,21 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowToast
 import java.util.concurrent.TimeUnit
 
 /** The widget's tap, from the speech prompt to the hub's answer on screen. */
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [ShadowPermissionFlags::class])
 class VoiceActivityTest {
     private lateinit var server: MockWebServer
 
     @Before
     fun start() {
         server = MockWebServer().apply { start() }
+        grantLocalNetwork()
     }
 
     @After
@@ -94,5 +97,27 @@ class VoiceActivityTest {
 
         assertTrue(activity.isFinishing)
         assertNull(server.takeRequest(200, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun `without local network access it asks before listening, and explains a refusal`() {
+        pair()
+        withholdLocalNetwork()
+        val activity = open()
+
+        assertTrue(askedForLocalNetwork(activity))
+        answerPermissionPrompt(activity, allow = false)
+        assertEquals(LocalNetwork.DENIED_MESSAGE, ShadowToast.getTextOfLatestToast())
+        assertTrue(activity.isFinishing)
+    }
+
+    @Test
+    fun `once local network access is allowed it goes on to listen`() {
+        pair()
+        withholdLocalNetwork()
+        val activity = open()
+
+        answerPermissionPrompt(activity, allow = true)
+        assertEquals(RecognizerIntent.ACTION_RECOGNIZE_SPEECH, shadowOf(activity).nextStartedActivityForResult.intent.action)
     }
 }

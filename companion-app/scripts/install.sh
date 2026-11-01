@@ -36,4 +36,11 @@ apk="$app/dist/hub-companion-$(repo_version)-release.apk"
 
 echo "==> Installing on $(adb shell getprop ro.product.model | tr -d '\r')..."
 adb install -r "$(native_path "$apk")"
+
+# Android 17+ blocks an app from the home network (a hub at 192.168.x.x) until it holds this
+# runtime permission. The app asks for it at pairing; granting it here saves the prompt.
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 37 ]; then
+  adb shell pm grant uk.aaronhanna.hub.companion android.permission.ACCESS_LOCAL_NETWORK \
+    && echo "==> Granted local network access (Android 17+)."
+fi
 echo "==> Installed. Next: npm run companion:pair"
