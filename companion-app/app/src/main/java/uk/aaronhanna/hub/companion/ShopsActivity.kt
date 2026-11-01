@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
@@ -70,6 +71,12 @@ class ShopsActivity : ComponentActivity() {
         super.onResume()
         showPermissions()
         render(ShopStore(this).lists())
+        refresh()
+    }
+
+    /** hubcompanion://shops while the screen is already open (singleTop): read the lists again. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
         refresh()
     }
 

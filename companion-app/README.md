@@ -45,7 +45,7 @@ needs anyway.
 | `COMPANION_DEVICE_NAME` | pair | the phone's model, e.g. *Pixel 6* |
 | `COMPANION_ADB_DEVICE` | install, pair, arrive | — the `ip:port` from Wireless debugging, if not using USB |
 | `COMPANION_ADB_PAIR`, `COMPANION_ADB_PAIR_CODE` | install | — first-time wireless pairing only (see below) |
-| `COMPANION_ARRIVE_SECONDS` | arrive | `180` — how long the fake position stays in the shop |
+| `COMPANION_ARRIVE_SECONDS` | arrive | `120` — how long the fake position stays in the shop |
 
 A typical `.env` (it's gitignored):
 
@@ -113,7 +113,8 @@ screen asks you to try again, nearer a door or window.
 
 After **a minute** inside a tagged shop the phone asks *"Are you at …?"*. **Yes** swaps the
 question for the list's items (the first six, then *+ N more*); tapping that opens the list in
-the hub. **No** just clears it — a false alarm, remembered so the leave reminder stays quiet.
+the hub. (On Android 17 the browser needs its own *local network* permission to open a hub at a
+LAN address — Settings → Apps → Firefox/Chrome → Permissions. The https address doesn't.) **No** just clears it — a false alarm, remembered so the leave reminder stays quiet.
 It stays quiet for an empty list, and asks at most **once an hour** per shop, so GPS wobbling at
 the edge can't nag.
 
@@ -133,11 +134,19 @@ the edge can't nag.
 npm run companion:arrive -- "Sainsbury's"
 ```
 
-Looks the list up on the hub (`COMPANION_HUB_URL`, as for `pair`), opens Shops on the phone so
-it's watching, then tells the phone it's 2 km away, then in that shop, for three minutes. The
-question should appear after about a minute. Real GPS is handed back when it ends, Ctrl-C
-included. The list must be tagged and have something on it, and a shop that asked within the
-last hour stays quiet — that's the cooldown, not a fault.
+Looks the list up on the hub (`COMPANION_HUB_URL`, as for `pair`), tells the phone it's standing
+in that shop, then has the app watch the shop afresh: it clears the tag on the hub and puts it
+back exactly, opening Shops after each. The question should appear about a minute later. Real
+GPS and the tag are both put back when it ends, Ctrl-C included. The list must be tagged and
+have something on it, and a shop that asked within the last hour stays quiet — that's the
+cooldown, not a fault.
+
+Why the clear-and-restore: on a Pixel 6, Play Services reliably reacts to a faked position
+inside a geofence it has just been given, but not to a faked walk out and back in of one it
+already has (the phone lying still on a desk doesn't help). Real movement doesn't have that
+problem, so a genuine arrival is tested by walking into a real shop — that works today, even
+before the hub is reachable over the internet, since the question and list come from the
+app's saved copy.
 
 ## Checking it on the phone
 

@@ -276,8 +276,12 @@ reminder reads. One arrival per shop per hour. Notifications are native, not web
   `goAsync`), or call `GeofenceReceiver.arrive` directly, since a `GeofencingEvent` can't be
   built in a test.
 - `npm run companion:arrive -- "<list>"` fakes GPS with `adb shell cmd location providers …`
-  test providers, after opening Shops via the `hubcompanion://shops` link so the phone is
-  watching. It's how arrival is tried without leaving the house.
+  test providers and is how arrival is tried without leaving the house. **Found on the Pixel:
+  Play Services fires for a faked position only when the geofence is newly added** — a faked
+  exit and re-entry of an existing one never fires, even with fixes delivered every few
+  seconds — so the script clears the tag on the hub and restores it, opening Shops
+  (`hubcompanion://shops`, `singleTop`) after each so the app drops and re-adds the geofence.
+  Its exit trap restores GPS and the tag. Genuine transitions need a real walk.
 - Robolectric on SDK 37 + JDK 21 needs `--add-exports=java.base/jdk.internal.access` (set in
   `app/build.gradle.kts`). Main-thread results from `Dispatchers.IO` work need `waitUntil`
   (`TestSupport.kt`) because Robolectric's looper only runs when idled.

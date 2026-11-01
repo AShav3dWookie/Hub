@@ -210,6 +210,20 @@ class ShopsActivityTest {
         assertEquals(ShopsActivity::class.java.name, app.packageManager.resolveActivity(intent, 0)?.activityInfo?.name)
     }
 
+    /** companion:arrive clears and restores a tag, opening the link after each — seen stacking 9 screens. */
+    @Test
+    fun `a second link to the open screen re-reads the lists, and watches what changed`() {
+        hubLists(tagged)
+        val controller = Robolectric.buildActivity(ShopsActivity::class.java).setup()
+        val screen = controller.get()
+        waitUntil { screen.button("clear-3") != null }
+
+        hubLists(sainsburys) // the tag was cleared on the hub
+        controller.newIntent(Intent(Intent.ACTION_VIEW, Uri.parse("hubcompanion://shops")))
+        waitUntil { screen.button("clear-3") == null }
+        assertNull(watched.last().single().location)
+    }
+
     @Test
     fun `unpaired, it says to pair first`() {
         app.getSharedPreferences("pairing", 0).edit().clear().commit()

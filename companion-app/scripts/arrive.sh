@@ -2,15 +2,21 @@
 # npm run companion:arrive -- "<list name>" — make the phone believe it's standing in that
 # list's shop, to try "Are you at …?" without leaving the house.
 #
-# Looks the shop up on the hub, opens the app's Shops screen (which re-reads the lists and
-# watches every tagged shop), then feeds the phone a fake position through adb: well away
-# first, then inside the shop for long enough to count as a visit. Real GPS is back when it
-# ends, Ctrl-C included.
+# Feeds the phone a fake position inside the shop through adb, then has the app watch that
+# shop afresh: the tag is cleared on the hub and put back exactly as it was, with the app's
+# Shops screen opened after each so it drops the geofence and adds it again.
+#
+# Why not fake walking in from outside? Found on a Pixel 6: Play Services reliably notices a
+# faked position inside a geofence it has just been given, but not a faked exit and re-entry
+# of one it already has — so a second run would never fire. Real movement has no such
+# problem; a walk to a real shop is the test of that.
+#
+# Real GPS and the tag are both back when it ends, Ctrl-C included.
 #
 # Settings, from the environment or .env:
 #   COMPANION_HUB_URL, COMPANION_HUB_PASSWORD, COMPANION_ADB_DEVICE   as for companion:pair
-#   COMPANION_ARRIVE_SECONDS   how long to stay in the shop (default 180: the app waits a
-#                              minute, and Android's geofencing can take a while on top)
+#   COMPANION_ARRIVE_SECONDS   how long to stay in the shop (default 120: the app waits a
+#                              minute, plus Play Services' own latency)
 #
 # A shop asks at most once an hour, so a second run inside the hour stays quiet by design.
 set -euo pipefail
@@ -21,7 +27,7 @@ command -v node > /dev/null || die "node isn't on your PATH (it reads the hub's 
 
 wanted="${1:-}"
 [ -n "$wanted" ] || die "say which shop: npm run companion:arrive -- \"Sainsbury's\""
-stay="${COMPANION_ARRIVE_SECONDS:-180}"
+stay="${COMPANION_ARRIVE_SECONDS:-120}"
 [[ "$stay" =~ ^[0-9]+$ ]] || die "COMPANION_ARRIVE_SECONDS must be a number of seconds."
 
 hub_setup
@@ -49,23 +55,40 @@ shop="$(node -e '
   if (l.itemCount === 0) console.error("note: " + l.name + " is empty, and an empty list doesn'\''t ask.");
   console.log([l.id, l.location.latitude, l.location.longitude, l.location.radiusM, l.name].join(" "));
 ' "$hub_response" "$wanted")" || exit 1 # node said why
-read -r _ lat lng radius name <<< "$shop"
+read -r id lat lng radius name <<< "$shop"
 
 connect_phone
 adb shell pm path uk.aaronhanna.hub.companion | grep -q package: || die "the app isn't on the phone — run npm run companion:install first."
 
 providers=(gps network fused)
-restore_gps() {
+location="{\"latitude\":$lat,\"longitude\":$lng,\"radiusM\":$radius}"
+tag_cleared=0
+
+# set_tag JSON — the list's location on the hub, or null.
+set_tag() {
+  local status
+  status="$(hub_call PATCH "/api/lists/$id" "{\"location\":$1}")"
+  [ "$status" = "200" ] || die "the hub answered HTTP $status changing $name's tag."
+}
+open_shops() {
+  # Its stderr is only "delivered to currently running top-most instance" on the second open,
+  # which is the point: the open Shops screen re-reads the lists.
+  adb shell am start -a android.intent.action.VIEW -d hubcompanion://shops uk.aaronhanna.hub.companion > /dev/null 2>&1
+}
+finish() {
   echo "==> Handing location back to the real GPS."
   for p in "${providers[@]}"; do adb shell cmd location providers remove-test-provider "$p" > /dev/null 2>&1 || true; done
   adb shell appops set com.android.shell android:mock_location default > /dev/null 2>&1 || true
+  if [ "$tag_cleared" = 1 ]; then
+    echo "==> Putting $name's tag back."
+    # Not set_tag: its die would end the cleanup here.
+    [ "$(hub_call PATCH "/api/lists/$id" "{\"location\":$location}")" = "200" ]       || echo "error: couldn't put the tag back — tag $name again from the app's Shops screen." >&2
+    open_shops || true
+  fi
+  rm -f "$hub_cookies" "$hub_response"
 }
-trap 'restore_gps; rm -f "$hub_cookies" "$hub_response"' EXIT
+trap finish EXIT
 trap 'exit 130' INT TERM
-
-echo "==> Opening Shops on the phone, so it's watching $name..."
-adb shell am start -a android.intent.action.VIEW -d hubcompanion://shops uk.aaronhanna.hub.companion > /dev/null
-sleep 5
 
 adb shell appops set com.android.shell android:mock_location allow
 for p in "${providers[@]}"; do
@@ -73,21 +96,27 @@ for p in "${providers[@]}"; do
   adb shell cmd location providers set-test-provider-enabled "$p" true
 done
 
-# feed SECONDS LAT LNG — keep reporting one position, as a real fix would keep arriving.
+# feed SECONDS — keep reporting the shop's position, as real fixes would keep arriving.
 feed() {
   local until=$((SECONDS + $1)) p
   while [ "$SECONDS" -lt "$until" ]; do
     for p in "${providers[@]}"; do
-      adb shell cmd location providers set-test-provider-location "$p" --location "$2,$3" --accuracy 5
+      adb shell cmd location providers set-test-provider-location "$p" --location "$lat,$lng" --accuracy 5
     done
     sleep 2
   done
 }
 
-# About 2 km north: outside any sensible radius, so going in is a real arrival.
-away="$(node -e 'console.log((+process.argv[1] + 0.018).toFixed(6))' "$lat")"
-echo "==> Somewhere else for 20 s..."
-feed 20 "$away" "$lng"
-echo "==> In $name ($lat, $lng; ${radius} m) for ${stay} s. \"Are you at $name?\" should appear after about a minute."
-feed "$stay" "$lat" "$lng"
+echo "==> In $name ($lat, $lng; ${radius} m). Having the phone forget the shop..."
+feed 3
+tag_cleared=1
+set_tag null
+open_shops
+feed 10
+
+echo "==> ...and watch it again, for ${stay} s. \"Are you at $name?\" should appear after about a minute."
+set_tag "$location"
+tag_cleared=0
+open_shops
+feed "$stay"
 echo "==> Done."

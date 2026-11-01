@@ -60,12 +60,14 @@
         <!--
           hubcompanion://shops opens it — what npm run companion:arrive does, so the phone is
           watching the shops before it fakes being in one. Harmless for anything else to open:
-          the screen only re-reads the lists.
+          the screen only re-reads the lists. singleTop: a second link refreshes the open
+          screen instead of stacking another copy.
         -->
         <activity
             android:name=".ShopsActivity"
             android:exported="true"
             android:label="Shops"
+            android:launchMode="singleTop"
             android:parentActivityName=".SettingsActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
