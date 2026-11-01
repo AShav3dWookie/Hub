@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Platform themes only: no AppCompat or Material library for one settings screen. -->
-    <style name="Theme.Hub" parent="@android:style/Theme.DeviceDefault.DayNight" />
+    <!-- No title bar: the screen has its own "Hub" heading, and both showed on a Pixel 6. -->
+    <style name="Theme.Hub" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 
     <!-- VoiceActivity shows nothing itself; the speech prompt and a toast are all you see. -->
     <style name="Theme.Hub.Invisible" parent="@android:style/Theme.Translucent.NoTitleBar">
