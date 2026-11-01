@@ -1,12 +1,27 @@
 import { useState } from "react";
 import {
+  CARD_ACTION_DANGER_CLASS,
   DANGER_BUTTON_CLASS,
   FIELD_CLASS,
   PRIMARY_BUTTON_CLASS,
+  PRIMARY_BUTTON_SM_CLASS,
   SECONDARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_SM_CLASS,
   SECTION_HEADING,
 } from "../components/ui.js";
-import { AlertTriangle, Bell, BellOff, RefreshCw, Send, Trash2, Wifi, WifiOff } from "lucide-react";
+import {
+  AlertTriangle,
+  Bell,
+  BellOff,
+  Copy,
+  RefreshCw,
+  Send,
+  Smartphone,
+  Trash2,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { DEVICE_NAME_MAX_LENGTH, type CreatedDeviceTokenDTO } from "@logger/shared";
 import {
   useOnlineStatus,
   useSyncStatus,
@@ -26,6 +41,7 @@ import {
   useRefreshPushStatus,
   useSendTestPush,
 } from "../api/notifications.js";
+import { useCreateDeviceToken, useDeviceTokens, useRevokeDeviceToken } from "../api/devices.js";
 import { useToast } from "../components/ToastProvider.js";
 import { ApiError } from "../api/client.js";
 
@@ -230,6 +246,162 @@ function NotificationsSection({ online }: { online: boolean }) {
  * Change the login password. Only rendered when the server actually requires one, so a LAN
  * deployment with auth off never sees it. Online-only: there is no sensible way to queue this.
  */
+/**
+ * Devices that use the API with a token instead of the password — the companion app's voice
+ * widget. A new token is shown once, here, for you to copy into the device; after that the
+ * server only has its hash. Online-only: managing devices is the server's business.
+ */
+function DevicesSection({ online }: { online: boolean }) {
+  const { data: devices, isError } = useDeviceTokens(online);
+  const createToken = useCreateDeviceToken();
+  const revokeToken = useRevokeDeviceToken();
+  const { showToast } = useToast();
+  const [name, setName] = useState("");
+  const [created, setCreated] = useState<CreatedDeviceTokenDTO | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState<number | null>(null);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const value = name.trim();
+    if (!value) return;
+    try {
+      setCreated(await createToken.mutateAsync(value));
+      setName("");
+    } catch {
+      showToast("Couldn't add the device");
+    }
+  }
+
+  async function handleCopy(token: string) {
+    try {
+      await navigator.clipboard.writeText(token);
+      showToast("Token copied");
+    } catch {
+      // The clipboard API needs a secure context, which the plain-http LAN address isn't.
+      showToast("Couldn't copy — select the token and copy it by hand");
+    }
+  }
+
+  async function handleRevoke(id: number) {
+    setConfirmingRevoke(null);
+    try {
+      await revokeToken.mutateAsync(id);
+      showToast("Device removed");
+    } catch {
+      showToast("Couldn't remove the device");
+    }
+  }
+
+  return (
+    <Section title="Devices">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Devices like the companion app&apos;s voice widget use a token instead of your password.
+      </p>
+
+      {!online && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">Reconnect to manage devices.</p>
+      )}
+      {online && isError && (
+        <p className="text-sm text-red-600 dark:text-red-400">Couldn&apos;t load your devices.</p>
+      )}
+
+      {devices && devices.length > 0 && (
+        <ul className="flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
+          {devices.map((device) => (
+            <li key={device.id} className="flex flex-col gap-2 py-2">
+              <div className="flex items-center gap-3">
+                <Smartphone size={20} aria-hidden className="shrink-0 text-slate-500" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium dark:text-white">{device.name}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Last used {relativeTime(device.lastUsedAt ? Date.parse(device.lastUsedAt) : null)}
+                  </span>
+                </div>
+                {confirmingRevoke !== device.id && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRevoke(device.id)}
+                    disabled={!online}
+                    aria-label={`Remove ${device.name}`}
+                    className={CARD_ACTION_DANGER_CLASS}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {confirmingRevoke === device.id && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-slate-600 dark:text-slate-300">
+                    Remove {device.name}? It stops working straight away.
+                  </span>
+                  <button type="button" onClick={() => handleRevoke(device.id)} className={DANGER_BUTTON_CLASS}>
+                    Remove
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRevoke(null)}
+                    className={SECONDARY_BUTTON_SM_CLASS}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {created && (
+        <div className="flex flex-col gap-2 rounded-md bg-amber-50 p-3 dark:bg-amber-950">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Copy this token into {created.name} now — it won&apos;t be shown again.
+          </p>
+          <input
+            readOnly
+            aria-label={`Token for ${created.name}`}
+            value={created.token}
+            onFocus={(e) => e.target.select()}
+            className={`w-full font-mono text-xs ${FIELD_CLASS}`}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleCopy(created.token)}
+              className={`flex items-center gap-2 ${PRIMARY_BUTTON_SM_CLASS}`}
+            >
+              <Copy size={16} aria-hidden />
+              Copy
+            </button>
+            <button type="button" onClick={() => setCreated(null)} className={SECONDARY_BUTTON_CLASS}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleAdd} className="flex gap-2">
+        <input
+          type="text"
+          aria-label="New device name"
+          placeholder="e.g. Pixel 6"
+          value={name}
+          maxLength={DEVICE_NAME_MAX_LENGTH}
+          onChange={(e) => setName(e.target.value)}
+          disabled={!online}
+          className={`min-w-0 flex-1 ${FIELD_CLASS}`}
+        />
+        <button
+          type="submit"
+          disabled={!online || !name.trim() || createToken.isPending}
+          className={PRIMARY_BUTTON_SM_CLASS}
+        >
+          Add device
+        </button>
+      </form>
+    </Section>
+  );
+}
+
 function PasswordSection({ online }: { online: boolean }) {
   const changePassword = useChangePassword();
   const { showToast } = useToast();
@@ -475,6 +647,8 @@ export function Settings() {
       </Section>
 
       <NotificationsSection online={online} />
+
+      <DevicesSection online={online} />
 
       {authStatus?.authRequired && <PasswordSection online={online} />}
 

@@ -145,6 +145,16 @@ describe("Layout", () => {
     expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
   });
 
+  it("treats Shopping as a tab root too, though it lives in the bar's second row", () => {
+    renderAt(["/shopping"]);
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+  });
+
+  it("offers a back arrow on a list's own page, below the Shopping root", () => {
+    renderAt(["/shopping/3"]);
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
   it("offers a back arrow on a screen the tab bar does not own", () => {
     renderAt(["/entity/5"]);
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();

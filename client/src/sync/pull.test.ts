@@ -28,7 +28,7 @@ interface PageOverrides {
 
 function page(over: PageOverrides = {}): SyncChangesResponse {
   return {
-    changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [], ...over.changes },
+    changes: { entities: [], logs: [], photos: [], albums: [], entityNotes: [], lists: [], listItems: [], ...over.changes },
     deletions: over.deletions ?? [],
     nextCursor: over.nextCursor ?? "0",
     hasMore: over.hasMore ?? false,

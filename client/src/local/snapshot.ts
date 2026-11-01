@@ -2,6 +2,8 @@ import type {
   AlbumSyncDTO,
   EntityNoteSyncDTO,
   EntitySyncDTO,
+  ListItemSyncDTO,
+  ListSyncDTO,
   LogSyncDTO,
   PhotoSyncDTO,
 } from "@logger/shared";
@@ -24,6 +26,8 @@ export interface LocalSnapshot {
   photos: PhotoSyncDTO[];
   albums: AlbumSyncDTO[];
   notes: EntityNoteSyncDTO[];
+  lists: ListSyncDTO[];
+  listItems: ListItemSyncDTO[];
   entityById: Map<number, EntitySyncDTO>;
   logById: Map<number, LogSyncDTO>;
   photoById: Map<number, PhotoSyncDTO>;
@@ -43,6 +47,9 @@ export function buildSnapshot(
     photos: (PhotoSyncDTO & LocalWriteMeta)[];
     albums: (AlbumSyncDTO & LocalWriteMeta)[];
     notes: (EntityNoteSyncDTO & LocalWriteMeta)[];
+    /** Optional so fixtures that predate lists still build a snapshot. */
+    lists?: (ListSyncDTO & LocalWriteMeta)[];
+    listItems?: (ListItemSyncDTO & LocalWriteMeta)[];
   },
   now: Date = new Date(),
 ): LocalSnapshot {
@@ -50,6 +57,8 @@ export function buildSnapshot(
   const photos = live(data.photos);
   const albums = live(data.albums);
   const notes = live(data.notes);
+  const lists = live(data.lists ?? []);
+  const listItems = live(data.listItems ?? []);
 
   const entityById = index(entities);
   const notDeleted = live(data.logs);
@@ -62,6 +71,8 @@ export function buildSnapshot(
     photos,
     albums,
     notes,
+    lists,
+    listItems,
     entityById,
     logById: index(logs),
     photoById: index(photos),
@@ -71,12 +82,14 @@ export function buildSnapshot(
 
 export async function loadSnapshot(now: Date = new Date()): Promise<LocalSnapshot> {
   const db = await getDB();
-  const [entities, logs, photos, albums, notes] = await Promise.all([
+  const [entities, logs, photos, albums, notes, lists, listItems] = await Promise.all([
     db.getAll("entities"),
     db.getAll("logs"),
     db.getAll("photos"),
     db.getAll("albums"),
     db.getAll("entityNotes"),
+    db.getAll("lists"),
+    db.getAll("listItems"),
   ]);
-  return buildSnapshot({ entities, logs, photos, albums, notes }, now);
+  return buildSnapshot({ entities, logs, photos, albums, notes, lists, listItems }, now);
 }

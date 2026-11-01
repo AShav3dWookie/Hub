@@ -14,10 +14,12 @@
     "lint": "eslint src",
     "db:migrate": "tsx src/db/migrate.ts",
     "seed:test-data": "tsx src/scripts/seedTestData.ts",
+    "voice:check": "tsx src/scripts/voiceCheck.ts",
     "auth:hash": "tsx src/scripts/hashPassword.ts",
     "auth:set-password": "tsx src/scripts/setPassword.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "@logger/shared": "*",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^11.5.0",

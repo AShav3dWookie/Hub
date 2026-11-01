@@ -3,11 +3,13 @@ import {
   type CreateAlbumRequest,
   type CreateEntityNoteRequest,
   type CreateEntityRequest,
+  type CreateListRequest,
   type CreateLogRequest,
   type MutationType,
   type PersonTagInput,
   type UpdateAlbumRequest,
   type UpdateEntityNoteRequest,
+  type UpdateListRequest,
   type UpdateLogRequest,
 } from "@logger/shared";
 import {
@@ -18,6 +20,8 @@ import {
   type LocalAlbum,
   type LocalEntity,
   type LocalEntityNote,
+  type LocalList,
+  type LocalListItem,
   type LocalLog,
   type OutboxRecord,
   type SyncStore,
@@ -50,7 +54,24 @@ export type LocalMutation =
   | { type: "album.removePerson"; input: { albumId: number; personId: number } }
   | { type: "note.create"; input: CreateEntityNoteRequest & { entityId: number } }
   | { type: "note.update"; input: UpdateEntityNoteRequest & { noteId: number } }
-  | { type: "note.delete"; input: { noteId: number } };
+  | { type: "note.delete"; input: { noteId: number } }
+  | { type: "list.create"; input: CreateListRequest }
+  | { type: "list.update"; input: UpdateListRequest & { listId: number } }
+  | { type: "list.delete"; input: { listId: number } }
+  | { type: "listItem.create"; input: { listId: number; text: string } }
+  | { type: "listItem.delete"; input: { listId: number; itemId: number } };
+
+/**
+ * A write the replica can already tell the server would refuse — a clashing list name, deleting
+ * the main list. Thrown before anything is queued, so the form can show it instead of the
+ * envelope dead-lettering later.
+ */
+export class LocalValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LocalValidationError";
+  }
+}
 
 /**
  * What `applyLocalMutation` hands back: the optimistic local row for a create/update (so a
@@ -62,6 +83,8 @@ export type LocalMutationResult =
   | LocalLog
   | LocalAlbum
   | LocalEntityNote
+  | LocalList
+  | LocalListItem
   | { id: number };
 
 function newMutationId(): string {
@@ -138,6 +161,19 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
   const logs = tx.objectStore("logs");
   const albums = tx.objectStore("albums");
   const notes = tx.objectStore("entityNotes");
+  const lists = tx.objectStore("lists");
+  const listItems = tx.objectStore("listItems");
+
+  const liveLists = async () => (await lists.getAll()).filter((l) => !l._localDeleted);
+
+  /** Same-kind list names must stay unique, compared the way the server compares them. */
+  const assertListNameFree = async (kind: string, name: string, exceptId?: number) => {
+    const norm = normalizeTitle(name);
+    const clash = (await liveLists()).find(
+      (l) => l.kind === kind && l.normalizedName === norm && l.id !== exceptId,
+    );
+    if (clash) throw new LocalValidationError("A list with that name already exists");
+  };
 
   const findLocalEntity = async (
     category: string,
@@ -201,6 +237,9 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
     await tx.done;
     return result;
   } catch (e) {
+    // Aborting rejects `tx.done`; the error that caused it is the one to report, so that
+    // rejection is expected and must not surface as an unhandled one.
+    tx.done.catch(() => {});
     try {
       tx.abort();
     } catch {
@@ -698,6 +737,186 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           affects: [{ store: "entityNotes", id: noteId }],
         });
         return { id: noteId };
+      }
+
+      case "list.create": {
+        const kind = m.input.kind ?? "shopping";
+        const name = m.input.name.trim();
+        await assertListNameFree(kind, name);
+        const id = await mintTempId();
+        const row: LocalList = {
+          id,
+          rowSeq: 0,
+          version: 0,
+          kind,
+          name,
+          normalizedName: normalizeTitle(name),
+          isDefault: false,
+          latitude: null,
+          longitude: null,
+          radiusM: null,
+          createdAt: now,
+          updatedAt: now,
+          _localDirty: true,
+        };
+        await lists.put(row);
+        await enqueue({
+          type: "list.create",
+          tempId: id,
+          payload: { kind, name },
+          affects: [{ store: "lists", id }],
+        });
+        return row;
+      }
+
+      case "list.update": {
+        const { listId, isDefault, location } = m.input;
+        const name = m.input.name?.trim();
+        const row = await lists.get(listId);
+        if (row && name != null) await assertListNameFree(row.kind, name, listId);
+
+        const affects: { store: SyncStore; id: number }[] = [{ store: "lists", id: listId }];
+        if (row) {
+          if (name != null) Object.assign(row, { name, normalizedName: normalizeTitle(name) });
+          if (isDefault && !row.isDefault) {
+            // Demote the old main list here too, so the replica never shows two.
+            for (const other of await liveLists()) {
+              if (other.kind === row.kind && other.isDefault) {
+                Object.assign(other, { isDefault: false, updatedAt: now, _localDirty: true });
+                await lists.put(other);
+                affects.push({ store: "lists", id: other.id });
+              }
+            }
+            row.isDefault = true;
+          }
+          if (location !== undefined) {
+            Object.assign(row, {
+              latitude: location?.latitude ?? null,
+              longitude: location?.longitude ?? null,
+              radiusM: location?.radiusM ?? null,
+            });
+          }
+          Object.assign(row, { updatedAt: now, _localDirty: true });
+          await lists.put(row);
+        }
+
+        // A rename of a list the server hasn't seen folds into its create. Making it main or
+        // moving its location can't — a create carries neither — so those still go as an update.
+        const create = listId < 0 ? await pendingCreateFor(listId) : undefined;
+        if (create && name != null) await collapseIntoCreate(create, { name });
+        if (create && !isDefault && location === undefined) return row ?? { id: listId };
+
+        const payload: Record<string, unknown> = { listId };
+        if (name != null && !create) payload.name = name;
+        if (isDefault) payload.isDefault = true;
+        if (location !== undefined) payload.location = location;
+        const prior = (await pending()).find(
+          (r) => r.type === "list.update" && (r.payload as { listId: number }).listId === listId,
+        );
+        if (prior) {
+          prior.payload = { ...(prior.payload as Record<string, unknown>), ...payload };
+          prior.affects = [...prior.affects, ...affects];
+          await outbox.put(prior);
+        } else {
+          await enqueue({
+            type: "list.update",
+            payload,
+            baseVersion: row?.version || undefined,
+            affects,
+          });
+        }
+        return row ?? { id: listId };
+      }
+
+      case "list.delete": {
+        const { listId } = m.input;
+        const row = await lists.get(listId);
+        if (row?.isDefault) {
+          throw new LocalValidationError("The main list can't be deleted — make another list main first");
+        }
+
+        // Its items go with it. Their own queued writes would only fail against a deleted list.
+        const own = await listItems.index("by-list").getAll(listId);
+        for (const item of own) await listItems.delete(item.id);
+        const ownIds = new Set(own.map((i) => i.id));
+        for (const r of await pending()) {
+          if (r.type.startsWith("listItem.") && (r.payload as { listId: number }).listId === listId) {
+            await outbox.delete(r.mutationId);
+          } else if (r.affects.some((a) => a.store === "listItems" && ownIds.has(a.id))) {
+            await outbox.delete(r.mutationId);
+          }
+        }
+
+        if (listId < 0 && (await pendingCreateFor(listId))) {
+          await dropEnvelopesTouching(listId);
+          await lists.delete(listId);
+          return { id: listId };
+        }
+        if (row) {
+          row._localDeleted = true;
+          row._localDirty = true;
+          await lists.put(row);
+        }
+        await enqueue({
+          type: "list.delete",
+          payload: { listId },
+          baseVersion: row?.version || undefined,
+          affects: [{ store: "lists", id: listId }],
+        });
+        return { id: listId };
+      }
+
+      case "listItem.create": {
+        const { listId } = m.input;
+        const text = m.input.text.trim();
+        const normalizedText = normalizeTitle(text);
+        // Already on the list: nothing to write, the same as the server's dedupe.
+        const existing = (await listItems.index("by-list").getAll(listId)).find(
+          (i) => i.normalizedText === normalizedText && !i._localDeleted,
+        );
+        if (existing) return existing;
+
+        const id = await mintTempId();
+        const row: LocalListItem = {
+          id,
+          rowSeq: 0,
+          version: 0,
+          listId,
+          text,
+          normalizedText,
+          createdAt: now,
+          updatedAt: now,
+          _localDirty: true,
+        };
+        await listItems.put(row);
+        await enqueue({
+          type: "listItem.create",
+          tempId: id,
+          payload: { listId, text },
+          affects: [{ store: "listItems", id }],
+        });
+        return row;
+      }
+
+      case "listItem.delete": {
+        const { listId, itemId } = m.input;
+        if (itemId < 0 && (await pendingCreateFor(itemId))) {
+          await dropEnvelopesTouching(itemId);
+          await listItems.delete(itemId);
+          return { id: itemId };
+        }
+        const row = await listItems.get(itemId);
+        if (row) {
+          row._localDeleted = true;
+          row._localDirty = true;
+          await listItems.put(row);
+        }
+        await enqueue({
+          type: "listItem.delete",
+          payload: { listId, itemId },
+          affects: [{ store: "listItems", id: itemId }],
+        });
+        return { id: itemId };
       }
     }
   }

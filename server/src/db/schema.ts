@@ -1,6 +1,6 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, NotificationSlot, SyncEntityType } from "@logger/shared";
+import type { Category, ListKind, NotificationSlot, SyncEntityType } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -193,6 +193,60 @@ export const entityNotes = sqliteTable(
 );
 
 /**
+ * General-purpose lists (shopping is the only kind so far). Unique by normalized name within a
+ * kind, so a spoken list name can never match two lists; the partial unique index allows
+ * exactly one default ("main") list per kind. Migration 0012 seeds the main shopping list.
+ */
+export const lists = sqliteTable(
+  "lists",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").$type<ListKind>().notNull(),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    // Where the shop is, tagged from the companion app (#5). All three or none; the app's
+    // geofence fires after a minute inside radius_m metres of the point.
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    radiusM: integer("radius_m"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    ...syncColumns,
+  },
+  (table) => ({
+    kindNameIdx: uniqueIndex("lists_kind_normalized_name_idx").on(table.kind, table.normalizedName),
+    oneDefaultIdx: uniqueIndex("lists_one_default_per_kind_idx")
+      .on(table.kind)
+      .where(sql`${table.isDefault} = 1`),
+    rowSeqIdx: index("lists_row_seq_idx").on(table.rowSeq),
+  }),
+);
+
+/** A list's entries. Unique by normalized text within a list — adding a duplicate is a no-op. */
+export const listItems = sqliteTable(
+  "list_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    normalizedText: text("normalized_text").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    ...syncColumns,
+  },
+  (table) => ({
+    listTextIdx: uniqueIndex("list_items_list_id_normalized_text_idx").on(
+      table.listId,
+      table.normalizedText,
+    ),
+    rowSeqIdx: index("list_items_row_seq_idx").on(table.rowSeq),
+  }),
+);
+
+/**
  * Single-row global counter backing `row_seq` assignment. Row `id = 1` always exists (seeded
  * by migration 0007); `next_row_seq` is the value the next trigger-driven write will claim.
  * Maintained entirely by triggers.
@@ -264,6 +318,21 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
     .notNull()
     .default(sql`(current_timestamp)`),
   lastSuccessAt: text("last_success_at"),
+});
+
+/**
+ * Non-browser callers allowed to use the API — the Android companion app's voice widget now,
+ * location triggers later. Each is named after its device and authenticates with
+ * `Authorization: Bearer <token>`. Only the token's SHA-256 is kept: tokens are 256 random bits,
+ * so a slow hash buys nothing, and a fast one lets the lookup be a plain indexed equality.
+ * Server-only and non-syncable, like `push_subscriptions`. See `deviceTokensService`.
+ */
+export const deviceTokens = sqliteTable("device_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: text("created_at").notNull(),
+  lastUsedAt: text("last_used_at"),
 });
 
 /**

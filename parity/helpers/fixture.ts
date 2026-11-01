@@ -6,11 +6,20 @@ import { createLog } from "../../server/src/services/logService.js";
 import { createEntityNote } from "../../server/src/services/entityNotesService.js";
 import { createAlbum, addAlbumEvent } from "../../server/src/services/albumService.js";
 import { getChanges } from "../../server/src/services/syncService.js";
+import {
+  addListItem,
+  createList,
+  deleteListItem,
+  setListLocation,
+  updateList,
+} from "../../server/src/services/listService.js";
 import { buildSnapshot, type LocalSnapshot } from "../../client/src/local/snapshot.js";
 import type {
   AlbumSyncDTO,
   EntityNoteSyncDTO,
   EntitySyncDTO,
+  ListItemSyncDTO,
+  ListSyncDTO,
   LogSyncDTO,
   PhotoSyncDTO,
   SyncEntityType,
@@ -67,6 +76,8 @@ export function snapshotFromServer(db: AppDb, now: Date = TODAY): LocalSnapshot 
   const photos: PhotoSyncDTO[] = [];
   const albums: AlbumSyncDTO[] = [];
   const notes: EntityNoteSyncDTO[] = [];
+  const lists: ListSyncDTO[] = [];
+  const listItems: ListItemSyncDTO[] = [];
 
   let since = 0;
   for (let guard = 0; guard < 100; guard++) {
@@ -76,13 +87,15 @@ export function snapshotFromServer(db: AppDb, now: Date = TODAY): LocalSnapshot 
     photos.push(...page.changes.photos);
     albums.push(...page.changes.albums);
     notes.push(...page.changes.entityNotes);
+    lists.push(...page.changes.lists);
+    listItems.push(...page.changes.listItems);
     // The feed takes a numeric cursor but reports the next one as a string, because that is
     // how it travels over the wire.
     since = Number(page.nextCursor);
     if (!page.hasMore) break;
   }
 
-  return buildSnapshot({ entities, logs, photos, albums, notes }, now);
+  return buildSnapshot({ entities, logs, photos, albums, notes, lists, listItems }, now);
 }
 
 /**
@@ -100,12 +113,16 @@ export function createParitySession(db: AppDb, now: Date = TODAY): Omit<ParitySe
   const photos = new Map<number, PhotoSyncDTO>();
   const albums = new Map<number, AlbumSyncDTO>();
   const notes = new Map<number, EntityNoteSyncDTO>();
+  const lists = new Map<number, ListSyncDTO>();
+  const listItems = new Map<number, ListItemSyncDTO>();
   const byType: Record<SyncEntityType, Map<number, unknown>> = {
     entity: entities,
     log: logs,
     log_photo: photos,
     album: albums,
     entity_note: notes,
+    list: lists,
+    list_item: listItems,
   };
 
   let cursor = 0;
@@ -120,6 +137,8 @@ export function createParitySession(db: AppDb, now: Date = TODAY): Omit<ParitySe
         for (const row of page.changes.photos) photos.set(row.id, row);
         for (const row of page.changes.albums) albums.set(row.id, row);
         for (const row of page.changes.entityNotes) notes.set(row.id, row);
+        for (const row of page.changes.lists) lists.set(row.id, row);
+        for (const row of page.changes.listItems) listItems.set(row.id, row);
         for (const t of page.deletions) byType[t.entityType].delete(t.id);
         cursor = Number(page.nextCursor);
         if (!page.hasMore) break;
@@ -131,6 +150,8 @@ export function createParitySession(db: AppDb, now: Date = TODAY): Omit<ParitySe
           photos: [...photos.values()],
           albums: [...albums.values()],
           notes: [...notes.values()],
+          lists: [...lists.values()],
+          listItems: [...listItems.values()],
         },
         at,
       );
@@ -340,6 +361,19 @@ export function createParityFixture(): ParityFixture {
   attachPhoto(db, { logId: chipotle.id, name: "chipotle-1" });
   attachPhoto(db, { logId: bowling.id, name: "bowling-1" });
   attachPhoto(db, { albumId: album.id, name: "rome-loose" });
+
+  // Lists: names that differ only in case from what they sort against, a non-ASCII dash, items
+  // added inside the same millisecond (so only the id tie-break orders them), one removed, and
+  // the main list moved off the seeded one.
+  const tesco = createList(db, { name: "Tesco" });
+  const ms = createList(db, { name: "M&S – Bangor" });
+  createList(db, { name: "aldi" });
+  for (const text of ["Eggs", "milk", "Bread", "apples"]) addListItem(db, tesco.id, { text });
+  const gone = addListItem(db, tesco.id, { text: "Cheese" });
+  deleteListItem(db, tesco.id, gone.id);
+  addListItem(db, ms.id, { text: "Flowers" });
+  updateList(db, tesco.id, { isDefault: true });
+  setListLocation(db, ms.id, { latitude: 53.2274, longitude: -4.1293, radiusM: 75 });
 
   return { db, snap: snapshotFromServer(db), cleanup };
 }

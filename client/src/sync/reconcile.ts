@@ -11,7 +11,7 @@ import { deepRemapIds } from "../local/outbox.js";
  *     converge on it.
  *  2. **Rewrite foreign keys** everywhere a re-keyed id could be referenced
  *     (`logs.entityId` / `peopleIds` / `albumIds`, `albums.eventLogIds` / `personIds`,
- *     `entityNotes.entityId`), de-duping arrays that collapse.
+ *     `entityNotes.entityId`, `listItems.listId`), de-duping arrays that collapse.
  *  3. **Rewrite still-pending outbox envelopes** so a later queued mutation that referenced an
  *     earlier create now points at the real id.
  */
@@ -112,6 +112,12 @@ export async function reconcileIds(map: Map<number, number>): Promise<void> {
   for (const note of await notes.getAll()) {
     const entityId = remap(note.entityId);
     if (entityId !== note.entityId) await notes.put({ ...note, entityId });
+  }
+
+  const listItems = tx.objectStore("listItems");
+  for (const item of await listItems.getAll()) {
+    const listId = remap(item.listId);
+    if (listId !== item.listId) await listItems.put({ ...item, listId });
   }
 
   // 3. Rewrite still-pending envelopes.

@@ -146,6 +146,13 @@ Reminders for upcoming dates — 9pm the evening before, 9am on the day, and a w
 birthdays — turned on per device in **Settings → Notifications**. Delivery is outbound only, so the
 reverse proxy needs no changes. [docs/notifications.md](docs/notifications.md) is the full guide.
 
+## Shopping lists, voice and the Android companion app
+
+Shopping lists live on the second row of the tab bar (swipe the bar up). Items can be added by
+voice from a home-screen widget in the Android companion app, which [companion-app/README.md](companion-app/README.md)
+explains how to install and pair; [docs/voice.md](docs/voice.md) covers the voice API and its
+Anthropic key. The app builds and tests entirely in containers (`npm run companion:test`).
+
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md), one section per released tag.

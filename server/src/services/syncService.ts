@@ -6,6 +6,8 @@ import {
   albumPeople,
   entities,
   entityNotes,
+  listItems,
+  lists,
   logs,
   logPeople,
   logPhotos,
@@ -16,6 +18,8 @@ import type {
   AlbumSyncDTO,
   EntityNoteSyncDTO,
   EntitySyncDTO,
+  ListItemSyncDTO,
+  ListSyncDTO,
   LogSyncDTO,
   PhotoSyncDTO,
   SyncChangesResponse,
@@ -36,6 +40,8 @@ type SyncableTable =
   | typeof logPhotos
   | typeof albums
   | typeof entityNotes
+  | typeof lists
+  | typeof listItems
   | typeof syncDeletions;
 
 type EntityRow = typeof entities.$inferSelect;
@@ -43,6 +49,8 @@ type LogRow = typeof logs.$inferSelect;
 type PhotoRow = typeof logPhotos.$inferSelect;
 type AlbumRow = typeof albums.$inferSelect;
 type NoteRow = typeof entityNotes.$inferSelect;
+type ListRow = typeof lists.$inferSelect;
+type ListItemRow = typeof listItems.$inferSelect;
 type DeletionRow = typeof syncDeletions.$inferSelect;
 
 /** Group `rows` into a `Map<parentId, childId[]>` from `{ parent, child }` pairs, insertion order preserved. */
@@ -101,6 +109,36 @@ function toEntityNoteSyncDTO(r: NoteRow): EntityNoteSyncDTO {
   };
 }
 
+function toListSyncDTO(r: ListRow): ListSyncDTO {
+  return {
+    id: r.id,
+    kind: r.kind,
+    name: r.name,
+    normalizedName: r.normalizedName,
+    isDefault: r.isDefault,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    radiusM: r.radiusM,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    rowSeq: r.rowSeq,
+    version: r.version,
+  };
+}
+
+function toListItemSyncDTO(r: ListItemRow): ListItemSyncDTO {
+  return {
+    id: r.id,
+    listId: r.listId,
+    text: r.text,
+    normalizedText: r.normalizedText,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    rowSeq: r.rowSeq,
+    version: r.version,
+  };
+}
+
 function toTombstone(r: DeletionRow): SyncTombstone {
   return { entityType: r.entityType, id: r.entityId, rowSeq: r.rowSeq, deletedAt: r.deletedAt };
 }
@@ -137,6 +175,8 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
   const photoRows = readSince(logPhotos);
   const albumRows = readSince(albums);
   const noteRows = readSince(entityNotes);
+  const listRows = readSince(lists);
+  const listItemRows = readSince(listItems);
   const deletionRows = readSince(syncDeletions);
 
   type Item =
@@ -145,6 +185,8 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
     | { seq: number; kind: "photo"; row: PhotoRow }
     | { seq: number; kind: "album"; row: AlbumRow }
     | { seq: number; kind: "note"; row: NoteRow }
+    | { seq: number; kind: "list"; row: ListRow }
+    | { seq: number; kind: "listItem"; row: ListItemRow }
     | { seq: number; kind: "deletion"; row: DeletionRow };
 
   const merged: Item[] = [
@@ -153,6 +195,8 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
     ...photoRows.map((row): Item => ({ seq: row.rowSeq, kind: "photo", row })),
     ...albumRows.map((row): Item => ({ seq: row.rowSeq, kind: "album", row })),
     ...noteRows.map((row): Item => ({ seq: row.rowSeq, kind: "note", row })),
+    ...listRows.map((row): Item => ({ seq: row.rowSeq, kind: "list", row })),
+    ...listItemRows.map((row): Item => ({ seq: row.rowSeq, kind: "listItem", row })),
     ...deletionRows.map((row): Item => ({ seq: row.rowSeq, kind: "deletion", row })),
   ].sort((a, b) => a.seq - b.seq);
 
@@ -167,6 +211,8 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
   const incPhotos: PhotoRow[] = [];
   const incAlbums: AlbumRow[] = [];
   const incNotes: NoteRow[] = [];
+  const incLists: ListRow[] = [];
+  const incListItems: ListItemRow[] = [];
   const incDeletions: DeletionRow[] = [];
   for (const item of windowItems) {
     switch (item.kind) {
@@ -185,6 +231,12 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
       case "note":
         incNotes.push(item.row);
         break;
+      case "list":
+        incLists.push(item.row);
+        break;
+      case "listItem":
+        incListItems.push(item.row);
+        break;
       case "deletion":
         incDeletions.push(item.row);
         break;
@@ -198,6 +250,8 @@ export function getChanges(db: AppDb, query: SyncChangesQuery = {}): SyncChanges
       photos: incPhotos.map(toPhotoSyncDTO),
       albums: buildAlbumSyncDTOs(db, incAlbums),
       entityNotes: incNotes.map(toEntityNoteSyncDTO),
+      lists: incLists.map(toListSyncDTO),
+      listItems: incListItems.map(toListItemSyncDTO),
     },
     deletions: incDeletions.map(toTombstone),
     nextCursor,
@@ -285,4 +339,4 @@ function buildAlbumSyncDTOs(db: AppDb, rows: AlbumRow[]): AlbumSyncDTO[] {
   }));
 }
 
-export { toEntitySyncDTO, toPhotoSyncDTO, toEntityNoteSyncDTO };
+export { toEntitySyncDTO, toPhotoSyncDTO, toEntityNoteSyncDTO, toListSyncDTO, toListItemSyncDTO };

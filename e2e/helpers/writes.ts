@@ -16,7 +16,7 @@ export async function bootstrap(page: Page) {
 }
 
 /** The sync stores the writes tier can touch (photos excluded — no offline photo writes). */
-export const WRITE_STORES = ["entities", "logs", "albums", "entityNotes"] as const;
+export const WRITE_STORES = ["entities", "logs", "albums", "entityNotes", "lists", "listItems"] as const;
 
 export interface FeedRow {
   id: number;
@@ -36,6 +36,13 @@ export interface FeedRow {
   albumIds?: number[];
   eventLogIds?: number[];
   personIds?: number[];
+  name?: string;
+  isDefault?: boolean;
+  listId?: number;
+  text?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusM?: number | null;
 }
 
 /**
@@ -66,6 +73,8 @@ export async function fullFeed(request: APIRequestContext) {
     logs: [] as FeedRow[],
     albums: [] as FeedRow[],
     notes: [] as FeedRow[],
+    lists: [] as FeedRow[],
+    listItems: [] as FeedRow[],
     deletions: [] as SyncChangesResponse["deletions"],
   };
   for (;;) {
@@ -77,6 +86,8 @@ export async function fullFeed(request: APIRequestContext) {
     out.logs.push(...(body.changes.logs as FeedRow[]));
     out.albums.push(...(body.changes.albums as FeedRow[]));
     out.notes.push(...(body.changes.entityNotes as FeedRow[]));
+    out.lists.push(...(body.changes.lists as FeedRow[]));
+    out.listItems.push(...(body.changes.listItems as FeedRow[]));
     out.deletions.push(...body.deletions);
     if (!body.hasMore) break;
     cursor = body.nextCursor;

@@ -28,6 +28,9 @@ const ROUTES: { path: string; ready: (page: Page) => Promise<unknown> }[] = [
   // A real person: id 1 is a movie, and PersonProfile redirects it to /entity/1.
   { path: "/person/2", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
   { path: "/settings", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
+  { path: "/shopping", ready: (p) => p.getByRole("link", { name: /Sainsbury/ }).waitFor() },
+  // The seed's second list (the migration's main list is 1): five items, each with its red X.
+  { path: "/shopping/2", ready: (p) => p.getByRole("button", { name: "Remove Eggs" }).waitFor() },
   // Renders outside Layout, so it has neither header nor tab bar and needs its own
   // safe-area handling — which is exactly why it is worth checking here.
   { path: "/login", ready: (p) => p.getByRole("heading", { level: 1 }).waitFor() },
@@ -132,7 +135,7 @@ test.describe("mobile layout", () => {
     // The header grows a fourth control in edit mode (back, title, pencil, settings, and a
     // Log out button when auth is on), and each screen reveals a form the read-only pass
     // above never renders. Neither is measured anywhere else.
-    const EDITABLE = ["/entity/1", "/person/2", "/gallery"];
+    const EDITABLE = ["/entity/1", "/person/2", "/gallery", "/shopping/2"];
     const problems: string[] = [];
 
     for (const path of EDITABLE) {
@@ -182,6 +185,62 @@ test.describe("mobile layout", () => {
     await expect(removeButton).toBeVisible();
     // Deliberately 36, not 44 — a 44px circle does not fit inside a text pill.
     expect((await removeButton.boundingBox())?.height).toBe(36);
+  });
+
+  test("the tab bar's second row opens inside the viewport at the 44px floor", async ({ page }) => {
+    // Another state the default pass never renders. The row overlays the page instead of
+    // growing --nav-h, so the bar must stay pinned to the bottom with nothing off-screen.
+    await page.goto("/");
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    const nav = page.getByRole("navigation", { name: "Navigation" });
+    const closedTop = (await nav.boundingBox())!.y;
+    await page.getByRole("button", { name: "More tabs" }).click();
+    const shopping = nav.getByRole("link", { name: "Shopping" });
+    await expect(shopping).toBeVisible();
+    await page.screenshot({ path: "e2e/.artifacts/screens/nav-more-open.png", fullPage: false });
+
+    const viewport = page.viewportSize()!;
+    const navBox = (await nav.boundingBox())!;
+    expect(navBox.y + navBox.height, "the bar left the bottom edge").toBeCloseTo(viewport.height, 0);
+    expect(navBox.y, "the second row didn't grow the bar upwards").toBeLessThan(closedTop);
+    for (const control of [shopping, page.getByRole("button", { name: "More tabs" })]) {
+      const box = (await control.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    }
+    // The first row's tabs are untouched: still 44px+, still all five.
+    for (const label of ["Home", "Search", "Add", "Calendar", "Gallery"]) {
+      expect((await nav.getByRole("link", { name: label }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("the handle takes no taps meant for the Add tab beneath it", async ({ page }) => {
+    // Its 44px target dips 6px into the bar; Add's icon and label must sit below that.
+    await page.goto("/");
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    const handle = (await page.getByRole("button", { name: "More tabs" }).boundingBox())!;
+    const icon = (await page
+      .getByRole("navigation", { name: "Navigation" })
+      .getByRole("link", { name: "Add" })
+      .locator("svg")
+      .boundingBox())!;
+    expect(icon.y).toBeGreaterThanOrEqual(handle.y + handle.height);
+  });
+
+  test("a shopping list's quick-add opens inside the viewport at the 44px floor", async ({ page }) => {
+    // Like the tag dropdown above, it only exists once the + is tapped.
+    await page.goto("/shopping");
+    await page.getByRole("button", { name: /Add to Sainsbury/ }).click();
+    const field = page.getByRole("textbox", { name: /Add an item to Sainsbury/ });
+    await expect(field).toBeFocused();
+    await page.screenshot({ path: "e2e/.artifacts/screens/shopping-quick-add.png", fullPage: true });
+
+    for (const control of [field, page.getByRole("button", { name: "Add", exact: true })]) {
+      const box = await control.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()!.width);
+    }
   });
 
   test("the calendar grid keeps one height across 4-, 5- and 6-row months", async ({ page }) => {

@@ -5,15 +5,19 @@ import { listOutbox } from "../local/outbox.js";
 import {
   makeAlbum,
   makeEntity,
+  makeList,
+  makeListItem,
   makeLog,
   makeNote,
   resetFixtureCounters,
 } from "../test/seedLocalDb.js";
 
-async function put(store: "entities" | "logs" | "albums" | "entityNotes", row: object) {
+type Store = "entities" | "logs" | "albums" | "entityNotes" | "lists" | "listItems";
+
+async function put(store: Store, row: object) {
   await (await getDB()).put(store, row as never);
 }
-const all = async <T>(store: "entities" | "logs" | "albums" | "entityNotes") =>
+const all = async <T>(store: Store) =>
   (await (await getDB()).getAll(store)) as T[];
 
 describe("reconcileIds", () => {
@@ -91,6 +95,20 @@ describe("reconcileIds", () => {
     await reconcileIds(new Map([[-1, 1], [-2, 2], [-3, 3]]));
     expect(await all<{ eventLogIds: number[]; personIds: number[] }>("albums")).toEqual([
       expect.objectContaining({ eventLogIds: [2], personIds: [3] }),
+    ]);
+  });
+
+  it("moves items added to an offline list onto the list's real id, merged or not", async () => {
+    // The server merged our offline "Tesco" onto the one it already had (id 40).
+    await put("lists", makeList({ id: 40, name: "Tesco" }));
+    await put("lists", { ...makeList({ id: -1, name: "Tesco" }), _localDirty: true });
+    await put("listItems", { ...makeListItem({ id: -2, listId: -1, text: "Eggs" }), _localDirty: true });
+
+    await reconcileIds(new Map([[-1, 40], [-2, 41]]));
+
+    expect((await all<{ id: number }>("lists")).map((l) => l.id)).toEqual([40]);
+    expect(await all<{ id: number; listId: number }>("listItems")).toEqual([
+      expect.objectContaining({ id: 41, listId: 40 }),
     ]);
   });
 });

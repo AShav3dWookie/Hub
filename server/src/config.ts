@@ -92,6 +92,11 @@ export const config = {
   // The contact push services associate with this server's VAPID key: a `mailto:` or `https:` URL.
   // Apple rejects `localhost`, so the default is the real site.
   vapidSubject: process.env.VAPID_SUBJECT || "https://hub.aaronhanna.uk",
+  // Voice commands (docs/voice.md) are parsed by Claude. Without a key they fall back to a
+  // simple rules parser rather than failing, so the app runs fine without one.
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
+  // The model the voice parser asks. Overridable so a newer Haiku needs no release.
+  voiceModel: process.env.VOICE_MODEL || "claude-haiku-5-5",
 };
 
 /**

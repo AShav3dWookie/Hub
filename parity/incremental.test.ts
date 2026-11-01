@@ -3,6 +3,16 @@ import { logPhotos } from "../server/src/db/schema.js";
 import { eq } from "drizzle-orm";
 import { getEntityWithLogs } from "../server/src/services/entityDetailService.js";
 import { listGalleryPhotos } from "../server/src/services/galleryService.js";
+import {
+  addListItem,
+  createList,
+  deleteList,
+  deleteListItem,
+  getList,
+  listLists,
+  setListLocation,
+  updateList,
+} from "../server/src/services/listService.js";
 import * as local from "../client/src/local/queries.js";
 import {
   attachPhoto,
@@ -92,5 +102,30 @@ describe("server and offline client parity after an incremental sync", () => {
     session.sync();
 
     expect(local.getGallery(session.snap, {})).toEqual(listGalleryPhotos(fx.db, {}));
+  });
+
+  it("agrees on lists after items are added, ticked off and a list is deleted", () => {
+    // Every list write after the first sync: the item counts on the lists screen are derived
+    // from item rows, not stored on the list, so this proves no list needs re-sending for them.
+    const main = listLists(fx.db).find((l) => l.isDefault)!;
+    const egg = getList(fx.db, main.id).items[0];
+    deleteListItem(fx.db, main.id, egg.id);
+    addListItem(fx.db, main.id, { text: "Coffee" });
+    const extra = createList(fx.db, { name: "Lidl" });
+    addListItem(fx.db, extra.id, { text: "Bananas" });
+    const doomed = listLists(fx.db).find((l) => !l.isDefault && l.itemCount > 0 && l.id !== extra.id)!;
+    deleteList(fx.db, doomed.id);
+    updateList(fx.db, extra.id, { isDefault: true, name: "Lidl Bangor" });
+    // Tag one shop, then tag and re-tag another — the location columns ride the same rows.
+    setListLocation(fx.db, extra.id, { latitude: 53.23, longitude: -4.13, radiusM: 75 });
+    setListLocation(fx.db, main.id, { latitude: 53.22, longitude: -4.12, radiusM: 75 });
+    setListLocation(fx.db, main.id, { latitude: 53.22, longitude: -4.12, radiusM: 150 });
+    session.sync();
+
+    expect(local.listLists(session.snap)).toEqual(listLists(fx.db));
+    for (const list of listLists(fx.db)) {
+      expect(local.getList(session.snap, list.id)).toEqual(getList(fx.db, list.id));
+    }
+    expect(session.snap.listItems.some((i) => i.listId === doomed.id)).toBe(false);
   });
 });

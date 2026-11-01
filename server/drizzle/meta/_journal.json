@@ -85,6 +85,27 @@
       "when": 1789425639052,
       "tag": "0011_mushy_rachel_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793464696612,
+      "tag": "0012_closed_miracleman",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793475487687,
+      "tag": "0013_mighty_manta",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793525285196,
+      "tag": "0014_tough_zarek",
+      "breakpoints": true
     }
   ]
 }

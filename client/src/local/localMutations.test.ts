@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { applyLocalMutation } from "./localMutations.js";
+import { applyLocalMutation, LocalValidationError } from "./localMutations.js";
 import { listOutbox, pendingOutbox } from "./outbox.js";
 import { getDB, type LocalLog } from "./db.js";
 import { loadSnapshot } from "./snapshot.js";
 import {
   makeAlbum,
   makeEntity,
+  makeList,
+  makeListItem,
   makeLog,
   makeNote,
   makePerson,
@@ -230,6 +232,103 @@ describe("applyLocalMutation", () => {
       expect((await store<{ _localDeleted?: boolean }>("entityNotes"))[0]._localDeleted).toBe(true);
       expect((await loadSnapshot()).notes).toEqual([]);
       expect((await pendingOutbox())[0]).toMatchObject({ type: "note.delete", payload: { noteId: 8 } });
+    });
+  });
+
+  describe("lists", () => {
+    const seedLists = () =>
+      seedLocalDb({
+        lists: [
+          makeList({ id: 1, name: "Shopping", isDefault: true }),
+          makeList({ id: 2, name: "Tesco" }),
+        ],
+        listItems: [makeListItem({ id: 20, listId: 2, text: "Eggs" })],
+      });
+
+    it("adds items to a list made offline, queued after the list's create", async () => {
+      const list = await applyLocalMutation({ type: "list.create", input: { name: "Aldi" } });
+      await applyLocalMutation({ type: "listItem.create", input: { listId: list.id, text: "Bread" } });
+
+      expect((await pendingOutbox()).map((r) => [r.type, r.payload])).toEqual([
+        ["list.create", { kind: "shopping", name: "Aldi" }],
+        ["listItem.create", { listId: list.id, text: "Bread" }],
+      ]);
+    });
+
+    it("refuses a list name already in use, and queues nothing", async () => {
+      await seedLists();
+      await expect(
+        applyLocalMutation({ type: "list.create", input: { name: " tesco " } }),
+      ).rejects.toBeInstanceOf(LocalValidationError);
+      expect(await listOutbox()).toEqual([]);
+    });
+
+    it("folds a rename of an unsynced list into its create", async () => {
+      const list = await applyLocalMutation({ type: "list.create", input: { name: "Aldi" } });
+      await applyLocalMutation({ type: "list.update", input: { listId: list.id, name: "Aldi Bangor" } });
+
+      expect((await pendingOutbox()).map((r) => [r.type, r.payload])).toEqual([
+        ["list.create", { kind: "shopping", name: "Aldi Bangor" }],
+      ]);
+    });
+
+    it("making a list main demotes the old main list in the replica too", async () => {
+      await seedLists();
+      await applyLocalMutation({ type: "list.update", input: { listId: 2, isDefault: true } });
+
+      const lists = (await loadSnapshot()).lists;
+      expect(lists.filter((l) => l.isDefault).map((l) => l.id)).toEqual([2]);
+      expect((await pendingOutbox())[0]).toMatchObject({
+        type: "list.update",
+        payload: { listId: 2, isDefault: true },
+      });
+    });
+
+    it("won't delete the main list", async () => {
+      await seedLists();
+      await expect(
+        applyLocalMutation({ type: "list.delete", input: { listId: 1 } }),
+      ).rejects.toBeInstanceOf(LocalValidationError);
+      expect((await loadSnapshot()).lists).toHaveLength(2);
+    });
+
+    it("deleting a list takes its items with it, including ones still queued", async () => {
+      await seedLists();
+      await applyLocalMutation({ type: "listItem.create", input: { listId: 2, text: "Milk" } });
+      await applyLocalMutation({ type: "list.delete", input: { listId: 2 } });
+
+      const snap = await loadSnapshot();
+      expect(snap.lists.map((l) => l.id)).toEqual([1]);
+      expect(snap.listItems).toEqual([]);
+      expect((await pendingOutbox()).map((r) => r.type)).toEqual(["list.delete"]);
+    });
+
+    it("deleting a list that never synced leaves nothing to send", async () => {
+      const list = await applyLocalMutation({ type: "list.create", input: { name: "Aldi" } });
+      await applyLocalMutation({ type: "listItem.create", input: { listId: list.id, text: "Bread" } });
+      await applyLocalMutation({ type: "list.delete", input: { listId: list.id } });
+
+      expect(await listOutbox()).toEqual([]);
+      expect((await loadSnapshot()).listItems).toEqual([]);
+    });
+
+    it("removing an item that never synced cancels its create", async () => {
+      await seedLists();
+      const item = await applyLocalMutation({ type: "listItem.create", input: { listId: 2, text: "Milk" } });
+      await applyLocalMutation({ type: "listItem.delete", input: { listId: 2, itemId: item.id } });
+
+      expect(await listOutbox()).toEqual([]);
+    });
+
+    it("removing a synced item hides it and queues the delete", async () => {
+      await seedLists();
+      await applyLocalMutation({ type: "listItem.delete", input: { listId: 2, itemId: 20 } });
+
+      expect((await loadSnapshot()).listItems).toEqual([]);
+      expect((await pendingOutbox())[0]).toMatchObject({
+        type: "listItem.delete",
+        payload: { listId: 2, itemId: 20 },
+      });
     });
   });
 });

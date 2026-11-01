@@ -191,7 +191,9 @@ describe("getChanges", () => {
   it("does not flag more pages when the window exactly fits", () => {
     ctx = createTestDb();
     const log = seedLog("Dune");
-    const total = getChanges(ctx.db).changes.entities.length + 1; // its entity plus the log
+    const { changes } = getChanges(ctx.db);
+    // Its entity, the seeded main list, plus the log.
+    const total = changes.entities.length + changes.lists.length + 1;
 
     const page = getChanges(ctx.db, { limit: total });
     expect(page.hasMore).toBe(false);

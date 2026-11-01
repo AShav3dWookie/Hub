@@ -12,8 +12,14 @@
   :root {
     --header-h: 3.25rem; /* 52px */
     --nav-h: 3.75rem; /* 60px, excluding the safe-area strip below it */
+    /* How far the bar's pull-handle (which opens its second row) stands proud of the bar.
+       Its 44px target is this plus the bar's own empty top padding, so content and toasts
+       clear it rather than sitting underneath. */
+    --nav-handle-h: 2.375rem; /* 38px */
     --content-pt: 0.75rem;
-    --content-pb: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+    --content-pb: calc(
+      var(--nav-h) + var(--nav-handle-h) + env(safe-area-inset-bottom, 0px) + 0.75rem
+    );
     /* Exactly the height a route gets between the sticky header and the fixed nav.
        The calendar uses this to become a two-pane screen. */
     --content-h: calc(
