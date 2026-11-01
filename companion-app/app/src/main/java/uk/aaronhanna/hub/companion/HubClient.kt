@@ -40,7 +40,8 @@ sealed class HubResult<out T> {
  */
 class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_000) {
 
-    fun status(): HubResult<VoiceStatus> = call("GET", "/api/voice/status", null) { json ->
+    fun status(): HubResult<VoiceStatus> = call("GET", "/api/voice/status", null) { text ->
+        val json = JSONObject(text)
         VoiceStatus(
             device = if (json.isNull("device")) null else json.getString("device"),
             usesModel = json.getString("parser") == "model",
@@ -48,7 +49,8 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
     }
 
     fun sendVoice(text: String): HubResult<VoiceReply> =
-        call("POST", "/api/voice", JSONObject().put("text", text)) { json ->
+        call("POST", "/api/voice", JSONObject().put("text", text)) { reply ->
+            val json = JSONObject(reply)
             VoiceReply(
                 message = json.getString("message"),
                 listName = json.getJSONObject("list").getString("name"),
@@ -58,7 +60,21 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
             )
         }
 
-    private fun <T> call(method: String, path: String, body: JSONObject?, read: (JSONObject) -> T): HubResult<T> {
+    /** Every shopping list with its location and items — the app's whole cache in one call. */
+    fun lists(): HubResult<List<ShopList>> = call("GET", "/api/device/lists", null, ShopList::listFromJson)
+
+    /** Tag where a shop is, or clear it with null. */
+    fun setLocation(listId: Int, location: ShopLocation?): HubResult<ShopList> {
+        val body = JSONObject().put(
+            "location",
+            location?.let {
+                JSONObject().put("latitude", it.latitude).put("longitude", it.longitude).put("radiusM", it.radiusM)
+            } ?: JSONObject.NULL,
+        )
+        return call("PUT", "/api/device/lists/$listId/location", body) { ShopList.fromJson(JSONObject(it)) }
+    }
+
+    private fun <T> call(method: String, path: String, body: JSONObject?, read: (String) -> T): HubResult<T> {
         val connection = try {
             URL(pairing.hubUrl + path).openConnection() as HttpURLConnection
         } catch (e: IOException) {
@@ -83,7 +99,7 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
                 code == 401 -> HubResult.Failed(HubError.BadToken)
                 code >= 500 -> HubResult.Failed(HubError.ServerError(code))
                 code >= 400 -> HubResult.Failed(errorFrom(text) ?: HubError.NotAHub)
-                else -> HubResult.Ok(read(JSONObject(text)))
+                else -> HubResult.Ok(read(text))
             }
         } catch (e: IOException) {
             unreachable(path, e)
