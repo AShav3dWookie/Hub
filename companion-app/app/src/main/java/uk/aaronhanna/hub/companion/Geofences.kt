@@ -14,7 +14,7 @@ import com.google.android.gms.location.LocationServices
 /**
  * One Play Services geofence per tagged shop. A shop counts as arrived at after [LOITER_MS]
  * inside its radius (a DWELL transition), so walking or driving past doesn't — the user's
- * choice was a minute.
+ * choice was a minute. Leaving is an EXIT; ShopStore.leave decides whether it reminds.
  *
  * Play Services forgets every geofence on reboot, so BootReceiver re-registers them from the
  * saved copy; a refresh from the hub re-registers too, so a newly tagged or cleared shop is
@@ -49,8 +49,10 @@ object Geofences {
             return
         }
         val request = GeofencingRequest.Builder()
-            // A shop the phone is already standing in counts too, once the minute is up.
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_DWELL)
+            // Already standing in a shop counts too, once the minute is up; already outside one
+            // reports an exit — so a shop left while nothing was watching (the phone restarting
+            // on the way home) still reminds. Every other shop's exit is ignored.
+            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_DWELL or GeofencingRequest.INITIAL_TRIGGER_EXIT)
             .addGeofences(specs.map(::toGeofence))
             .build()
         client.addGeofences(request, receiverIntent(context))
@@ -61,7 +63,7 @@ object Geofences {
     private fun toGeofence(spec: Spec): Geofence = Geofence.Builder()
         .setRequestId(spec.listId.toString())
         .setCircularRegion(spec.latitude, spec.longitude, spec.radiusM)
-        .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_DWELL)
+        .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_DWELL or Geofence.GEOFENCE_TRANSITION_EXIT)
         .setLoiteringDelay(LOITER_MS)
         .setExpirationDuration(Geofence.NEVER_EXPIRE)
         .build()

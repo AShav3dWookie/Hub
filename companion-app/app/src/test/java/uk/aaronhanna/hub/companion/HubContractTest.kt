@@ -100,10 +100,23 @@ class HubContractTest {
 
         val fromHub = (client.lists() as HubResult.Ok).value.first { it.id == id }
         assertEquals(ShopLocation(53.2161, -4.1529, 75), fromHub.location)
-        assertEquals(listOf("Bread"), fromHub.items)
+        assertEquals(listOf("Bread"), fromHub.items.map { it.text })
 
         val cleared = (client.setLocation(id, null) as HubResult.Ok).value
         assertEquals(null, cleared.location)
+    }
+
+    @Test
+    fun `got it deletes the item on the hub, and a second go at it is fine too`() {
+        requireHub()
+        val id = JSONObject(http("POST", "/api/lists", JSONObject().put("name", "Contract checkout ${System.currentTimeMillis()}"))).getInt("id")
+        val bread = JSONObject(http("POST", "/api/lists/$id/items", JSONObject().put("text", "Bread"))).getInt("id")
+        http("POST", "/api/lists/$id/items", JSONObject().put("text", "Jam"))
+
+        assertTrue(client.removeItem(id, bread) is HubResult.Ok)
+        assertTrue("a queued tap sent twice", client.removeItem(id, bread) is HubResult.Ok)
+        val fromHub = (client.lists() as HubResult.Ok).value.first { it.id == id }
+        assertEquals(listOf("Jam"), fromHub.items.map { it.text })
     }
 
     @Test

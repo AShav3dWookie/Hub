@@ -77,7 +77,8 @@ time it falls back.
 ## Security
 
 - A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
-  it reads the shopping lists (names, items, shop locations) and tags or clears a list's shop.
+  it reads the shopping lists (names, items, shop locations), tags or clears a list's shop, and
+  ticks items off when you tap Got it after leaving a shop.
   A token can't reach anything else — logs, people, photos, settings — and it can't create or
   remove devices; managing devices needs a signed-in browser.
 - A wrong or revoked token gets a `401`, even on the LAN with auth off. A device set up wrong

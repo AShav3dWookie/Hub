@@ -74,6 +74,9 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
         return call("PUT", "/api/device/lists/$listId/location", body) { ShopList.fromJson(JSONObject(it)) }
     }
 
+    /** "Got it": delete an item. The hub counts one that's already gone as done, too. */
+    fun removeItem(listId: Int, itemId: Int): HubResult<Unit> =
+        call("DELETE", "/api/device/lists/$listId/items/$itemId", null) { }
     private fun <T> call(method: String, path: String, body: JSONObject?, read: (String) -> T): HubResult<T> {
         val connection = try {
             URL(pairing.hubUrl + path).openConnection() as HttpURLConnection

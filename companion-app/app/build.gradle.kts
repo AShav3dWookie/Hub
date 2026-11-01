@@ -85,12 +85,15 @@ dependencies {
     // Play Services brings an old androidx.fragment, whose activity-result handling is broken
     // (lint's InvalidFragmentVersionForActivityResult); this lifts it to a current one.
     implementation("androidx.fragment:fragment:1.9.1")
+    // Sends "Got it" taps made with no signal once the hub is reachable, across restarts too.
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.1")
+    testImplementation("androidx.work:work-testing:2.12.0")
     // android.jar's org.json is a stub on the plain JVM; the real one for the non-Robolectric tests.
     testImplementation("org.json:json:20260814")
 }

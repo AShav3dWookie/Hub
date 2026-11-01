@@ -15,7 +15,7 @@ class ShopStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val store get() = ShopStore(context)
 
-    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), listOf("Eggs", "Milk"))
+    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), items("Eggs", "Milk"))
     private val main = ShopList(1, "Shopping", null, emptyList())
 
     @Test
@@ -46,9 +46,9 @@ class ShopStoreTest {
     fun `remembers the visit and how Are you at was answered`() {
         assertNull(store.visit())
         store.markArrival(3, 0)
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED, 0), store.visit())
         store.answerVisit(3, ShopStore.VisitState.NOT_THERE)
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE, 0), store.visit())
     }
 
     @Test
@@ -56,7 +56,7 @@ class ShopStoreTest {
         store.markArrival(3, 0)
         store.markArrival(4, 0)
         store.answerVisit(3, ShopStore.VisitState.CONFIRMED)
-        assertEquals(ShopStore.Visit(4, ShopStore.VisitState.ASKED), store.visit())
+        assertEquals(ShopStore.Visit(4, ShopStore.VisitState.ASKED, 0), store.visit())
     }
 
     @Test

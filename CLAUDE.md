@@ -238,7 +238,8 @@ on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from co
 
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the
-companion app's shopping lists with their shop locations, and `PUT …/location` to tag one) and
+companion app's shopping lists with their shop locations, `PUT …/location` to tag one, and
+`DELETE …/items/:itemId` for Got it) and
 nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
 token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
 never mint tokens.
@@ -252,11 +253,24 @@ install guide and covers signing and releases.
 
 **Shops (#5).** A list's shop is tagged from the phone (`ShopsActivity`, "Tag here") and stored on
 the hub (`lists.latitude/longitude/radius_m`). The app keeps a copy of every list in
-`ShopStore` (so arrival works with no signal) and registers one Play Services DWELL geofence
-per tagged shop (`Geofences`, one-minute loiter). Arriving asks "Are you at X?" first
-(`Arrivals`); Yes shows the items, No records a false alarm in the visit state that #6's leave
-reminder reads. One arrival per shop per hour. Notifications are native, not web push.
-`BootReceiver` re-registers after a reboot, since Play Services forgets geofences.
+`ShopStore` (so arrival works with no signal) and registers one Play Services geofence per
+tagged shop (`Geofences`: DWELL with a one-minute loiter, plus EXIT). Arriving asks "Are you
+at X?" first (`Arrivals`); Yes shows the items, No records a false alarm. One arrival per shop
+per hour. Notifications are native, not web push. `BootReceiver` re-registers after a reboot,
+since Play Services forgets geofences.
+
+**Leaving (#6).** An EXIT reminds only through `ShopStore.leave`, which claims the visit under a
+lock: it must be the current visit's shop, answered **Yes** (unanswered or No stays quiet), not
+already reminded, and within 3 h of arriving. That gate matters because the geofences use
+`INITIAL_TRIGGER_EXIT`, so *every* registration reports an exit for every shop the phone is
+outside — which is also what lets `companion:leave` work and lets a shop left while nothing was
+watching still remind. `Leaving` posts one notification per item (≤ 5) with Got it / Still
+need, grouped under a heading, or one that opens `CheckoutActivity` above that. Got it goes
+through `Outbox`: off `ShopStore`'s copy at once, queued, sent by a WorkManager job
+(`OutboxWorker`, network constraint, backoff) and by `Shops.refresh` before it reads the lists.
+`saveLists` filters queued items out, so a refresh can't bring a ticked item back. The hub's
+`DELETE /api/device/lists/:id/items/:itemId` is a 204 for an already-gone item, so a repeat
+send is harmless.
 
 - **Everything Android runs in a container** (`companion-app/docker/Dockerfile`: JDK 21, Android
   SDK 37, Gradle pinned in the image — there's no Gradle wrapper). `scripts/run.sh <gradle task>`
@@ -273,15 +287,16 @@ reminder reads. One arrival per shop per hour. Notifications are native, not web
 - Play Services doesn't run under Robolectric, so the two calls into it are swappable seams —
   `Shops.watch` (geofence registration) and `ShopsActivity.locate` (current position) — and
   tests replace them; reset them in `@After`. Test receivers by `sendBroadcast` (it supplies
-  `goAsync`), or call `GeofenceReceiver.arrive` directly, since a `GeofencingEvent` can't be
-  built in a test.
-- `npm run companion:arrive -- "<list>"` fakes GPS with `adb shell cmd location providers …`
-  test providers and is how arrival is tried without leaving the house. **Found on the Pixel:
-  Play Services fires for a faked position only when the geofence is newly added** — a faked
-  exit and re-entry of an existing one never fires, even with fixes delivered every few
-  seconds — so the script clears the tag on the hub and restores it, opening Shops
-  (`hubcompanion://shops`, `singleTop`) after each so the app drops and re-adds the geofence.
-  Its exit trap restores GPS and the tag. Genuine transitions need a real walk.
+  `goAsync`), or call `GeofenceReceiver.arrive`/`leave` directly, since a `GeofencingEvent`
+  can't be built in a test. Tests that tick items off call `initWorkManager()` (`TestSupport.kt`)
+  and run `OutboxWorker` with `TestListenableWorkerBuilder`.
+- `npm run companion:arrive -- "<list>"` / `companion:leave` (`scripts/visit.sh`) fake GPS
+  with `adb shell cmd location providers …` test providers — in the shop, or 500 m past its
+  edge. **Found on the Pixel: Play Services fires for a faked position only when the geofence
+  is newly added** — a faked exit and re-entry of an existing one never fires, even with fixes
+  delivered every few seconds — so the script clears the tag on the hub and restores it,
+  opening Shops (`hubcompanion://shops`, `singleTop`) after each so the app drops and re-adds
+  the geofence. Its exit trap restores GPS and the tag. Genuine transitions need a real walk.
 - Robolectric on SDK 37 + JDK 21 needs `--add-exports=java.base/jdk.internal.access` (set in
   `app/build.gradle.kts`). Main-thread results from `Dispatchers.IO` work need `waitUntil`
   (`TestSupport.kt`) because Robolectric's looper only runs when idled.

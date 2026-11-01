@@ -34,7 +34,7 @@ class ShopsActivityTest {
     private val watched = mutableListOf<List<ShopList>>()
     private val store get() = ShopStore(app)
 
-    private val sainsburys = ShopList(3, "Sainsbury's", null, listOf("Eggs", "Milk"))
+    private val sainsburys = ShopList(3, "Sainsbury's", null, items("Eggs", "Milk"))
     private val tagged = sainsburys.copy(location = ShopLocation(53.2161, -4.1529, 120))
 
     @Before

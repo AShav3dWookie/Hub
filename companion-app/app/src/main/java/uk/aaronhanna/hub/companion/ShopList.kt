@@ -6,12 +6,15 @@ import org.json.JSONObject
 /** Where a shop is, and how near counts as being there. Mirrors the hub's ListLocation. */
 data class ShopLocation(val latitude: Double, val longitude: Double, val radiusM: Int)
 
+/** One thing on a list. The hub's id is what "Got it" deletes. */
+data class ShopItem(val id: Int, val text: String)
+
 /**
  * A shopping list as the app keeps it: enough to watch for the shop and to show what's on the
  * list there, with no signal. Read from the hub's `GET /api/device/lists`, and saved in the same
  * JSON shape, so the cache and the API can't drift apart.
  */
-data class ShopList(val id: Int, val name: String, val location: ShopLocation?, val items: List<String>) {
+data class ShopList(val id: Int, val name: String, val location: ShopLocation?, val items: List<ShopItem>) {
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -22,7 +25,7 @@ data class ShopList(val id: Int, val name: String, val location: ShopLocation?, 
                 JSONObject().put("latitude", it.latitude).put("longitude", it.longitude).put("radiusM", it.radiusM)
             } ?: JSONObject.NULL,
         )
-        .put("items", JSONArray(items.map { JSONObject().put("text", it) }))
+        .put("items", JSONArray(items.map { JSONObject().put("id", it.id).put("text", it.text) }))
 
     companion object {
         /** The default radius when a shop is first tagged — the hub's DEFAULT_SHOP_RADIUS_M. */
@@ -37,7 +40,10 @@ data class ShopList(val id: Int, val name: String, val location: ShopLocation?, 
                 id = json.getInt("id"),
                 name = json.getString("name"),
                 location = location,
-                items = List(items.length()) { items.getJSONObject(it).getString("text") },
+                items = List(items.length()) {
+                    val item = items.getJSONObject(it)
+                    ShopItem(item.getInt("id"), item.getString("text"))
+                },
             )
         }
 

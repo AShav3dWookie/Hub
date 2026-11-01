@@ -28,7 +28,7 @@ class ArrivalsTest {
     private lateinit var server: MockWebServer
     private val watched = mutableListOf<List<ShopList>>()
 
-    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), listOf("Eggs", "Milk"))
+    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), items("Eggs", "Milk"))
     private val now = 1_000_000_000L
 
     @Before
@@ -66,7 +66,7 @@ class ArrivalsTest {
         assertEquals("Are you at Sainsbury's?", asked.title())
         assertEquals(listOf("Yes", "No"), asked.actions.map { it.title.toString() })
         assertNull("the items wait for a yes", asked.lines())
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED, now), store.visit())
     }
 
     @Test
@@ -87,7 +87,7 @@ class ArrivalsTest {
     fun `yes swaps the question for the list, which opens on the hub`() {
         store.saveLists(listOf(sainsburys))
         Arrivals.onArrive(context, 3, now)
-        hubLists(sainsburys.copy(items = listOf("Eggs", "Milk", "Bread"))) // added since the copy was saved
+        hubLists(sainsburys.copy(items = items("Eggs", "Milk", "Bread"))) // added since the copy was saved
         answer(Arrivals.ACTION_YES)
 
         waitUntil { shown()?.lines() != null }
@@ -118,18 +118,18 @@ class ArrivalsTest {
         answer(Arrivals.ACTION_NO)
 
         waitUntil { shown() == null }
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE, now), store.visit())
         assertEquals("No talks to nobody", 0, server.requestCount)
     }
 
     @Test
     fun `a long list shows the first six and says how many more`() {
-        val items = (1..9).map { "Item $it" }
+        val items = (1..9).map { ShopItem(it, "Item $it") }
         store.saveLists(listOf(sainsburys.copy(items = items)))
         Arrivals.onArrive(context, 3, now)
         Arrivals.onAnswer(context, 3, yes = true)
 
-        assertEquals(items.take(6), shown()!!.lines())
+        assertEquals(items.take(6).map { it.text }, shown()!!.lines())
         assertEquals("+ 3 more", shown()!!.extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT).toString())
     }
 

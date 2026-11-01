@@ -65,12 +65,12 @@ object Arrivals {
         val list = store.list(listId) ?: return manager.cancel(notificationId(listId))
 
         val inbox = NotificationCompat.InboxStyle().setBigContentTitle(list.name)
-        list.items.take(MAX_LINES).forEach { inbox.addLine(it) }
+        list.items.take(MAX_LINES).forEach { inbox.addLine(it.text) }
         if (list.items.size > MAX_LINES) inbox.setSummaryText("+ ${list.items.size - MAX_LINES} more")
 
         val builder = base(context)
             .setContentTitle(list.name)
-            .setContentText(list.items.joinToString(", ").ifEmpty { "Nothing left on this list" })
+            .setContentText(list.items.joinToString(", ") { it.text }.ifEmpty { "Nothing left on this list" })
             .setStyle(inbox)
             // Already seen: replacing the question shouldn't buzz again.
             .setOnlyAlertOnce(true)
