@@ -98,4 +98,42 @@ class HubClientTest {
         server.shutdown()
         assertEquals(HubError.Unreachable, client.status().error())
     }
+
+    @Test
+    fun `lists come back with their shop and items`() {
+        respond(
+            200,
+            """[{"id":3,"name":"Sainsbury's","isDefault":false,"itemCount":2,
+                 "location":{"latitude":53.2161,"longitude":-4.1529,"radiusM":75},
+                 "items":[{"id":1,"listId":3,"text":"Eggs"},{"id":2,"listId":3,"text":"Milk"}]},
+                {"id":1,"name":"Shopping","isDefault":true,"itemCount":0,"location":null,"items":[]}]""",
+        )
+        assertEquals(
+            listOf(
+                ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), listOf("Eggs", "Milk")),
+                ShopList(1, "Shopping", null, emptyList()),
+            ),
+            client.lists().ok(),
+        )
+        assertEquals("/api/device/lists", server.takeRequest().path)
+    }
+
+    @Test
+    fun `tagging a shop sends where it is, and clearing sends null`() {
+        val tagged = """{"id":3,"name":"Sainsbury's","location":{"latitude":53.2,"longitude":-4.1,"radiusM":120},"items":[]}"""
+        respond(200, tagged)
+        assertEquals(ShopLocation(53.2, -4.1, 120), client.setLocation(3, ShopLocation(53.2, -4.1, 120)).ok().location)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/api/device/lists/3/location", request.path)
+        val sent = JSONObject(request.body.readUtf8()).getJSONObject("location")
+        assertEquals(53.2, sent.getDouble("latitude"), 0.0)
+        assertEquals(-4.1, sent.getDouble("longitude"), 0.0)
+        assertEquals(120, sent.getInt("radiusM"))
+
+        respond(200, """{"id":3,"name":"Sainsbury's","location":null,"items":[]}""")
+        assertEquals(null, client.setLocation(3, null).ok().location)
+        assertTrue(JSONObject(server.takeRequest().body.readUtf8()).isNull("location"))
+    }
 }

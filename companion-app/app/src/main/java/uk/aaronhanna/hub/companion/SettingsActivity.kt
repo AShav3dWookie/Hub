@@ -35,8 +35,9 @@ internal fun describeStatus(status: VoiceStatus): String {
 }
 
 /**
- * The app's only screen: pair with the hub (its address and a device token from the hub's
- * Settings → Devices) and test the pairing. Voice commands come from the home-screen widget.
+ * The app's main screen: pair with the hub (its address and a device token from the hub's
+ * Settings → Devices) and test the pairing. Voice commands come from the home-screen widget;
+ * shops are tagged on [ShopsActivity].
  */
 class SettingsActivity : ComponentActivity() {
     private lateinit var store: PairingStore
@@ -78,6 +79,9 @@ class SettingsActivity : ComponentActivity() {
         }
         findViewById<Button>(R.id.save).setOnClickListener { save() }
         testButton.setOnClickListener { save()?.let(::test) }
+        findViewById<Button>(R.id.open_shops).setOnClickListener {
+            startActivity(Intent(this, ShopsActivity::class.java))
+        }
         updateWarning()
         if (savedInstanceState == null) offerPairingLink(intent)
     }

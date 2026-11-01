@@ -24,11 +24,7 @@ if [ -n "${COMPANION_ADB_PAIR:-}" ]; then
   [ -n "${COMPANION_ADB_PAIR_CODE:-}" ] || die "COMPANION_ADB_PAIR needs COMPANION_ADB_PAIR_CODE (the six-digit code on the phone)."
   adb pair "$COMPANION_ADB_PAIR" "$COMPANION_ADB_PAIR_CODE"
 fi
-if [ -n "${COMPANION_ADB_DEVICE:-}" ]; then
-  adb connect "$COMPANION_ADB_DEVICE" | grep -q "connected" || die "adb couldn't connect to $COMPANION_ADB_DEVICE (is wireless debugging on, and the port current?)."
-  export ANDROID_SERIAL="$COMPANION_ADB_DEVICE"
-fi
-require_phone
+connect_phone
 
 bash "$here/build.sh"
 apk="$app/dist/hub-companion-$(repo_version)-release.apk"
@@ -37,10 +33,15 @@ apk="$app/dist/hub-companion-$(repo_version)-release.apk"
 echo "==> Installing on $(adb shell getprop ro.product.model | tr -d '\r')..."
 adb install -r "$(native_path "$apk")"
 
-# Android 17+ blocks an app from the home network (a hub at 192.168.x.x) until it holds this
-# runtime permission. The app asks for it at pairing; granting it here saves the prompt.
+# The app asks for each of these when it needs it; granting them here saves the prompts — and
+# "Allow all the time" location is otherwise a trip into Android's settings.
+grant() { adb shell pm grant uk.aaronhanna.hub.companion "android.permission.$1"; }
+# Android 17+ blocks an app from the home network (a hub at 192.168.x.x) without this one.
 if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 37 ]; then
-  adb shell pm grant uk.aaronhanna.hub.companion android.permission.ACCESS_LOCAL_NETWORK \
-    && echo "==> Granted local network access (Android 17+)."
+  grant ACCESS_LOCAL_NETWORK && echo "==> Granted local network access (Android 17+)."
 fi
+# Shops: tagging needs precise location, noticing a shop with the app closed needs it all the
+# time, and "Are you at …?" is a notification.
+grant ACCESS_FINE_LOCATION && grant ACCESS_COARSE_LOCATION && grant ACCESS_BACKGROUND_LOCATION \
+  && grant POST_NOTIFICATIONS && echo "==> Granted location (all the time) and notifications."
 echo "==> Installed. Next: npm run companion:pair"

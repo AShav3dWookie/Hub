@@ -6,7 +6,7 @@
 # what makes builds reproducible, so there is no second place for the version to drift.
 FROM eclipse-temurin:21-jdk-noble
 
-# Bump these together with app/build.gradle.kts (compileSdk) and the README.
+# Bump these together with app/build.gradle.kts (compileSdk, buildToolsVersion) and the README.
 ARG CMDLINE_TOOLS_VERSION=16111833
 ARG ANDROID_PLATFORM=android-37.0
 ARG BUILD_TOOLS_VERSION=37.0.0
@@ -30,7 +30,7 @@ RUN curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-
  && rm /tmp/cmdline-tools.zip
 
 RUN yes | sdkmanager --licenses > /dev/null \
- && sdkmanager "platforms;${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+ && sdkmanager "platforms;${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS_VERSION}" platform-tools > /dev/null
 
 # Checked against the published SHA-256 before it is unpacked.
 RUN curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip \

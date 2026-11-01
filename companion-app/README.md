@@ -5,6 +5,10 @@ land on that shopping list. The phone does the listening (Android's own speech p
 works out what you meant ([`docs/voice.md`](../docs/voice.md)), and a one-line answer pops up:
 *"Added Eggs and Milk to M&S – Bangor"*. Android 12 or later (a Pixel 6 is fine).
 
+It also knows where your shops are. Tag a list's shop while standing in it, and after a minute
+there the phone asks *"Are you at M&S – Bangor?"* — tap **Yes** and the list appears in the
+notification, even with no signal inside ([Shops](#shops)).
+
 Everything below is a single command, run from the repo root in **Git Bash or WSL2**. Each
 reads its settings from environment variables, and falls back to the repo-root `.env` for any
 that aren't set — so the usual way is to put them in `.env` once.
@@ -16,15 +20,17 @@ that aren't set — so the usual way is to put them in `.env` once.
 | `npm run companion:keygen` | Creates the release signing key, once |
 | `npm run companion:install` | Builds the signed APK and installs it on the phone (also updates it) |
 | `npm run companion:pair` | Creates a device token on the hub and sends it to the app; tap **Pair** on the phone |
+| `npm run companion:arrive -- "<list>"` | Fakes the phone's GPS into that list's shop, to try *"Are you at …?"* at home |
 | `npm run companion:secrets` | Gives GitHub Actions the signing key, so releases attach the APK |
 | `npm run companion:build` | Just builds the APK into `companion-app/dist/` |
-| `npm run companion:test` | Unit and Robolectric tests (the real screens and widget code, on the JVM) |
+| `npm run companion:test` | Unit and Robolectric tests (the real screens and widget code, on the JVM), then the release build's lint checks |
 | `npm run companion:contract` | The app's API client against a hub container built from this repo |
 
 The first command to run builds the build container (JDK, Android SDK, Gradle; a couple of GB,
 once). Nothing Android is installed on your machine. Two host tools are needed: **Docker**, and
-**adb** (Android platform-tools) on the PATH for `install` and `pair` — a container can't reach
-the phone over USB on Docker Desktop.
+**adb** (Android platform-tools) on the PATH for `install`, `pair` and `arrive` — a container
+can't reach the phone over USB on Docker Desktop. `arrive` also uses **node**, which the repo
+needs anyway.
 
 ## Settings
 
@@ -34,11 +40,12 @@ the phone over USB on Docker Desktop.
 | `COMPANION_KEYSTORE` | keygen, install, build, secrets | `~/.hub-companion/release.jks` |
 | `COMPANION_KEY_ALIAS` | keygen, install, build, secrets | `hub-companion` |
 | `COMPANION_KEY_PASSWORD` | keygen, install, build, secrets | same as `COMPANION_KEYSTORE_PASSWORD` |
-| `COMPANION_HUB_URL` | pair | — required: the hub address **the phone** will use, e.g. `http://192.168.1.4:3000` |
-| `COMPANION_HUB_PASSWORD` | pair | — only if the hub has auth on |
+| `COMPANION_HUB_URL` | pair, arrive | — required: the hub address **the phone** will use, e.g. `http://192.168.1.4:3000` |
+| `COMPANION_HUB_PASSWORD` | pair, arrive | — only if the hub has auth on |
 | `COMPANION_DEVICE_NAME` | pair | the phone's model, e.g. *Pixel 6* |
-| `COMPANION_ADB_DEVICE` | install, pair | — the `ip:port` from Wireless debugging, if not using USB |
+| `COMPANION_ADB_DEVICE` | install, pair, arrive | — the `ip:port` from Wireless debugging, if not using USB |
 | `COMPANION_ADB_PAIR`, `COMPANION_ADB_PAIR_CODE` | install | — first-time wireless pairing only (see below) |
+| `COMPANION_ARRIVE_SECONDS` | arrive | `120` — how long the fake position stays in the shop |
 
 A typical `.env` (it's gitignored):
 
@@ -96,6 +103,51 @@ On the phone: long-press the home screen → **Widgets** → **Hub** → drag **
 it, wait for *"What should I add?"*, and speak. The app needs no microphone permission — it's
 the phone's own speech prompt that listens.
 
+## Shops
+
+Open the app → **Shops**. Each shopping list has **Tag here**: standing in the shop, tap it and
+the phone's current position becomes that list's shop, at a 75 m radius. The hub keeps the tag
+— its web app shows *Tagged to a shop* on the list, and is where the radius is changed (25–1000
+m) or the tag cleared. **Clear** here does the same. A fix vaguer than 100 m isn't used; the
+screen asks you to try again, nearer a door or window.
+
+After **a minute** inside a tagged shop the phone asks *"Are you at …?"*. **Yes** swaps the
+question for the list's items (the first six, then *+ N more*); tapping that opens the list in
+the hub. (On Android 17 the browser needs its own *local network* permission to open a hub at a
+LAN address — Settings → Apps → Firefox/Chrome → Permissions. The https address doesn't.) **No** just clears it — a false alarm, remembered so the leave reminder stays quiet.
+It stays quiet for an empty list, and asks at most **once an hour** per shop, so GPS wobbling at
+the edge can't nag.
+
+- **No signal in the shop is fine.** The app keeps a copy of every list, refreshed each time it
+  can reach the hub (opening Shops, an arrival, a Yes); the notification falls back to it.
+- **Permissions:** precise location **all the time** (to notice a shop with the app closed) and
+  notifications. `companion:install` grants them; otherwise Shops shows what's missing, one at a
+  time, with a button for each. Android's own geofencing does the watching, so the battery cost
+  is small.
+- **After a reboot** the shops are watched again by themselves.
+- A shop tagged or changed in the hub's web app reaches the phone the next time it refreshes —
+  open Shops once to be sure.
+
+### Trying it at home: `npm run companion:arrive`
+
+```bash
+npm run companion:arrive -- "Sainsbury's"
+```
+
+Looks the list up on the hub (`COMPANION_HUB_URL`, as for `pair`), tells the phone it's standing
+in that shop, then has the app watch the shop afresh: it clears the tag on the hub and puts it
+back exactly, opening Shops after each. The question should appear about a minute later. Real
+GPS and the tag are both put back when it ends, Ctrl-C included. The list must be tagged and
+have something on it, and a shop that asked within the last hour stays quiet — that's the
+cooldown, not a fault.
+
+Why the clear-and-restore: on a Pixel 6, Play Services reliably reacts to a faked position
+inside a geofence it has just been given, but not to a faked walk out and back in of one it
+already has (the phone lying still on a desk doesn't help). Real movement doesn't have that
+problem, so a genuine arrival is tested by walking into a real shop — that works today, even
+before the hub is reachable over the internet, since the question and list come from the
+app's saved copy.
+
 ## Checking it on the phone
 
 The automated tests run the app's code on a computer; these are the bits only a phone shows.
@@ -109,6 +161,13 @@ Worth a run after installing and after updates:
 - [ ] Off the home Wi-Fi, a command says *Couldn't reach the hub*.
 - [ ] Removing the device in the hub's Settings → Devices, then using the widget, says the token
       wasn't accepted.
+- [ ] **Shops** lists the hub's lists; **Tag here** on one shows *Tagged · 75 m*, and the hub's
+      web app shows it tagged too.
+- [ ] `companion:arrive` on that list: *"Are you at …?"* appears with **Yes** and **No**.
+- [ ] **Yes** shows the items; tapping them opens the list in the hub.
+- [ ] Another `companion:arrive` within the hour shows nothing.
+- [ ] After a restart of the phone, an arrival (once the hour's up) still asks.
+- [ ] In a real shop, after a minute: the question appears.
 
 ## Releases
 
@@ -128,5 +187,8 @@ them, a release still publishes the server image and skips the APK, saying so in
   uses the free rules parser and is part of the regression suite and CI; it fails if the hub
   ever says it would use the model. The real model is checked separately and by hand with
   `npm run voice:check`.
+- Play Services isn't there on the JVM, so the tests swap the two calls into it for stand-ins:
+  `Shops.watch` (registering geofences) and `ShopsActivity.locate` (the current position).
+  Everything either side of them — what's watched, what's asked, what's sent — is tested.
 - No emulator tests: an emulator needs hardware virtualisation inside Docker, which Docker
   Desktop on Windows can't reliably give it. The phone checklist covers that gap.

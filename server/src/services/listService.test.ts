@@ -9,6 +9,7 @@ import {
   deleteList,
   addListItem,
   deleteListItem,
+  setListLocation,
 } from "./listService.js";
 import { getChanges } from "./syncService.js";
 import { BadRequestError, NotFoundError } from "../lib/errors.js";
@@ -154,5 +155,31 @@ describe("listService", () => {
     expect(changes.listItems).toEqual([
       expect.objectContaining({ listId: tesco.id, text: "Eggs", normalizedText: "eggs" }),
     ]);
+  });
+
+  describe("a shop's location", () => {
+    const shop = { latitude: 53.2274, longitude: -4.1293, radiusM: 75 };
+
+    it("is set, changed and cleared, and the other fields are left alone", () => {
+      ctx = createTestDb();
+      const tesco = createList(ctx.db, { name: "Tesco" });
+      expect(tesco.location).toBeNull();
+
+      expect(setListLocation(ctx.db, tesco.id, shop).location).toEqual(shop);
+      expect(updateList(ctx.db, tesco.id, { location: { ...shop, radiusM: 150 } }).location?.radiusM).toBe(150);
+      expect(updateList(ctx.db, tesco.id, { name: "Tesco Bangor" }).location?.radiusM).toBe(150);
+      expect(setListLocation(ctx.db, tesco.id, null).location).toBeNull();
+      expect(getList(ctx.db, tesco.id).name).toBe("Tesco Bangor");
+    });
+
+    it("reaches the change feed, so the PWA and the offline copy see a tag", () => {
+      ctx = createTestDb();
+      const tesco = createList(ctx.db, { name: "Tesco" });
+      setListLocation(ctx.db, tesco.id, shop);
+
+      const synced = getChanges(ctx.db).changes.lists.find((l) => l.id === tesco.id);
+      expect(synced).toMatchObject({ latitude: 53.2274, longitude: -4.1293, radiusM: 75 });
+      expect(listLists(ctx.db).find((l) => l.id === tesco.id)?.location).toEqual(shop);
+    });
   });
 });

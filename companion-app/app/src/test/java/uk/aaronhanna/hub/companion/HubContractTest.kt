@@ -87,4 +87,30 @@ class HubContractTest {
         val stranger = HubClient(Pairing(hubUrl!!, "hub_" + "n".repeat(43)))
         assertEquals(HubError.BadToken, (stranger.status() as HubResult.Failed).error)
     }
+
+    @Test
+    fun `a shop tagged from the phone is kept by the hub and comes back in the lists`() {
+        requireHub()
+        val created = JSONObject(http("POST", "/api/lists", JSONObject().put("name", "Contract shop ${System.currentTimeMillis()}")))
+        val id = created.getInt("id")
+        http("POST", "/api/lists/$id/items", JSONObject().put("text", "Bread"))
+
+        val tagged = (client.setLocation(id, ShopLocation(53.2161, -4.1529, 75)) as HubResult.Ok).value
+        assertEquals(ShopLocation(53.2161, -4.1529, 75), tagged.location)
+
+        val fromHub = (client.lists() as HubResult.Ok).value.first { it.id == id }
+        assertEquals(ShopLocation(53.2161, -4.1529, 75), fromHub.location)
+        assertEquals(listOf("Bread"), fromHub.items)
+
+        val cleared = (client.setLocation(id, null) as HubResult.Ok).value
+        assertEquals(null, cleared.location)
+    }
+
+    @Test
+    fun `a radius the hub doesn't allow is refused in its own words`() {
+        requireHub()
+        val main = (client.lists() as HubResult.Ok).value.first()
+        val error = (client.setLocation(main.id, ShopLocation(53.2, -4.1, 5)) as HubResult.Failed).error
+        assertTrue(error is HubError.Rejected)
+    }
 }

@@ -146,3 +146,48 @@ test("the main list can't be deleted, even offline", async ({ page, context }) =
   await expect(page.getByText(/can't be deleted/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete list" })).toHaveCount(0);
 });
+
+test("a shop tagged from the phone shows on the list, and its radius and tag change offline", async ({
+  page,
+  context,
+}) => {
+  const tag = tagged();
+  const name = `Morrisons ${tag}`;
+  const id = await seedList(page, name, ["Bread"]);
+
+  // Tag it the way the companion app does: with a device token, through /api/device.
+  const device = (await (await page.request.post("/api/device-tokens", { data: { name: `Phone ${tag}` } })).json()) as {
+    token: string;
+  };
+  const tagRes = await page.request.put(`/api/device/lists/${id}/location`, {
+    headers: { Authorization: `Bearer ${device.token}` },
+    data: { location: { latitude: 53.2274, longitude: -4.1293, radiusM: 75 } },
+  });
+  expect(tagRes.status()).toBe(200);
+  await syncFromSettings(page);
+
+  await page.goto(`/shopping/${id}`);
+  await expect(page.getByText("Tagged to a shop · 75 m")).toBeVisible();
+
+  await context.setOffline(true);
+  await enterEditMode(page);
+  const radius = page.getByRole("spinbutton", { name: "Shop radius (metres)" });
+  await radius.fill("120");
+  await page.getByRole("button", { name: "Save radius" }).click();
+  await expect(page.getByText("Tagged to a shop · 120 m")).toBeVisible();
+
+  await context.setOffline(false);
+  await syncFromSettings(page);
+  let feed = await feedWhere(page.request, (f) => f.lists.some((l) => l.id === id && l.radiusM === 120));
+  expect(feed.lists.find((l) => l.id === id)).toMatchObject({ latitude: 53.2274, longitude: -4.1293, radiusM: 120 });
+
+  await page.goto(`/shopping/${id}`);
+  await enterEditMode(page);
+  await page.getByRole("button", { name: "Clear location" }).click();
+  await page.getByRole("button", { name: "Clear location" }).first().click();
+  await expect(page.getByText(/Tagged to a shop/)).toHaveCount(0);
+  await syncFromSettings(page);
+  feed = await feedWhere(page.request, (f) => f.lists.some((l) => l.id === id && l.radiusM == null));
+  expect(feed.lists.find((l) => l.id === id)).toMatchObject({ latitude: null, longitude: null, radiusM: null });
+  await assertReplicaClean(page);
+});

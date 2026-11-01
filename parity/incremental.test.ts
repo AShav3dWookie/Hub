@@ -10,6 +10,7 @@ import {
   deleteListItem,
   getList,
   listLists,
+  setListLocation,
   updateList,
 } from "../server/src/services/listService.js";
 import * as local from "../client/src/local/queries.js";
@@ -115,6 +116,10 @@ describe("server and offline client parity after an incremental sync", () => {
     const doomed = listLists(fx.db).find((l) => !l.isDefault && l.itemCount > 0 && l.id !== extra.id)!;
     deleteList(fx.db, doomed.id);
     updateList(fx.db, extra.id, { isDefault: true, name: "Lidl Bangor" });
+    // Tag one shop, then tag and re-tag another — the location columns ride the same rows.
+    setListLocation(fx.db, extra.id, { latitude: 53.23, longitude: -4.13, radiusM: 75 });
+    setListLocation(fx.db, main.id, { latitude: 53.22, longitude: -4.12, radiusM: 75 });
+    setListLocation(fx.db, main.id, { latitude: 53.22, longitude: -4.12, radiusM: 150 });
     session.sync();
 
     expect(local.listLists(session.snap)).toEqual(listLists(fx.db));

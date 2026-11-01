@@ -4,6 +4,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 17+: needed to reach a hub at a LAN address. Asked for at pairing; see LocalNetwork. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Shops: tag one where you stand, and notice arriving at it with the app closed. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Play Services forgets geofences on reboot; BootReceiver puts them back. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Lets the app see that a speech recogniser exists (package visibility, Android 11+). -->
     <queries>
@@ -49,6 +56,41 @@
             android:exported="false"
             android:taskAffinity=""
             android:theme="@style/Theme.Hub.Invisible" />
+
+        <!--
+          hubcompanion://shops opens it — what npm run companion:arrive does, so the phone is
+          watching the shops before it fakes being in one. Harmless for anything else to open:
+          the screen only re-reads the lists. singleTop: a second link refreshes the open
+          screen instead of stacking another copy.
+        -->
+        <activity
+            android:name=".ShopsActivity"
+            android:exported="true"
+            android:label="Shops"
+            android:launchMode="singleTop"
+            android:parentActivityName=".SettingsActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="hubcompanion" android:host="shops" />
+            </intent-filter>
+        </activity>
+
+        <!-- Not exported: only Play Services (through the app's own PendingIntent) sends these. -->
+        <receiver
+            android:name=".GeofenceReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".ArrivalActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".MicWidget"

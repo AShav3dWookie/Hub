@@ -83,3 +83,51 @@ require_phone() {
     *) die "adb can't see a phone. Plug it in with USB debugging on, or set COMPANION_ADB_DEVICE for wireless debugging (README.md \"Getting it onto the phone\")." ;;
   esac
 }
+
+# Reach the phone: over wireless debugging when COMPANION_ADB_DEVICE is set, else whichever
+# single phone adb already sees. Stops with the fix when there isn't exactly one.
+connect_phone() {
+  if [ -n "${COMPANION_ADB_DEVICE:-}" ]; then
+    adb connect "$COMPANION_ADB_DEVICE" | grep -q "connected" || die "adb couldn't connect to $COMPANION_ADB_DEVICE (is wireless debugging on, and the port current?)."
+    export ANDROID_SERIAL="$COMPANION_ADB_DEVICE"
+  fi
+  require_phone
+}
+
+# Talking to the hub from this machine with curl, as the web app does. hub_setup reads
+# COMPANION_HUB_URL (the address the PHONE uses — so a LAN IP, never localhost) and logs in when
+# COMPANION_HUB_PASSWORD is set. The caller must load_env both first.
+#
+# curl is a native .exe under Git Bash, so its files get native paths — even /dev/null won't
+# work for it there, which is why responses land in a file rather than being thrown away.
+hub_setup() {
+  command -v curl > /dev/null || die "curl isn't on your PATH."
+  hub="${COMPANION_HUB_URL:-}"
+  hub="${hub%/}"
+  [ -n "$hub" ] || die "set COMPANION_HUB_URL to the hub address the phone will use, e.g. http://192.168.1.4:3000"
+  [[ "$hub" =~ ^https?://[^[:space:]\&\#\?]+$ ]] || die "COMPANION_HUB_URL doesn't look like an address: $hub"
+  case "$hub" in *://localhost*|*://127.*) die "COMPANION_HUB_URL must be an address the phone can reach — use this machine's LAN IP, not localhost.";; esac
+
+  hub_cookies="$(native_path "$(mktemp)")"
+  hub_response="$(native_path "$(mktemp)")"
+  trap 'rm -f "$hub_cookies" "$hub_response"' EXIT
+
+  if [ -n "${COMPANION_HUB_PASSWORD:-}" ]; then
+    local status
+    status="$(hub_call POST /api/auth/login "{\"password\":$(json_string "$COMPANION_HUB_PASSWORD")}")"
+    [ "$status" = "200" ] || die "the hub refused COMPANION_HUB_PASSWORD (HTTP $status)."
+  fi
+}
+
+# hub_call METHOD PATH [JSON] — prints the HTTP status; the body is left in $hub_response.
+hub_call() {
+  local args=(-s -o "$hub_response" -w '%{http_code}' -b "$hub_cookies" -c "$hub_cookies" -X "$1")
+  if [ $# -ge 3 ]; then
+    curl "${args[@]}" -H 'Content-Type: application/json' --data-binary @- "$hub$2" <<< "$3" \
+      || die "couldn't reach the hub at $hub."
+  else
+    curl "${args[@]}" "$hub$2" || die "couldn't reach the hub at $hub."
+  fi
+}
+
+json_string() { printf '%s' "$1" | sed 's/\/\\/g; s/"/\\"/g; s/^/"/; s/$/"/'; }

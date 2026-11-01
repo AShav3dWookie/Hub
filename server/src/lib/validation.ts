@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared";
 import { daysInMonth, daysBetween } from "@logger/shared";
 import { LIST_KINDS, LIST_ITEM_MAX_LENGTH, LIST_NAME_MAX_LENGTH } from "@logger/shared";
+import { MAX_SHOP_RADIUS_M, MIN_SHOP_RADIUS_M } from "@logger/shared";
 import { DEVICE_NAME_MAX_LENGTH, VOICE_TEXT_MAX_LENGTH } from "@logger/shared";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
@@ -75,14 +76,26 @@ export const createListSchema = z.object({
   name: listNameSchema,
 });
 
+export const listLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  radiusM: z.number().int().min(MIN_SHOP_RADIUS_M).max(MAX_SHOP_RADIUS_M),
+});
+
 export const updateListSchema = z
   .object({
     name: listNameSchema.optional(),
     isDefault: z.literal(true).optional(),
+    location: listLocationSchema.nullable().optional(),
   })
-  .refine((v) => v.name != null || v.isDefault != null, {
-    message: "Nothing to update — pass name and/or isDefault",
+  .refine((v) => v.name != null || v.isDefault != null || v.location !== undefined, {
+    message: "Nothing to update — pass name, isDefault and/or location",
   });
+
+/** PUT /api/device/lists/:id/location. Wrapped: a bare JSON null isn't a body express.json() accepts. */
+export const deviceListLocationSchema = z.object({
+  location: listLocationSchema.nullable(),
+});
 
 export const createListItemSchema = z.object({
   text: z.string().trim().min(1).max(LIST_ITEM_MAX_LENGTH),

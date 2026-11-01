@@ -237,15 +237,26 @@ on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from co
 **manual** script, never part of `npm test` or CI, because it costs money.
 
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
-(server-only, not synced). `requireDeviceOrSession` guards `/api/voice` alone: a valid token
-passes, a present-but-wrong one is a 401 even with auth off, no token falls through to
-`requireAuth`. `/api/device-tokens` is session-only, so a device can never mint tokens.
+(server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the
+companion app's shopping lists with their shop locations, and `PUT …/location` to tag one) and
+nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
+token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
+never mint tokens.
 
 ### Android companion app (`companion-app/`)
 
-A small native Kotlin app (minSdk 31): a pairing screen and a home-screen mic widget that sends
-the phone's speech-recognised text to `/api/voice` with a device token. Not an npm workspace;
-`companion-app/README.md` is the user's install guide and covers signing and releases.
+A small native Kotlin app (minSdk 31) — **kept deliberately lightweight**: a pairing screen, a
+home-screen mic widget that sends the phone's speech-recognised text to `/api/voice` with a
+device token, and a Shops screen. Not an npm workspace; `companion-app/README.md` is the user's
+install guide and covers signing and releases.
+
+**Shops (#5).** A list's shop is tagged from the phone (`ShopsActivity`, "Tag here") and stored on
+the hub (`lists.latitude/longitude/radius_m`). The app keeps a copy of every list in
+`ShopStore` (so arrival works with no signal) and registers one Play Services DWELL geofence
+per tagged shop (`Geofences`, one-minute loiter). Arriving asks "Are you at X?" first
+(`Arrivals`); Yes shows the items, No records a false alarm in the visit state that #6's leave
+reminder reads. One arrival per shop per hour. Notifications are native, not web push.
+`BootReceiver` re-registers after a reboot, since Play Services forgets geofences.
 
 - **Everything Android runs in a container** (`companion-app/docker/Dockerfile`: JDK 21, Android
   SDK 37, Gradle pinned in the image — there's no Gradle wrapper). `scripts/run.sh <gradle task>`
@@ -253,19 +264,32 @@ the phone's speech-recognised text to `/api/voice` with a device token. Not an n
   app's version is read from the root `package.json`). Never install the Android SDK on the host.
 - The `companion:*` scripts drive Docker, so like `docker:*` they run from a **host** terminal.
 - `npm run companion:test` (unit + Robolectric, `testDebugUnitTest` — not `test`, which runs
-  every variant and rejects `--tests`), `companion:contract` (the app's `HubClient` against a hub
+  every variant and rejects `--tests` — then `lintVitalRelease`, the lint a release build runs,
+  so CI catches what would otherwise first fail on a release tag), `companion:contract` (the app's `HubClient` against a hub
   container built from this repo), `companion:build` (APK into `companion-app/dist/`).
 - **The contract hub must never get `ANTHROPIC_API_KEY`** — the script passes an explicit empty
   one and `HubContractTest` fails if `/api/voice/status` reports the model. That's what keeps it
   free and in the regression suite.
+- Play Services doesn't run under Robolectric, so the two calls into it are swappable seams —
+  `Shops.watch` (geofence registration) and `ShopsActivity.locate` (current position) — and
+  tests replace them; reset them in `@After`. Test receivers by `sendBroadcast` (it supplies
+  `goAsync`), or call `GeofenceReceiver.arrive` directly, since a `GeofencingEvent` can't be
+  built in a test.
+- `npm run companion:arrive -- "<list>"` fakes GPS with `adb shell cmd location providers …`
+  test providers and is how arrival is tried without leaving the house. **Found on the Pixel:
+  Play Services fires for a faked position only when the geofence is newly added** — a faked
+  exit and re-entry of an existing one never fires, even with fixes delivered every few
+  seconds — so the script clears the tag on the hub and restores it, opening Shops
+  (`hubcompanion://shops`, `singleTop`) after each so the app drops and re-adds the geofence.
+  Its exit trap restores GPS and the tag. Genuine transitions need a real walk.
 - Robolectric on SDK 37 + JDK 21 needs `--add-exports=java.base/jdk.internal.access` (set in
   `app/build.gradle.kts`). Main-thread results from `Dispatchers.IO` work need `waitUntil`
   (`TestSupport.kt`) because Robolectric's looper only runs when idled.
 - Releases sign with one key kept outside the repo (`COMPANION_KEYSTORE*` env vars / Actions
   secrets); `release.yml`'s `companion-apk` job skips cleanly without them.
 - **The user runs everything from Git Bash or WSL2 and wants one command per job, configured by
-  env vars** — never PowerShell, never a list of steps. `keygen`, `install`, `pair` and `secrets`
-  exist for that. All scripts source `scripts/lib.sh`, whose `load_env` falls back to the root
+  env vars** — never PowerShell, never a list of steps. `keygen`, `install`, `pair`, `arrive`
+  and `secrets` exist for that, sharing `lib.sh`'s `connect_phone` and `hub_setup`/`hub_call`. All scripts source `scripts/lib.sh`, whose `load_env` falls back to the root
   `.env` by *parsing* it (it holds `$$`-escaped compose values, so never `source` it).
 - **Git Bash gotchas** (each one bit): `lib.sh` exports `MSYS_NO_PATHCONV=1` for docker, so
   native `.exe`s (`curl`, `adb`, `gh`) get paths untranslated — pass them `native_path`

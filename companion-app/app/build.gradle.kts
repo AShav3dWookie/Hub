@@ -18,6 +18,9 @@ android {
     compileSdk {
         version = release(37)
     }
+    // The image's build-tools (docker/Dockerfile). Left to AGP's default, every run in the
+    // throwaway container downloaded another version first.
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "uk.aaronhanna.hub.companion"
@@ -77,6 +80,11 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    // Geofencing and a one-off current location: battery-friendly in a way raw GPS isn't.
+    implementation("com.google.android.gms:play-services-location:21.4.0")
+    // Play Services brings an old androidx.fragment, whose activity-result handling is broken
+    // (lint's InvalidFragmentVersionForActivityResult); this lifts it to a current one.
+    implementation("androidx.fragment:fragment:1.9.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")

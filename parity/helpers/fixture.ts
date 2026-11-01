@@ -10,6 +10,7 @@ import {
   addListItem,
   createList,
   deleteListItem,
+  setListLocation,
   updateList,
 } from "../../server/src/services/listService.js";
 import { buildSnapshot, type LocalSnapshot } from "../../client/src/local/snapshot.js";
@@ -372,6 +373,7 @@ export function createParityFixture(): ParityFixture {
   deleteListItem(db, tesco.id, gone.id);
   addListItem(db, ms.id, { text: "Flowers" });
   updateList(db, tesco.id, { isDefault: true });
+  setListLocation(db, ms.id, { latitude: 53.2274, longitude: -4.1293, radiusM: 75 });
 
   return { db, snap: snapshotFromServer(db), cleanup };
 }

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { Category, ListKind, NotificationSlot, SyncEntityType } from "@logger/shared";
 
@@ -205,6 +205,11 @@ export const lists = sqliteTable(
     name: text("name").notNull(),
     normalizedName: text("normalized_name").notNull(),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    // Where the shop is, tagged from the companion app (#5). All three or none; the app's
+    // geofence fires after a minute inside radius_m metres of the point.
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    radiusM: integer("radius_m"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     ...syncColumns,
