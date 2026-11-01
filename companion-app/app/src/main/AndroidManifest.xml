@@ -76,12 +76,21 @@
             </intent-filter>
         </activity>
 
-        <!-- Not exported: only Play Services (through the app's own PendingIntent) sends these. -->
+        <!-- The leave reminder's tick list; only the app's own notification opens it. -->
+        <activity
+            android:name=".CheckoutActivity"
+            android:exported="false"
+            android:label="Checkout" />
+
+        <!-- Not exported: only Play Services and the app's own notifications send these. -->
         <receiver
             android:name=".GeofenceReceiver"
             android:exported="false" />
         <receiver
             android:name=".ArrivalActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".LeaveActionReceiver"
             android:exported="false" />
         <receiver
             android:name=".BootReceiver"

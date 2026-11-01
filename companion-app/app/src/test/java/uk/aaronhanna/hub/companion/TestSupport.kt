@@ -5,7 +5,23 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.testing.SynchronousExecutor
+import androidx.work.testing.WorkManagerTestInitHelper
 import org.robolectric.Shadows.shadowOf
+
+/** Items for a test list, numbered from [firstId] as the hub would number them. */
+fun items(vararg texts: String, firstId: Int = 1): List<ShopItem> =
+    texts.mapIndexed { index, text -> ShopItem(firstId + index, text) }
+
+/**
+ * WorkManager for a test: [Outbox] schedules through it, and Robolectric doesn't start the
+ * real one. Its work only runs when the test says so (WorkManagerTestInitHelper's driver).
+ */
+fun initWorkManager() = WorkManagerTestInitHelper.initializeTestWorkManager(
+    ApplicationProvider.getApplicationContext(),
+    Configuration.Builder().setExecutor(SynchronousExecutor()).build(),
+)
 
 /** Most tests talk to MockWebServer on localhost, which Android 17 treats as the local network. */
 fun grantLocalNetwork() =

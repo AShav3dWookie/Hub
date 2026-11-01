@@ -91,6 +91,41 @@ describe("/api/device", () => {
     expect(res.status).toBe(404);
   });
 
+  it("ticks an item off, and the lists no longer have it", async () => {
+    const { app, tesco, token } = await setup();
+    const auth = { Authorization: `Bearer ${token}` };
+    const lists = await request(app).get("/api/device/lists").set(auth);
+    const items = lists.body.find((l: { id: number }) => l.id === tesco.id).items;
+    const eggs = items.find((i: { text: string }) => i.text === "Eggs");
+
+    const res = await request(app).delete(`/api/device/lists/${tesco.id}/items/${eggs.id}`).set(auth);
+    expect(res.status).toBe(204);
+
+    const after = await request(app).get("/api/device/lists").set(auth);
+    const left = after.body.find((l: { id: number }) => l.id === tesco.id).items;
+    expect(left.map((i: { text: string }) => i.text)).toEqual(["Milk"]);
+  });
+
+  it("counts an item that's already gone as ticked off — a queued tap may arrive twice", async () => {
+    const { app, tesco, token } = await setup();
+    const auth = { Authorization: `Bearer ${token}` };
+    const lists = await request(app).get("/api/device/lists").set(auth);
+    const eggs = lists.body.find((l: { id: number }) => l.id === tesco.id).items[0];
+
+    const path = `/api/device/lists/${tesco.id}/items/${eggs.id}`;
+    expect((await request(app).delete(path).set(auth)).status).toBe(204);
+    expect((await request(app).delete(path).set(auth)).status).toBe(204);
+    expect((await request(app).delete(`/api/device/lists/999/items/${eggs.id}`).set(auth)).status).toBe(204);
+  });
+
+  it("refuses an item id that isn't a number", async () => {
+    const { app, tesco, token } = await setup();
+    const res = await request(app)
+      .delete(`/api/device/lists/${tesco.id}/items/eggs`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
   it("refuses no token, and a wrong one", async () => {
     const { app } = await setup();
     expect((await request(app).get("/api/device/lists")).status).toBe(401);

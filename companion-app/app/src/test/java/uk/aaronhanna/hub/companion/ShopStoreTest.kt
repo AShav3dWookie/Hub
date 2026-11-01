@@ -15,7 +15,7 @@ class ShopStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val store get() = ShopStore(context)
 
-    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), listOf("Eggs", "Milk"))
+    private val sainsburys = ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), items("Eggs", "Milk"))
     private val main = ShopList(1, "Shopping", null, emptyList())
 
     @Test
@@ -44,19 +44,27 @@ class ShopStoreTest {
 
     @Test
     fun `remembers the visit and how Are you at was answered`() {
-        assertNull(store.visit())
+        assertNull(store.visit(3))
         store.markArrival(3, 0)
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.ASKED, 0), store.visit(3))
         store.answerVisit(3, ShopStore.VisitState.NOT_THERE)
-        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.NOT_THERE, 0), store.visit(3))
     }
 
+    /** Seen on the Pixel: two shops tagged close together arrived in one geofence event. */
     @Test
-    fun `an answer to an older visit doesn't overwrite the current one`() {
+    fun `shops arrived at together keep a visit each, so answering one leaves the other alone`() {
         store.markArrival(3, 0)
         store.markArrival(4, 0)
         store.answerVisit(3, ShopStore.VisitState.CONFIRMED)
-        assertEquals(ShopStore.Visit(4, ShopStore.VisitState.ASKED), store.visit())
+        assertEquals(ShopStore.Visit(3, ShopStore.VisitState.CONFIRMED, 0), store.visit(3))
+        assertEquals(ShopStore.Visit(4, ShopStore.VisitState.ASKED, 0), store.visit(4))
+    }
+
+    @Test
+    fun `an answer for a shop never arrived at is ignored`() {
+        store.answerVisit(9, ShopStore.VisitState.CONFIRMED)
+        assertNull(store.visit(9))
     }
 
     @Test

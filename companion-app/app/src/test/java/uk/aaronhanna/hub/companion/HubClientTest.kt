@@ -110,12 +110,21 @@ class HubClientTest {
         )
         assertEquals(
             listOf(
-                ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), listOf("Eggs", "Milk")),
+                ShopList(3, "Sainsbury's", ShopLocation(53.2161, -4.1529, 75), items("Eggs", "Milk")),
                 ShopList(1, "Shopping", null, emptyList()),
             ),
             client.lists().ok(),
         )
         assertEquals("/api/device/lists", server.takeRequest().path)
+    }
+
+    @Test
+    fun `got it deletes the item on the hub`() {
+        respond(204, "")
+        assertEquals(HubResult.Ok(Unit), client.removeItem(3, 7))
+        val sent = server.takeRequest()
+        assertEquals("DELETE /api/device/lists/3/items/7", "${sent.method} ${sent.path}")
+        assertEquals("Bearer hub_token", sent.getHeader("Authorization"))
     }
 
     @Test

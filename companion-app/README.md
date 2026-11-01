@@ -7,7 +7,8 @@ works out what you meant ([`docs/voice.md`](../docs/voice.md)), and a one-line a
 
 It also knows where your shops are. Tag a list's shop while standing in it, and after a minute
 there the phone asks *"Are you at M&S – Bangor?"* — tap **Yes** and the list appears in the
-notification, even with no signal inside ([Shops](#shops)).
+notification, even with no signal inside. Walk out with things still on it and it asks what you
+got, with **Got it** for each ([Shops](#shops)).
 
 Everything below is a single command, run from the repo root in **Git Bash or WSL2**. Each
 reads its settings from environment variables, and falls back to the repo-root `.env` for any
@@ -21,6 +22,7 @@ that aren't set — so the usual way is to put them in `.env` once.
 | `npm run companion:install` | Builds the signed APK and installs it on the phone (also updates it) |
 | `npm run companion:pair` | Creates a device token on the hub and sends it to the app; tap **Pair** on the phone |
 | `npm run companion:arrive -- "<list>"` | Fakes the phone's GPS into that list's shop, to try *"Are you at …?"* at home |
+| `npm run companion:leave -- "<list>"` | Fakes it out of that shop again, to try the leave reminder |
 | `npm run companion:secrets` | Gives GitHub Actions the signing key, so releases attach the APK |
 | `npm run companion:build` | Just builds the APK into `companion-app/dist/` |
 | `npm run companion:test` | Unit and Robolectric tests (the real screens and widget code, on the JVM), then the release build's lint checks |
@@ -28,9 +30,9 @@ that aren't set — so the usual way is to put them in `.env` once.
 
 The first command to run builds the build container (JDK, Android SDK, Gradle; a couple of GB,
 once). Nothing Android is installed on your machine. Two host tools are needed: **Docker**, and
-**adb** (Android platform-tools) on the PATH for `install`, `pair` and `arrive` — a container
-can't reach the phone over USB on Docker Desktop. `arrive` also uses **node**, which the repo
-needs anyway.
+**adb** (Android platform-tools) on the PATH for `install`, `pair`, `arrive` and `leave` — a
+container can't reach the phone over USB on Docker Desktop. `arrive` and `leave` also use
+**node**, which the repo needs anyway.
 
 ## Settings
 
@@ -40,12 +42,12 @@ needs anyway.
 | `COMPANION_KEYSTORE` | keygen, install, build, secrets | `~/.hub-companion/release.jks` |
 | `COMPANION_KEY_ALIAS` | keygen, install, build, secrets | `hub-companion` |
 | `COMPANION_KEY_PASSWORD` | keygen, install, build, secrets | same as `COMPANION_KEYSTORE_PASSWORD` |
-| `COMPANION_HUB_URL` | pair, arrive | — required: the hub address **the phone** will use, e.g. `http://192.168.1.4:3000` |
-| `COMPANION_HUB_PASSWORD` | pair, arrive | — only if the hub has auth on |
+| `COMPANION_HUB_URL` | pair, arrive, leave | — required: the hub address **the phone** will use, e.g. `http://192.168.1.4:3000` |
+| `COMPANION_HUB_PASSWORD` | pair, arrive, leave | — only if the hub has auth on |
 | `COMPANION_DEVICE_NAME` | pair | the phone's model, e.g. *Pixel 6* |
-| `COMPANION_ADB_DEVICE` | install, pair, arrive | — the `ip:port` from Wireless debugging, if not using USB |
+| `COMPANION_ADB_DEVICE` | install, pair, arrive, leave | — the `ip:port` from Wireless debugging, if not using USB |
 | `COMPANION_ADB_PAIR`, `COMPANION_ADB_PAIR_CODE` | install | — first-time wireless pairing only (see below) |
-| `COMPANION_ARRIVE_SECONDS` | arrive | `120` — how long the fake position stays in the shop |
+| `COMPANION_ARRIVE_SECONDS` | arrive, leave | `120` for arrive, `60` for leave — how long the fake position is kept up |
 
 A typical `.env` (it's gitignored):
 
@@ -118,6 +120,22 @@ LAN address — Settings → Apps → Firefox/Chrome → Permissions. The https 
 It stays quiet for an empty list, and asks at most **once an hour** per shop, so GPS wobbling at
 the edge can't nag.
 
+**Leaving** a shop you said **Yes** to, with things still on its list, brings *"You left …"*:
+
+- **Five things or fewer:** one notification each, grouped under that heading. **Got it** takes
+  the item off the list on the hub; **Still need** just dismisses it.
+- **More than five:** one notification. Tapping it opens a screen with a tick per item and
+  **Done**: what's ticked comes off, the rest stays.
+
+There's no reminder after **No**, or if the question was never answered, or once the visit
+has already reminded (walking back past the door doesn't repeat it), or if you left more than
+three hours after arriving. Anything ticked off in the hub's web app while you were in the shop
+isn't listed, if the phone can reach the hub as you leave.
+
+**Got it works with no signal.** The item comes off the app's copy at once, and the hub is told
+as soon as it can be reached: Android retries in the background, and every refresh sends
+anything still waiting first. Until the hub is on the internet that means once you're home.
+
 - **No signal in the shop is fine.** The app keeps a copy of every list, refreshed each time it
   can reach the hub (opening Shops, an arrival, a Yes); the notification falls back to it.
 - **Permissions:** precise location **all the time** (to notice a shop with the app closed) and
@@ -128,7 +146,7 @@ the edge can't nag.
 - A shop tagged or changed in the hub's web app reaches the phone the next time it refreshes —
   open Shops once to be sure.
 
-### Trying it at home: `npm run companion:arrive`
+### Trying it at home: `npm run companion:arrive` and `companion:leave`
 
 ```bash
 npm run companion:arrive -- "Sainsbury's"
@@ -147,6 +165,14 @@ already has (the phone lying still on a desk doesn't help). Real movement doesn'
 problem, so a genuine arrival is tested by walking into a real shop — that works today, even
 before the hub is reachable over the internet, since the question and list come from the
 app's saved copy.
+
+```bash
+npm run companion:leave -- "Sainsbury's"
+```
+
+Does the same from 500 m beyond the shop's edge, so the re-added shop reports the phone has
+left. Arrive first and tap **Yes**; *"You left …"* should then appear within a minute. Nothing
+appears after a **No**, or if this visit has already reminded.
 
 ## Checking it on the phone
 
@@ -167,7 +193,14 @@ Worth a run after installing and after updates:
 - [ ] **Yes** shows the items; tapping them opens the list in the hub.
 - [ ] Another `companion:arrive` within the hour shows nothing.
 - [ ] After a restart of the phone, an arrival (once the hour's up) still asks.
+- [ ] `companion:leave` after a **Yes**: *"You left …"* lists each item with **Got it** and
+      **Still need**; Got it takes the item off the hub's list.
+- [ ] With more than five items, the one notification opens the tick screen, and **Done** takes
+      off just what was ticked.
+- [ ] With Wi-Fi and data off, Got it still clears the item; it goes from the hub's list once
+      the phone is back on the home Wi-Fi.
 - [ ] In a real shop, after a minute: the question appears.
+- [ ] Walking out of a real shop after a **Yes**: the leave reminder appears.
 
 ## Releases
 
