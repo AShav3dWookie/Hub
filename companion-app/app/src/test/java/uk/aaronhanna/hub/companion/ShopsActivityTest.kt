@@ -3,6 +3,8 @@ package uk.aaronhanna.hub.companion
 import android.Manifest
 import android.app.AlertDialog
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -199,6 +201,13 @@ class ShopsActivityTest {
         screen.button("tag-3").performClick()
         assertTrue(Manifest.permission.ACCESS_FINE_LOCATION in shadowOf(screen).lastRequestedPermission.requestedPermissions)
         assertNull(server.takeRequest(200, TimeUnit.MILLISECONDS))
+    }
+
+    /** npm run companion:arrive opens the screen this way, so the phone watches before it fakes GPS. */
+    @Test
+    fun `hubcompanion shops link opens this screen`() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("hubcompanion://shops")).setPackage(app.packageName)
+        assertEquals(ShopsActivity::class.java.name, app.packageManager.resolveActivity(intent, 0)?.activityInfo?.name)
     }
 
     @Test

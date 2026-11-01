@@ -76,13 +76,15 @@ time it falls back.
 
 ## Security
 
-- A token works for `/api/voice` **only**. It can't read your lists, and it can't create or remove
-  devices; managing devices needs a signed-in browser.
+- A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
+  it reads the shopping lists (names, items, shop locations) and tags or clears a list's shop.
+  A token can't reach anything else — logs, people, photos, settings — and it can't create or
+  remove devices; managing devices needs a signed-in browser.
 - A wrong or revoked token gets a `401`, even on the LAN with auth off. A device set up wrong
   fails loudly instead of appearing to work.
 - **Over the WAN**, Authelia sits in front of the app and a phone widget can't log in to it. When
-  the companion app needs to reach `/api/voice` from outside, add an Authelia bypass for that one
-  path, and make sure `AUTH_ENABLED=true` (the production default). The app's own token check is
+  the companion app needs to reach the hub from outside, add an Authelia bypass for those two
+  paths (`/api/voice` and `/api/device`), and make sure `AUTH_ENABLED=true` (the production default). The app's own token check is
   then what protects it. With auth off, a request with *no* token would also be let through.
 
 ## Checking it works: `npm run voice:check`

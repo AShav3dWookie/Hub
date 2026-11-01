@@ -82,6 +82,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     // Geofencing and a one-off current location: battery-friendly in a way raw GPS isn't.
     implementation("com.google.android.gms:play-services-location:21.4.0")
+    // Play Services brings an old androidx.fragment, whose activity-result handling is broken
+    // (lint's InvalidFragmentVersionForActivityResult); this lifts it to a current one.
+    implementation("androidx.fragment:fragment:1.9.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")

@@ -57,11 +57,22 @@
             android:taskAffinity=""
             android:theme="@style/Theme.Hub.Invisible" />
 
+        <!--
+          hubcompanion://shops opens it — what npm run companion:arrive does, so the phone is
+          watching the shops before it fakes being in one. Harmless for anything else to open:
+          the screen only re-reads the lists.
+        -->
         <activity
             android:name=".ShopsActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="Shops"
-            android:parentActivityName=".SettingsActivity" />
+            android:parentActivityName=".SettingsActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="hubcompanion" android:host="shops" />
+            </intent-filter>
+        </activity>
 
         <!-- Not exported: only Play Services (through the app's own PendingIntent) sends these. -->
         <receiver
