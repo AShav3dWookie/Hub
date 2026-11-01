@@ -3,6 +3,28 @@
 Notable changes to Logger, newest first. Versions are the tags `npm run release` pushes, each of
 which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/deployment.md).
 
+## [1.3.0] — 2026-11-01
+
+### Added
+
+- **Shopping lists.** A main *Shopping* list plus one per shop, under a new Shopping tab. They work
+  offline like everything else and sync between devices.
+- **A second row in the tab bar.** Swipe up on the bar to reach Shopping, without squeezing a sixth
+  tab into the first row.
+- **Voice entry** ([docs/voice.md](docs/voice.md)). "Add milk and eggs to Sainsbury's" puts the
+  items on the right list. Claude Haiku reads the sentence when `ANTHROPIC_API_KEY` is set, and a
+  built-in rules parser takes over if it isn't or the call fails, so a command is never lost.
+- **Device tokens.** Settings → Devices creates a token for a phone, which can add by voice and
+  read and tick off shopping lists, and nothing else. Tokens can be revoked there too.
+- **The Android companion app** ([companion-app/README.md](companion-app/README.md)). A home-screen
+  mic widget for voice entry. It also has shop reminders:
+  - Tag a list to a shop from the phone. Arriving there asks *Are you at …?*, and Yes shows the
+    list, even with no signal.
+  - Leaving a shop you said Yes to lists what's still on it, each item with *Got it* and *Still
+    need*. Got it ticks the item off the hub, and waits for a connection if there isn't one.
+- **Reaching it over the WAN.** The phone's two paths can skip Authelia while the rest of the site
+  stays behind it. The nginx block is in [docs/voice.md](docs/voice.md).
+
 ## [1.2.0] — 2026-09-19
 
 ### Fixed
