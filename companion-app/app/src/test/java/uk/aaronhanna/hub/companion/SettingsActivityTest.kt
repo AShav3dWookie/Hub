@@ -20,16 +20,20 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlertDialog
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [ShadowPermissionFlags::class])
 class SettingsActivityTest {
     private lateinit var server: MockWebServer
 
     @Before
     fun start() {
         server = MockWebServer().apply { start() }
+        grantLocalNetwork()
     }
 
     @After
@@ -142,6 +146,27 @@ class SettingsActivityTest {
         assertEquals(Pairing("http://192.168.1.20:8090", token), store.load())
     }
 
+    /** Seen on a Pixel 6: Android rebuilds the task from the link that opened it after the app is killed. */
+    @Test
+    fun `reopening from the same pairing link doesn't ask again, whichever way it was answered`() {
+        server.enqueue(MockResponse().setBody("""{"device":"Pixel 6","parser":"model"}"""))
+        val paired = pairLink(serverUrl, token)
+        openWithLink(paired)
+        (ShadowAlertDialog.getLatestAlertDialog() as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        ShadowAlertDialog.reset()
+        openWithLink(paired)
+        assertNull("the link it paired with", ShadowAlertDialog.getLatestAlertDialog())
+
+        val refused = pairLink("http://evil.example", "hub_" + "e".repeat(43))
+        openWithLink(refused)
+        (ShadowAlertDialog.getLatestAlertDialog() as AlertDialog).getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        ShadowAlertDialog.reset()
+        openWithLink(refused)
+        assertNull("the link it was told to ignore", ShadowAlertDialog.getLatestAlertDialog())
+    }
+
     @Test
     fun `an incomplete pairing link says so instead of asking`() {
         val screen = openWithLink("hubcompanion://pair?url=${Uri.encode(serverUrl)}&token=nope")
@@ -158,5 +183,34 @@ class SettingsActivityTest {
         screen.tap(R.id.test_connection)
 
         waitUntil { screen.text(R.id.result) == HubError.BadToken.message }
+    }
+
+    /** Android 17 blocks a LAN hub without ACCESS_LOCAL_NETWORK — found on a real Pixel 6. */
+    @Test
+    fun `asks for local network access before testing a hub on the home network`() {
+        withholdLocalNetwork()
+        server.enqueue(MockResponse().setBody("""{"device":"Pixel 6","parser":"model"}"""))
+        val screen = open()
+        screen.field(R.id.hub_url).setText(serverUrl)
+        screen.field(R.id.token).setText(token)
+        screen.tap(R.id.test_connection)
+
+        assertTrue(askedForLocalNetwork(screen))
+        assertNull("nothing is sent before it's allowed", server.takeRequest(200, TimeUnit.MILLISECONDS))
+
+        answerPermissionPrompt(screen, allow = true)
+        waitUntil { screen.text(R.id.result).startsWith("Connected") }
+    }
+
+    @Test
+    fun `says why it can't connect when local network access is refused`() {
+        withholdLocalNetwork()
+        val screen = open()
+        screen.field(R.id.hub_url).setText(serverUrl)
+        screen.field(R.id.token).setText(token)
+        screen.tap(R.id.test_connection)
+
+        answerPermissionPrompt(screen, allow = false)
+        assertEquals(LocalNetwork.DENIED_MESSAGE, screen.text(R.id.result))
     }
 }

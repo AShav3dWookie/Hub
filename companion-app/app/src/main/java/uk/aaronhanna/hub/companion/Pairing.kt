@@ -54,6 +54,12 @@ object PairingRules {
         return uri.scheme == "http" && !isLocalHost(uri.host ?: return false)
     }
 
+    /** Whether the hub is on the home network — which Android 17 gates behind a permission. */
+    fun isLocalNetwork(url: String): Boolean {
+        val host = runCatching { URI(url).host }.getOrNull() ?: return false
+        return isLocalHost(host)
+    }
+
     private fun isLocalHost(host: String): Boolean {
         val h = host.lowercase()
         if (h == "localhost" || h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home.arpa")) return true
@@ -78,8 +84,21 @@ class PairingStore(context: Context) {
         prefs.edit().putString(KEY_URL, pairing.hubUrl).putString(KEY_TOKEN, pairing.token).apply()
     }
 
+    /**
+     * Whether a pairing link has already been answered. Android rebuilds a task from its original
+     * intent after the app is killed (an update, a reboot, Recents), so the link that opened the
+     * app would otherwise ask "Pair with this hub?" again every time — seen on a Pixel 6.
+     */
+    fun linkAlreadyHandled(token: String): Boolean =
+        prefs.getString(KEY_HANDLED_LINK, null) == token || load()?.token == token
+
+    fun markLinkHandled(token: String) {
+        prefs.edit().putString(KEY_HANDLED_LINK, token).apply()
+    }
+
     private companion object {
         const val KEY_URL = "hub_url"
         const val KEY_TOKEN = "token"
+        const val KEY_HANDLED_LINK = "handled_link_token"
     }
 }

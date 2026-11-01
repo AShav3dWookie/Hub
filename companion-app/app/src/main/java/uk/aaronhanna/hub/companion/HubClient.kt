@@ -1,5 +1,6 @@
 package uk.aaronhanna.hub.companion
 
+import android.util.Log
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
@@ -61,7 +62,7 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
         val connection = try {
             URL(pairing.hubUrl + path).openConnection() as HttpURLConnection
         } catch (e: IOException) {
-            return HubResult.Failed(HubError.Unreachable)
+            return unreachable(path, e)
         }
         return try {
             connection.requestMethod = method
@@ -85,13 +86,26 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
                 else -> HubResult.Ok(read(JSONObject(text)))
             }
         } catch (e: IOException) {
-            HubResult.Failed(HubError.Unreachable)
+            unreachable(path, e)
         } catch (e: JSONException) {
             // A 200 that isn't the hub's JSON: a router login page, a different app on that port.
             HubResult.Failed(HubError.NotAHub)
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * "Couldn't reach the hub" covers a lot — wrong address, no Wi-Fi, a firewall, Android's
+     * local-network rule — so the real exception goes to logcat (`adb logcat -s HubClient`).
+     */
+    private fun unreachable(path: String, e: IOException): HubResult.Failed {
+        Log.w(TAG, "${pairing.hubUrl}$path: ${e.javaClass.simpleName}: ${e.message}")
+        return HubResult.Failed(HubError.Unreachable)
+    }
+
+    private companion object {
+        const val TAG = "HubClient"
     }
 
     /** The hub's `{ "error": "…" }`, if that's what came back. */

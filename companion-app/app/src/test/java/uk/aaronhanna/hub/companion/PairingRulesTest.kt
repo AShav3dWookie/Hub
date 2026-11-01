@@ -47,4 +47,13 @@ class PairingRulesTest {
             assertFalse(lan, PairingRules.isInsecureRemote(lan))
         }
     }
+
+    @Test
+    fun `knows which hubs are on the home network, where Android 17 wants a permission`() {
+        for (lan in listOf("http://192.168.1.4:3000", "http://10.0.0.5", "http://nas.local", "http://localhost:3000")) {
+            assertTrue(lan, PairingRules.isLocalNetwork(lan))
+        }
+        assertFalse(PairingRules.isLocalNetwork("https://hub.aaronhanna.uk"))
+        assertFalse(PairingRules.isLocalNetwork("http://81.2.3.4:8090"))
+    }
 }

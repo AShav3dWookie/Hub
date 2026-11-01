@@ -39,12 +39,31 @@ class VoiceActivity : ComponentActivity() {
         // Only on the first launch: after a rotation the speech prompt is already up.
         if (savedInstanceState != null) return
 
-        if (PairingStore(this).load() == null) {
+        val pairing = PairingStore(this).load()
+        if (pairing == null) {
             say("Pair Hub with your hub first.")
             startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             finish()
             return
         }
+        // Normally granted at pairing; ask here too rather than fail after you've spoken.
+        if (LocalNetwork.needsPermission(this, pairing.hubUrl)) {
+            askLocalNetwork.launch(LocalNetwork.PERMISSION)
+        } else {
+            startListening()
+        }
+    }
+
+    private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            startListening()
+        } else {
+            say(LocalNetwork.DENIED_MESSAGE)
+            finish()
+        }
+    }
+
+    private fun startListening() {
         try {
             listen.launch(
                 Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)

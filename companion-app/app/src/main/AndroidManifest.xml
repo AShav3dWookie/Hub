@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 17+: needed to reach a hub at a LAN address. Asked for at pairing; see LocalNetwork. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <!-- Lets the app see that a speech recogniser exists (package visibility, Android 11+). -->
     <queries>
