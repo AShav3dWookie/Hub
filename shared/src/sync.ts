@@ -106,6 +106,10 @@ export interface ListSyncDTO extends SyncMeta {
   name: string;
   normalizedName: string;
   isDefault: boolean;
+  /** The shop's location, all three or all null — see ListLocation. */
+  latitude: number | null;
+  longitude: number | null;
+  radiusM: number | null;
   createdAt: string;
   updatedAt: string;
 }

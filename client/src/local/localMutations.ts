@@ -752,6 +752,9 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           name,
           normalizedName: normalizeTitle(name),
           isDefault: false,
+          latitude: null,
+          longitude: null,
+          radiusM: null,
           createdAt: now,
           updatedAt: now,
           _localDirty: true,
@@ -767,7 +770,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
       }
 
       case "list.update": {
-        const { listId, isDefault } = m.input;
+        const { listId, isDefault, location } = m.input;
         const name = m.input.name?.trim();
         const row = await lists.get(listId);
         if (row && name != null) await assertListNameFree(row.kind, name, listId);
@@ -786,19 +789,27 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             }
             row.isDefault = true;
           }
+          if (location !== undefined) {
+            Object.assign(row, {
+              latitude: location?.latitude ?? null,
+              longitude: location?.longitude ?? null,
+              radiusM: location?.radiusM ?? null,
+            });
+          }
           Object.assign(row, { updatedAt: now, _localDirty: true });
           await lists.put(row);
         }
 
-        // A rename of a list the server hasn't seen folds into its create. Making it main
-        // can't — a create is never main — so that still goes as an update.
+        // A rename of a list the server hasn't seen folds into its create. Making it main or
+        // moving its location can't — a create carries neither — so those still go as an update.
         const create = listId < 0 ? await pendingCreateFor(listId) : undefined;
         if (create && name != null) await collapseIntoCreate(create, { name });
-        if (create && !isDefault) return row ?? { id: listId };
+        if (create && !isDefault && location === undefined) return row ?? { id: listId };
 
         const payload: Record<string, unknown> = { listId };
         if (name != null && !create) payload.name = name;
         if (isDefault) payload.isDefault = true;
+        if (location !== undefined) payload.location = location;
         const prior = (await pending()).find(
           (r) => r.type === "list.update" && (r.payload as { listId: number }).listId === listId,
         );

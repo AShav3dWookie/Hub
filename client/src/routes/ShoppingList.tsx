@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X } from "lucide-react";
-import { LIST_NAME_MAX_LENGTH, type ListDTO } from "@logger/shared";
+import { MapPin, X } from "lucide-react";
+import {
+  DEFAULT_SHOP_RADIUS_M,
+  LIST_NAME_MAX_LENGTH,
+  MAX_SHOP_RADIUS_M,
+  MIN_SHOP_RADIUS_M,
+  type ListDTO,
+} from "@logger/shared";
 import { useDeleteList, useDeleteListItem, useList, useUpdateList } from "../api/hooks.js";
 import { LocalValidationError } from "../local/localMutations.js";
 import { useEditableRoute } from "../components/EditModeProvider.js";
@@ -17,6 +23,107 @@ import {
   SECONDARY_BUTTON_SM_CLASS,
 } from "../components/ui.js";
 import { MainBadge } from "./Shopping.js";
+
+/**
+ * The shop's geofence. It is tagged from the companion app while standing in the shop (a web
+ * page can't read your location over the LAN's plain http); here it can be widened or cleared.
+ */
+function ShopLocationEditor({ list }: { list: ListDTO }) {
+  const location = list.location;
+  const [radius, setRadius] = useState(String(location?.radiusM ?? DEFAULT_SHOP_RADIUS_M));
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const updateList = useUpdateList(list.id);
+  const { showToast } = useToast();
+
+  if (!location) {
+    return (
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Not tagged to a shop. In the Hub companion app, open Shops and tap "Tag with where I am
+        now" while you're there, and your phone will offer this list when you arrive.
+      </p>
+    );
+  }
+
+  const radiusM = Number(radius);
+  const radiusValid =
+    Number.isInteger(radiusM) && radiusM >= MIN_SHOP_RADIUS_M && radiusM <= MAX_SHOP_RADIUS_M;
+
+  async function handleRadius(e: FormEvent) {
+    e.preventDefault();
+    if (!location || !radiusValid || radiusM === location.radiusM) return;
+    try {
+      await updateList.mutateAsync({ location: { ...location, radiusM } });
+      showToast(`Shop radius set to ${radiusM} m`);
+    } catch {
+      showToast("Could not change the radius");
+    }
+  }
+
+  async function handleClear() {
+    try {
+      await updateList.mutateAsync({ location: null });
+      showToast("Shop location cleared");
+    } catch {
+      setConfirmingClear(false);
+      showToast("Could not clear the location");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <form onSubmit={handleRadius} className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-slate-600 dark:text-slate-300">Shop radius (metres)</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={MIN_SHOP_RADIUS_M}
+            max={MAX_SHOP_RADIUS_M}
+            step={5}
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            className={`w-32 ${FIELD_CLASS}`}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={!radiusValid || radiusM === location.radiusM}
+          className={PRIMARY_BUTTON_SM_CLASS}
+        >
+          Save radius
+        </button>
+      </form>
+      {!radiusValid && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          Between {MIN_SHOP_RADIUS_M} and {MAX_SHOP_RADIUS_M} metres.
+        </p>
+      )}
+      {confirmingClear ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-slate-600 dark:text-slate-300">Stop watching for this shop?</span>
+          <button type="button" onClick={handleClear} className={DANGER_BUTTON_CLASS}>
+            Clear location
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingClear(false)}
+            className={SECONDARY_BUTTON_SM_CLASS}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmingClear(true)}
+          className={`self-start ${CARD_ACTION_DANGER_CLASS}`}
+        >
+          Clear location
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** Rename, make main and delete — the header pencil's controls. */
 function ListEditor({ list }: { list: ListDTO }) {
@@ -93,6 +200,8 @@ function ListEditor({ list }: { list: ListDTO }) {
         </p>
       )}
 
+      <ShopLocationEditor list={list} />
+
       {list.isDefault ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
           This is the main list. Voice adds go here when no list is named, and it can't be
@@ -159,6 +268,12 @@ export function ShoppingList() {
         <span className="break-words">{list.name}</span>
         {list.isDefault && <MainBadge />}
       </h1>
+      {list.location && (
+        <p className="-mt-3 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          <MapPin aria-hidden className="h-4 w-4" />
+          Tagged to a shop · {list.location.radiusM} m
+        </p>
+      )}
 
       {/* Mounted only while editing, so each visit to edit mode starts from the current name. */}
       {editing && <ListEditor list={list} />}

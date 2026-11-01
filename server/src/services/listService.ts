@@ -9,6 +9,7 @@ import type {
   ListDTO,
   ListItemDTO,
   ListKind,
+  ListLocation,
   ListSummaryDTO,
   UpdateListRequest,
 } from "@logger/shared";
@@ -90,6 +91,11 @@ export function findOrCreateList(db: AppDb, input: CreateListRequest): ListSumma
   return existing ? assembleList(existing, []) : createList(db, input);
 }
 
+/** Tag a shop's location (or clear it, with null) — what the companion app does in the shop. */
+export function setListLocation(db: AppDb, id: number, location: ListLocation | null): ListDTO {
+  return updateList(db, id, { location });
+}
+
 /**
  * Rename and/or make main. Making a list main demotes the current one in the same transaction,
  * so the one-default-per-kind index never sees two.
@@ -114,6 +120,13 @@ export function updateList(db: AppDb, id: number, input: UpdateListRequest): Lis
         .where(and(eq(lists.kind, existing.kind), eq(lists.isDefault, true)))
         .run();
       changes.isDefault = true;
+    }
+
+    // `undefined` leaves it alone; `null` clears it.
+    if (input.location !== undefined) {
+      changes.latitude = input.location?.latitude ?? null;
+      changes.longitude = input.location?.longitude ?? null;
+      changes.radiusM = input.location?.radiusM ?? null;
     }
 
     db.update(lists).set(changes).where(eq(lists.id, id)).run();

@@ -40,6 +40,9 @@ export interface FeedRow {
   isDefault?: boolean;
   listId?: number;
   text?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusM?: number | null;
 }
 
 /**

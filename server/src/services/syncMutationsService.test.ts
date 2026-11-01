@@ -401,6 +401,19 @@ describe("applyMutations", () => {
       expect(getList(ctx.db, tesco.id)).toMatchObject({ name: "Tesco Bangor", isDefault: true });
     });
 
+    it("changes a shop's radius or clears its tag from an offline edit", () => {
+      setup();
+      const tesco = createList(ctx.db, { name: "Tesco" });
+      const shop = { latitude: 53.2274, longitude: -4.1293, radiusM: 75 };
+      run([env({ type: "list.update", payload: { listId: tesco.id, location: shop } })]);
+      run([env({ type: "list.update", payload: { listId: tesco.id, location: { ...shop, radiusM: 120 } } })]);
+      expect(getList(ctx.db, tesco.id).location).toEqual({ ...shop, radiusM: 120 });
+
+      const [cleared] = run([env({ type: "list.update", payload: { listId: tesco.id, location: null } })]);
+      expect(cleared.status).toBe("applied");
+      expect(getList(ctx.db, tesco.id).location).toBeNull();
+    });
+
     it("reports deleting the main list as an error", () => {
       setup();
       const [result] = run([env({ type: "list.delete", payload: { listId: mainId() } })]);

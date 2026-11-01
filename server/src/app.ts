@@ -19,6 +19,7 @@ import { createSyncRouter } from "./routes/sync.js";
 import { createListsRouter } from "./routes/lists.js";
 import { createDeviceTokensRouter } from "./routes/deviceTokens.js";
 import { createVoiceRouter } from "./routes/voice.js";
+import { createDeviceRouter } from "./routes/device.js";
 import { requireDeviceOrSession } from "./middleware/deviceAuth.js";
 import type { VoiceParser } from "./lib/voiceModel.js";
 import { createAuthRouter } from "./routes/auth.js";
@@ -91,6 +92,8 @@ export function createApp(
   app.use("/api/device-tokens", requireAuth, createDeviceTokensRouter(db));
   // A device token or a session: the companion app's widget calls this, not a browser.
   app.use("/api/voice", requireDeviceOrSession(db), createVoiceRouter(db, voiceParser));
+  // The companion app's list cache and shop tagging (#5). Narrow on purpose — see routes/device.ts.
+  app.use("/api/device", requireDeviceOrSession(db), createDeviceRouter(db));
   app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
   app.use("/api/notifications", requireAuth, createNotificationsRouter(db, push));
   app.use("/api/photos", requireAuth, express.static(photosDir));

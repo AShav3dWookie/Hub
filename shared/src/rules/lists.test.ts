@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { assembleList, summariseLists, type ListRow } from "./lists.js";
+import { assembleList, locationOf, summariseLists, type ListRow } from "./lists.js";
 
 const list = (id: number, name: string, isDefault = false): ListRow => ({
   id,
   kind: "shopping",
   name,
   isDefault,
+  latitude: null,
+  longitude: null,
+  radiusM: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 });
@@ -51,5 +54,28 @@ describe("assembleList", () => {
       text: "Eggs",
       createdAt: "2026-10-01T00:00:00.000Z",
     });
+  });
+});
+
+describe("locationOf", () => {
+  it("is the shop's location when all three columns are set", () => {
+    expect(locationOf({ latitude: 53.2274, longitude: -4.1293, radiusM: 75 })).toEqual({
+      latitude: 53.2274,
+      longitude: -4.1293,
+      radiusM: 75,
+    });
+  });
+
+  it("is null for an untagged list, or a half-set one", () => {
+    expect(locationOf({ latitude: null, longitude: null, radiusM: null })).toBeNull();
+    expect(locationOf({ latitude: 53.2, longitude: null, radiusM: 75 })).toBeNull();
+  });
+
+  it("puts it on the lists screen's rows", () => {
+    const tagged = { ...list(1, "Tesco", true), latitude: 53.2, longitude: -4.1, radiusM: 100 };
+    expect(summariseLists([tagged, list(2, "Aldi")], [], "shopping").map((l) => l.location)).toEqual([
+      { latitude: 53.2, longitude: -4.1, radiusM: 100 },
+      null,
+    ]);
   });
 });

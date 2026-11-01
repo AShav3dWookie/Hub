@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { makeList, makeListItem, resetFixtureCounters, seedLocalDb } from "../test/seedLocalDb.js";
+import { pendingOutbox } from "../local/outbox.js";
 import { Shopping } from "./Shopping.js";
 import { ShoppingList } from "./ShoppingList.js";
 
@@ -132,6 +133,68 @@ describe("A shopping list's page", () => {
 
       expect(await screen.findByRole("heading", { name: "Shopping" })).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: /Tesco/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("a shop's location", () => {
+    let shopId: number;
+    beforeEach(async () => {
+      const shop = makeList({ name: "Sainsbury's", latitude: 53.2274, longitude: -4.1293, radiusM: 75 });
+      shopId = shop.id;
+      await seedLocalDb({ lists: [shop] });
+    });
+
+    it("shows that a list is tagged to a shop, and how wide its geofence is", async () => {
+      render(shopId);
+      expect(await screen.findByText("Tagged to a shop · 75 m")).toBeInTheDocument();
+    });
+
+    it("shows nothing about location on an untagged list", async () => {
+      render(tescoId);
+      await screen.findByText("Eggs");
+      expect(screen.queryByText(/Tagged to a shop/)).not.toBeInTheDocument();
+    });
+
+    it("explains how to tag an untagged list, in edit mode", async () => {
+      render(tescoId, true);
+      expect(await screen.findByText(/Tag with where I am now/)).toBeInTheDocument();
+    });
+
+    it("widens the geofence, and queues it for the hub", async () => {
+      const user = userEvent.setup();
+      render(shopId, true);
+      const field = await screen.findByRole("spinbutton", { name: "Shop radius (metres)" });
+      await user.clear(field);
+      await user.type(field, "120");
+      await user.click(screen.getByRole("button", { name: "Save radius" }));
+
+      expect(await screen.findByText("Tagged to a shop · 120 m")).toBeInTheDocument();
+      expect((await pendingOutbox())[0]).toMatchObject({
+        type: "list.update",
+        payload: { listId: shopId, location: { latitude: 53.2274, longitude: -4.1293, radiusM: 120 } },
+      });
+    });
+
+    it("won't save a radius outside what works", async () => {
+      const user = userEvent.setup();
+      render(shopId, true);
+      const field = await screen.findByRole("spinbutton", { name: "Shop radius (metres)" });
+      await user.clear(field);
+      await user.type(field, "10");
+
+      expect(screen.getByRole("alert")).toHaveTextContent("Between 25 and 1000 metres");
+      expect(screen.getByRole("button", { name: "Save radius" })).toBeDisabled();
+    });
+
+    it("clears the tag after confirming", async () => {
+      const user = userEvent.setup();
+      render(shopId, true);
+      await user.click(await screen.findByRole("button", { name: "Clear location" }));
+      expect(screen.getByText("Stop watching for this shop?")).toBeInTheDocument();
+      await user.click(screen.getAllByRole("button", { name: "Clear location" })[0]);
+
+      await vi.waitFor(() => expect(screen.queryByText(/Tagged to a shop/)).not.toBeInTheDocument());
+      expect((await pendingOutbox())[0]).toMatchObject({ type: "list.update", payload: { location: null } });
     });
   });
 });

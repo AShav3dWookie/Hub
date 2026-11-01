@@ -19,7 +19,7 @@ import { createLog } from "../services/logService.js";
 import { findOrCreateEntity } from "../services/entityService.js";
 import { createEntityNote } from "../services/entityNotesService.js";
 import { createLogPhotos } from "../services/logPhotosService.js";
-import { addListItem, createList, listLists } from "../services/listService.js";
+import { addListItem, createList, listLists, setListLocation } from "../services/listService.js";
 import type { AppDb } from "../db/client.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -187,6 +187,8 @@ const sainsburys = createList(db, { name: "Sainsbury's – Bangor" });
 for (const text of ["Eggs", "Semi-skimmed milk", "Sourdough loaf", "Bananas", "Cheddar"]) {
   addListItem(db, sainsburys.id, { text });
 }
+// Tagged, as if from the companion app in the shop, so the location controls have something to show.
+setListLocation(db, sainsburys.id, { latitude: 53.2161, longitude: -4.1529, radiusM: 75 });
 createList(db, { name: "M&S – Bangor" });
 
 // --- Photos (on a movie and an eating_out log — the two hasPeople categories) ---

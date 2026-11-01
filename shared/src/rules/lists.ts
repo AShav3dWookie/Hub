@@ -3,7 +3,7 @@
  * query layer. Both load the raw list and item rows their own way, then hand them here, so the
  * lists screen and a list's page can't come out in a different order on either side.
  */
-import type { ListDTO, ListItemDTO, ListKind, ListSummaryDTO } from "../lists.js";
+import type { ListDTO, ListItemDTO, ListKind, ListLocation, ListSummaryDTO } from "../lists.js";
 
 /** The stored fields of a list, as both the server row and the synced replica carry them. */
 export interface ListRow {
@@ -11,8 +11,17 @@ export interface ListRow {
   kind: ListKind;
   name: string;
   isDefault: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  radiusM: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The stored columns as a location, or null unless all three are set. */
+export function locationOf(row: Pick<ListRow, "latitude" | "longitude" | "radiusM">): ListLocation | null {
+  if (row.latitude == null || row.longitude == null || row.radiusM == null) return null;
+  return { latitude: row.latitude, longitude: row.longitude, radiusM: row.radiusM };
 }
 
 /** The main list first, then by name (case-insensitive), then id. */
@@ -40,6 +49,7 @@ function toSummary(list: ListRow, itemCount: number): ListSummaryDTO {
     name: list.name,
     isDefault: list.isDefault,
     itemCount,
+    location: locationOf(list),
     createdAt: list.createdAt,
     updatedAt: list.updatedAt,
   };
