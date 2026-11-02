@@ -3,6 +3,7 @@ import { AppError } from "../lib/errors.js";
 import { addListItem, getList, listLists } from "../services/listService.js";
 import { LIST_ITEM_MAX_LENGTH, normalizeTitle, type AddToListReply } from "@logger/shared";
 import type { VoiceAction } from "./actions.js";
+import { joinNames, tidy } from "./text.js";
 
 const input = z.object({
   listId: z
@@ -19,18 +20,6 @@ const input = z.object({
 /** `listId` null means no list was named (or none matched) — the main list then. */
 export type AddToListInput = z.output<typeof input>;
 
-/** "eggs", "eggs and milk", "eggs, milk and bread". */
-export function joinNames(names: string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-/** Speech recognisers often hand back all-lowercase; leave anything else ("iPhone") alone. */
-function tidy(item: string): string {
-  const text = item.trim().replace(/\s+/g, " ").slice(0, LIST_ITEM_MAX_LENGTH);
-  return text === text.toLowerCase() ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
 /**
  * Shopping. The server, not the parser, decides what is written: a list id it doesn't know
  * becomes the main list, and items already on the list are reported rather than re-added.
@@ -42,7 +31,7 @@ export const addToList: VoiceAction<typeof input> = {
   run(db, { listId, items: said }, { text, parsedBy }): AddToListReply {
     // One entry per distinct item, compared the way the list dedupes them.
     const seen = new Set<string>();
-    const items = said.map(tidy).filter((item) => {
+    const items = said.map((item) => tidy(item, LIST_ITEM_MAX_LENGTH)).filter((item) => {
       const key = normalizeTitle(item);
       if (!key || seen.has(key)) return false;
       seen.add(key);

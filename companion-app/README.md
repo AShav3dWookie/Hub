@@ -3,7 +3,9 @@
 A home-screen mic for the hub: tap it, say *"add eggs and milk to the M&S list"*, and the items
 land on that shopping list. The phone does the listening (Android's own speech prompt), the hub
 works out what you meant ([`docs/voice.md`](../docs/voice.md)), and a one-line answer pops up:
-*"Added Eggs and Milk to M&S – Bangor"*. Android 12 or later (a Pixel 6 is fine).
+*"Added Eggs and Milk to M&S – Bangor"*. Say *"dentist next Tuesday at 3"* and it goes in the
+diary instead, with a notification saying exactly what was saved: *"Added Dentist, Tue 10 Nov
+15:00"*. Android 12 or later (a Pixel 6 is fine).
 
 It also knows where your shops are. Tag a list's shop while standing in it, and after a minute
 there the phone asks *"Are you at M&S – Bangor?"* — tap **Yes** and the list appears in the
@@ -102,7 +104,9 @@ network, where the token would travel unencrypted.
 ## Adding the widget
 
 On the phone: long-press the home screen → **Widgets** → **Hub** → drag **Hub voice** out. Tap
-it, wait for *"What should I add?"*, and speak. The app needs no microphone permission — it's
+it, wait for *"What do you need?"*, and speak. Shopping answers with a toast; anything else
+answers with a notification (channel *Voice replies*) showing what was saved and what it heard,
+or a toast if notifications are off. The app needs no microphone permission — it's
 the phone's own speech prompt that listens.
 
 ## Shops

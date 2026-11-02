@@ -1,8 +1,8 @@
 # Voice commands
 
 Say "add eggs and milk to the M&S list" into the companion app's widget and the items land on
-that list. The phone turns speech into text; the server works out what the text means and adds
-the items.
+that list; say "dentist next Tuesday at 3" and it lands in the diary as an appointment. The phone
+turns speech into text; the server works out what the text means and saves it.
 
 ```
  phone ── "add eggs and milk to marks and spencer" ──▶ POST /api/voice
@@ -79,11 +79,35 @@ Rules ship with a release, like code.
 - **Items already on the list** aren't added twice; the reply says they were already there.
 - **Adding only, for now.** Removing by voice may come later as another action.
 
+### Appointments
+
+"Dentist next Tuesday at 3", "haircut on the 14th", "MOT tomorrow at half 9" become appointments
+(`create_log`), with the reply saying exactly what was saved: *Added Dentist, Tue 10 Nov 15:00*.
+
+- **Dates** are worked out where the hub is (`NOTIFY_TIMEZONE`). The model is given today and
+  the next five weeks day by day, and returns an exact date. "Friday" or "this Friday" is the
+  first one coming; **"next Friday" is Friday of next week**; "the 14th" is the next 14th.
+- **Times** without am/pm are daytime: "at 3" is 15:00, "at 9" is 09:00. No time said means an
+  untimed appointment.
+- An appointment in the past, a date that doesn't exist, or a time that isn't one is refused
+  (422) and nothing is saved.
+- New appointments auto-delete once they've passed, like the form's default, unless you say to
+  keep it.
+- Every loggable category goes through the same action, its fields taken from the category
+  configuration; the rules decide which ones voice is used for.
+
+### What it won't do
+
+Questions ("what's on tomorrow?"), removing or changing things, and anything else no action
+covers get a 422: *I can't do that by voice (answering questions).* Nothing is saved.
+
 ## The backup parser
 
 When the model can't be reached (no key, no internet, a 10-second timeout, or an answer that
-doesn't fit), a simple set of rules takes over so a command is never lost. It understands
-*"add X to Y"* and matches *Y* only when every word of it is in exactly one list's name. It
+doesn't fit), a simple set of rules takes over so a shopping command is never lost. It understands
+*"add X to Y"* and matches *Y* only when every word of it is in exactly one list's name. It only
+takes a command that starts "add" or "put", or ends by naming a list; anything else (an
+appointment) answers *I need the model for that* rather than landing on the shopping list. It
 **never splits items**, so "eggs and milk" lands as a single entry *Eggs and milk*. That's why
 its replies end in *(simple parser — check it)* and report `"parsedBy": "rules"`.
 
@@ -92,6 +116,8 @@ time it falls back.
 
 ## Security
 
+- **Create only.** Through `/api/voice` a token can add list items and diary entries (an
+  appointment, a log). It can't change or delete anything there.
 - A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
   it reads the shopping lists (names, items, shop locations), tags or clears a list's shop, and
   ticks items off when you tap Got it after leaving a shop.

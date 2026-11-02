@@ -15,7 +15,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * What the widget's mic opens: an invisible activity that asks Android's own speech prompt for
- * a command, sends the words to the hub, shows the hub's one-line answer and goes away.
+ * a command, sends the words to the hub, shows the hub's one-line answer and goes away. The
+ * answer is a toast for shopping and a notification for anything else ([VoiceReplies]).
  *
  * Using the system prompt means the app needs no microphone permission and no speech engine of
  * its own — the phone's (Google's, on a Pixel) does the listening.
@@ -68,7 +69,7 @@ class VoiceActivity : ComponentActivity() {
             listen.launch(
                 Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(RecognizerIntent.EXTRA_PROMPT, "What should I add?"),
+                    .putExtra(RecognizerIntent.EXTRA_PROMPT, PROMPT),
             )
         } catch (e: ActivityNotFoundException) {
             say("This phone has no speech recognition available.")
@@ -80,14 +81,21 @@ class VoiceActivity : ComponentActivity() {
         val pairing = PairingStore(this).load() ?: return finish()
         lifecycleScope.launch {
             val outcome = withContext(Dispatchers.IO) { HubClient(pairing).sendVoice(words) }
-            say(
-                when (outcome) {
-                    is HubResult.Ok -> outcome.value.message
-                    is HubResult.Failed -> outcome.error.message
-                },
-            )
+            when (outcome) {
+                is HubResult.Ok -> {
+                    val reply = outcome.value
+                    val notified = VoiceReplies.wantsNotification(reply) && VoiceReplies.show(applicationContext, reply, words)
+                    if (!notified) say(reply.message)
+                }
+                is HubResult.Failed -> say(outcome.error.message)
+            }
             finish()
         }
+    }
+
+    companion object {
+        /** Shown on the speech prompt. Voice does more than shopping now. */
+        const val PROMPT = "What do you need?"
     }
 
     /** On the application context, so it outlives this activity finishing straight after. */

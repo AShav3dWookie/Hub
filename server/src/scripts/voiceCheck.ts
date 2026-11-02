@@ -22,7 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createModelVoiceParser } from "../lib/voiceModel.js";
-import { findVoiceAction, type VoiceContext } from "../voice/actions.js";
+import { describeClock, findVoiceAction, type VoiceContext } from "../voice/actions.js";
 import type { VoiceActionName } from "@logger/shared";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -37,7 +37,14 @@ const USD_PER_MTOK = { input: 0.1, output: 0.5 };
 
 /** The hub every phrase is said to. Id 1 is the main list. */
 const MAIN_LIST = 1;
+/**
+ * Monday 2 November 2026, mid-morning: "on Tuesday" is the 3rd, "next Tuesday" the 10th, and
+ * "the 14th" is this month's.
+ * The date half comes from the server's own describeClock over a fixed clock, so the phrase table
+ * sees exactly what a real command would.
+ */
 const CONTEXT: VoiceContext = {
+  ...describeClock({ now: new Date("2026-11-02T10:00:00Z"), timeZone: "Europe/London" }),
   lists: [
     { id: 1, name: "Shopping" },
     { id: 2, name: "M&S – Bangor" },
@@ -71,7 +78,52 @@ const PHRASES: { say: string; action: VoiceActionName; want: Record<string, unkn
   { say: "add bananas to the sains brees list", action: "add_to_list", want: { listId: 3, items: ["bananas"] } },
   { say: "add tesco value beans to marks and spencers", action: "add_to_list", want: { listId: 2, items: ["tesco value beans"] } },
   { say: "add coffee to tesco", action: "add_to_list", want: { listId: 4, items: ["coffee"] } },
-  { say: "what's on my list", action: "add_to_list", want: { items: [] } },
+  // The diary: appointments. Today is Monday 2 November 2026.
+  {
+    say: "dentist next tuesday at 3",
+    action: "create_log",
+    want: { category: "appointment", title: "dentist", date: "2026-11-10", time: "15:00" },
+  },
+  {
+    say: "dentist on tuesday at 3",
+    action: "create_log",
+    want: { category: "appointment", title: "dentist", date: "2026-11-03", time: "15:00" },
+  },
+  {
+    say: "haircut on the 14th",
+    action: "create_log",
+    want: { category: "appointment", title: "haircut", date: "2026-11-14", time: null },
+  },
+  {
+    say: "MOT tomorrow at half 9",
+    action: "create_log",
+    want: { category: "appointment", date: "2026-11-03", time: "09:30" },
+  },
+  {
+    say: "doctor's appointment on friday at quarter to 4",
+    action: "create_log",
+    want: { category: "appointment", date: "2026-11-06", time: "15:45" },
+  },
+  {
+    say: "eye test on the 1st at 10am",
+    action: "create_log",
+    want: { category: "appointment", date: "2026-12-01", time: "10:00" },
+  },
+  {
+    say: "add a dentist appointment for wednesday",
+    action: "create_log",
+    want: { category: "appointment", title: "dentist", date: "2026-11-04", time: null },
+  },
+  {
+    say: "physio a week on thursday at 2 and keep it",
+    action: "create_log",
+    want: { category: "appointment", date: "2026-11-12", time: "14:00", autoDelete: false },
+  },
+
+  // Anything else
+  { say: "what's on my list", action: "not_supported", want: {} },
+  { say: "what's on tomorrow", action: "not_supported", want: {} },
+  { say: "remove the eggs from tesco", action: "not_supported", want: {} },
 ];
 
 /** Compare loosely: case, hyphens and spacing don't matter ("Semi-skimmed" = "semi skimmed"). */

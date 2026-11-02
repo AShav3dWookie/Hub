@@ -57,7 +57,30 @@ describe("POST /api/voice", () => {
     const res = await say(app, "add eggs and milk", token);
 
     expect(res.body).toMatchObject({ added: ["Eggs", "Milk"], parsedBy: "model" });
-    expect(parser).toHaveBeenCalledWith("add eggs and milk", { lists: expect.any(Array) });
+    expect(parser).toHaveBeenCalledWith("add eggs and milk", expect.objectContaining({ lists: expect.any(Array) }));
+  });
+
+  it("lets a device add an appointment, dated where the hub is", async () => {
+    const parser: VoiceParser = vi.fn().mockResolvedValue({
+      action: "create_log",
+      input: {
+        category: "appointment",
+        title: "Dentist",
+        date: "2099-11-10",
+        time: "15:00",
+        autoDelete: null,
+        rating: null,
+        releaseYear: null,
+        author: null,
+        notes: null,
+      },
+    });
+    const { app, token } = await setup({ auth: true, parser });
+    const res = await say(app, "dentist next tuesday at 3", token);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ action: "create_log", message: "Added Dentist, Tue 10 Nov 2099 15:00" });
+    expect(vi.mocked(parser).mock.calls[0][1]).toMatchObject({ timeZone: "Europe/London" });
   });
 
   describe("GET /api/voice/status — the companion app's Test connection", () => {

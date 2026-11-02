@@ -1,6 +1,8 @@
 package uk.aaronhanna.hub.companion
 
 import android.app.Activity
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.test.core.app.ApplicationProvider
@@ -62,6 +64,58 @@ class VoiceActivityTest {
         val prompt = shadowOf(open()).nextStartedActivityForResult.intent
         assertEquals(RecognizerIntent.ACTION_RECOGNIZE_SPEECH, prompt.action)
         assertEquals(RecognizerIntent.LANGUAGE_MODEL_FREE_FORM, prompt.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL))
+        assertEquals("What do you need?", prompt.getStringExtra(RecognizerIntent.EXTRA_PROMPT))
+    }
+
+    private val notifications
+        get() = shadowOf(ApplicationProvider.getApplicationContext<android.content.Context>().getSystemService(NotificationManager::class.java))
+
+    private fun voiceReplies(): List<Notification> =
+        notifications.activeNotifications.filter { it.tag == VoiceReplies.TAG }.map { it.notification }
+
+    private fun appointmentReply() = server.enqueue(
+        MockResponse().setBody(
+            """{"action":"create_log","log":{"id":7,"entityId":3,"category":"appointment","title":"Dentist",
+               "date":"2026-11-10","time":"15:00"},"parsedBy":"model","message":"Added Dentist, Tue 10 Nov 15:00"}""",
+        ),
+    )
+
+    @Test
+    fun `an appointment's reply is a notification saying what was saved and what was heard`() {
+        pair()
+        appointmentReply()
+        val activity = open()
+        activity.hear("dentist next tuesday at 3")
+
+        waitUntil { voiceReplies().isNotEmpty() }
+        val reply = voiceReplies().single()
+        assertEquals("Added Dentist, Tue 10 Nov 15:00", reply.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals("You said “dentist next tuesday at 3”", reply.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertNull(ShadowToast.getTextOfLatestToast())
+        assertTrue(activity.isFinishing)
+    }
+
+    @Test
+    fun `each command gets its own reply rather than replacing the last`() {
+        pair()
+        appointmentReply()
+        appointmentReply()
+        open().hear("dentist next tuesday at 3")
+        waitUntil { voiceReplies().size == 1 }
+        Thread.sleep(5)
+        open().hear("dentist next tuesday at 3")
+        waitUntil { voiceReplies().size == 2 }
+    }
+
+    @Test
+    fun `with notifications turned off the appointment's reply is a toast instead`() {
+        pair()
+        notifications.setNotificationsEnabled(false)
+        appointmentReply()
+        open().hear("dentist next tuesday at 3")
+
+        waitUntil { ShadowToast.getTextOfLatestToast() == "Added Dentist, Tue 10 Nov 15:00" }
+        assertTrue(voiceReplies().isEmpty())
     }
 
     @Test
@@ -78,6 +132,8 @@ class VoiceActivityTest {
 
         waitUntil { ShadowToast.getTextOfLatestToast() == "Added Eggs to Shopping" }
         assertTrue(activity.isFinishing)
+        // Shopping stays a toast.
+        assertTrue(voiceReplies().isEmpty())
         assertEquals("add eggs", JSONObject(server.takeRequest().body.readUtf8()).getString("text"))
     }
 
