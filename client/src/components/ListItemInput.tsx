@@ -3,6 +3,7 @@ import { LIST_ITEM_MAX_LENGTH } from "@logger/shared";
 import { useAddListItem } from "../api/hooks.js";
 import { useToast } from "./ToastProvider.js";
 import { FIELD_CLASS, PRIMARY_BUTTON_SM_CLASS } from "./ui.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 /**
  * The one-line "add an item" field, on a list's page and under a row on the lists screen.
@@ -21,6 +22,7 @@ export function ListItemInput({
   autoFocus?: boolean;
 }) {
   const [text, setText] = useState("");
+  useUnsavedChanges(text.trim() !== "");
   const addItem = useAddListItem();
   const { showToast } = useToast();
 

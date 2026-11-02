@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ensureCurrentShell } from "./shellVersion.js";
+import { newerServingVersion, updateShell, type ShellVersionDeps } from "./shellVersion.js";
 import { THUMB_CACHE } from "../sync/thumbnailCache.js";
 import { setMeta, getMeta, META_SYNC_CURSOR } from "../local/db.js";
+
+/** The check and the recovery back to back, as a launch with nothing unsaved runs them. */
+async function ensureCurrentShell(deps: ShellVersionDeps): Promise<void> {
+  if (await newerServingVersion()) await updateShell(deps);
+}
 
 /**
  * The recovery for a shell frozen on an older build.

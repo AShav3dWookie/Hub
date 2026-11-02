@@ -6,6 +6,7 @@ import { useCreateList, useLists } from "../api/hooks.js";
 import { LocalValidationError } from "../local/localMutations.js";
 import { ListItemInput } from "../components/ListItemInput.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 import {
   CARD_ACTION_CLASS,
   CARD_CLASS,
@@ -74,6 +75,7 @@ function ListRow({
 function NewListForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(name.trim() !== "");
   const createList = useCreateList();
   const { showToast } = useToast();
 

@@ -11,7 +11,7 @@ import { gotoHome, serviceWorkerState } from "./helpers/app";
  *
  * Here the build never changes, so `registration.update()` genuinely finds nothing to install —
  * the same dead end a pinned `/sw.js` produces. Only `/api/health` is made to disagree, which is
- * the signal `ensureCurrentShell` actually keys on.
+ * the signal `newerServingVersion` actually keys on.
  *
  * The full outcome — a device on build A ending up on build B with the CDN still pinning A's
  * `sw.js` — was verified separately against two real builds behind a proxy, with a control build

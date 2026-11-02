@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { CARD_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "../components/ui.js";
 import { ApiError } from "../api/client.js";
 import { useLogin } from "../api/auth.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 /** Only same-origin absolute paths are safe redirect targets ("//host" is not). */
 function safeDest(from: unknown): string {
@@ -19,6 +20,7 @@ function safeDest(from: unknown): string {
 export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(password !== "");
   const login = useLogin();
   const navigate = useNavigate();
   const location = useLocation();

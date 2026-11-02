@@ -18,7 +18,7 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.E2E_PORT ?? "3100";
 // The published image always bakes a version in (Dockerfile APP_VERSION -> VITE_APP_VERSION for
-// the bundle, APP_VERSION for /api/health). Match that here: `ensureCurrentShell` compares the
+// the bundle, APP_VERSION for /api/health). Match that here: the shell version check compares the
 // two and deliberately does nothing on a "dev" build, so a rig without one cannot exercise it.
 const APP_VERSION = process.env.E2E_APP_VERSION ?? "9.9.9";
 const artifactsDir = path.join(root, "e2e", ".artifacts");

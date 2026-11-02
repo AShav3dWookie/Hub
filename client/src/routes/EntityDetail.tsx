@@ -19,6 +19,7 @@ import { PeopleTagInput } from "../components/PeopleTagInput.js";
 import { PhotoGallery } from "../components/PhotoGallery.js";
 import { useToast } from "../components/ToastProvider.js";
 import { useEditableRoute } from "../components/EditModeProvider.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 export function EntityDetail() {
   const { id } = useParams<{ id: string }>();
@@ -86,6 +87,7 @@ function LogRow({
     log.people.map((p) => ({ id: p.id, name: p.name })),
   );
   const [autoDelete, setAutoDelete] = useState(log.autoDelete);
+  useUnsavedChanges(formOpen);
 
   const updateLog = useUpdateLog(log.id);
   const deleteLog = useDeleteLog();

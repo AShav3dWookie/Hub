@@ -26,6 +26,7 @@ import { useToast } from "../components/ToastProvider.js";
 import { useEditableRoute } from "../components/EditModeProvider.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 /** The album header form while it is being edited; null until something is typed. */
 interface AlbumDraft {
@@ -67,6 +68,7 @@ export function AlbumDetail() {
   // from the album and are right on the first render; a refetch landing mid-edit cannot
   // overwrite what has been typed either.
   const [draft, setDraft] = useState<AlbumDraft | null>(null);
+  useUnsavedChanges(draft !== null);
 
   // Leaving edit mode discards the draft and any pending confirm — the header Done is the
   // cancel this form used to carry.

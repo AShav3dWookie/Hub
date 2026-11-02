@@ -9,6 +9,7 @@ import { PersonLinks } from "./PersonLinks.js";
 import { PeopleTagInput } from "./PeopleTagInput.js";
 import { LogPicker } from "./LogPicker.js";
 import { formatLogDate } from "../lib/formatLogDate.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 /**
  * The people and events halves of the album page, which was one 365-line function.
@@ -35,6 +36,7 @@ export function AlbumPeopleSection({
   onRemove: (personId: number) => void;
 }) {
   const [draft, setDraft] = useState<PersonTagInput[]>([]);
+  useUnsavedChanges(draft.length > 0);
 
   async function addDraft() {
     for (const tag of draft) {

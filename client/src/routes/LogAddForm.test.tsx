@@ -5,6 +5,7 @@ import { Routes, Route, useSearchParams } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
 import { pendingOutbox } from "../local/outbox.js";
 import { LogAddForm } from "./LogAddForm.js";
+import { hasUnsavedChanges } from "../lib/unsavedChanges.js";
 
 vi.mock("../api/afterMutation.js", () => ({
   refreshAfterMutation: (qc: { invalidateQueries: () => unknown }) => {
@@ -224,5 +225,39 @@ describe("LogAddForm ?date / ?returnTo (calendar shortcut)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await screen.findByText("calendar on 2026-10-15");
+  });
+});
+
+describe("LogAddForm and app updates", () => {
+  // A new build is applied by reloading, so a started form has to hold it off.
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([])));
+  });
+
+  it("holds off an update once something is typed, and not before", async () => {
+    const { unmount } = renderWithProviders(<LogAddForm category="movie" />);
+    expect(hasUnsavedChanges()).toBe(false);
+
+    await userEvent.type(screen.getByLabelText("Title"), "Sicario");
+    expect(hasUnsavedChanges()).toBe(true);
+
+    unmount();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("lets the update through once the log is saved", async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/add/:category" element={<LogAddForm category="movie" />} />
+        <Route path="/" element={<div>home</div>} />
+      </Routes>,
+      { route: "/add/movie" },
+    );
+
+    await userEvent.type(screen.getByLabelText("Title"), "Sicario");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText("home");
+    expect(hasUnsavedChanges()).toBe(false);
   });
 });

@@ -73,34 +73,49 @@ function whenActivated(worker: ServiceWorker): Promise<void> {
   });
 }
 
-/**
- * Compare the running bundle against what the server serves, and recover if they disagree.
- *
- * Does nothing when the versions match, when the build has no version baked in (a dev build), or
- * when the server cannot be reached — opening offline is a supported thing, not a fault.
- */
-export async function ensureCurrentShell(
-  { reload }: ShellVersionDeps = { reload: () => location.reload() },
-): Promise<void> {
+/** The version this bundle was built as, or `undefined` for a dev build, which has none. */
+export function builtVersion(): string | undefined {
   const built = import.meta.env.VITE_APP_VERSION;
-  if (!built || built === "dev") return;
+  return built && built !== "dev" ? built : undefined;
+}
+
+/**
+ * The version the server is serving when it differs from this bundle's, otherwise `null`.
+ *
+ * `null` too for a dev build, which has no version baked in, and when the server cannot be
+ * reached — opening offline is a supported thing, not a fault. When to act on the answer is
+ * `appUpdate.ts`'s decision.
+ */
+export async function newerServingVersion(): Promise<string | null> {
+  const built = builtVersion();
+  if (!built) return null;
 
   let serving: string | undefined;
   try {
     const res = await fetch("/api/health", { cache: "no-store" });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     serving = ((await res.json()) as { version?: string }).version;
   } catch {
-    return;
+    return null;
   }
 
   if (!serving || serving === built) {
     writeAttempts(null);
-    return;
+    return null;
   }
+  return serving;
+}
 
+/**
+ * Move the app onto the build the server serves: update the worker, or failing that remove it
+ * and the shell caches, then reload. Resolves `false` without reloading when two earlier
+ * attempts this session already failed.
+ */
+export async function updateShell(
+  { reload }: ShellVersionDeps = { reload: () => location.reload() },
+): Promise<boolean> {
   const attempts = readAttempts();
-  if (attempts >= MAX_ATTEMPTS) return; // it did not work twice; stop rather than reload-loop
+  if (attempts >= MAX_ATTEMPTS) return false; // it did not work twice; stop rather than reload-loop
   writeAttempts(attempts + 1);
 
   const registration = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
@@ -113,7 +128,7 @@ export async function ensureCurrentShell(
       // the reload is what swaps the running bundle for the shell it just precached.
       await whenActivated(pending);
       reload();
-      return;
+      return true;
     }
     // `update()` found nothing to install. The worker is not going to fix this — the copy of
     // /sw.js it can see is stale — so don't spend a reload discovering that again.
@@ -122,4 +137,5 @@ export async function ensureCurrentShell(
 
   await clearShellCaches();
   reload();
+  return true;
 }

@@ -13,6 +13,7 @@ import { LocalValidationError } from "../local/localMutations.js";
 import { useEditableRoute } from "../components/EditModeProvider.js";
 import { ListItemInput } from "../components/ListItemInput.js";
 import { useToast } from "../components/ToastProvider.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 import {
   CARD_ACTION_CLASS,
   CARD_ACTION_DANGER_CLASS,
@@ -32,6 +33,7 @@ function ShopLocationEditor({ list }: { list: ListDTO }) {
   const location = list.location;
   const [radius, setRadius] = useState(String(location?.radiusM ?? DEFAULT_SHOP_RADIUS_M));
   const [confirmingClear, setConfirmingClear] = useState(false);
+  useUnsavedChanges(!!location && radius !== String(location.radiusM));
   const updateList = useUpdateList(list.id);
   const { showToast } = useToast();
 
@@ -130,6 +132,7 @@ function ListEditor({ list }: { list: ListDTO }) {
   const [name, setName] = useState(list.name);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  useUnsavedChanges(name !== list.name);
   const updateList = useUpdateList(list.id);
   const deleteList = useDeleteList();
   const { showToast } = useToast();
