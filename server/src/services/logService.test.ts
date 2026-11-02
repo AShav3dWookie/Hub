@@ -115,6 +115,66 @@ describe("logService", () => {
     expect(getLogById(ctx.db, created.id).autoDelete).toBe(true);
   });
 
+  describe("time of day", () => {
+    const appointment = (time?: string | null) =>
+      createLog(ctx.db, {
+        category: "appointment",
+        title: "Dentist",
+        rating: null,
+        date: "2026-09-15",
+        notes: null,
+        people: [],
+        time,
+      });
+    const edit = (id: number, time?: string | null) =>
+      updateLog(ctx.db, id, { rating: null, date: "2026-09-15", notes: null, people: [], time });
+
+    it("is null unless given, and round-trips through create and update", () => {
+      ctx = createTestDb();
+      expect(appointment().time).toBeNull();
+      const timed = appointment("15:00");
+      expect(timed.time).toBe("15:00");
+      expect(edit(timed.id, "09:30").time).toBe("09:30");
+      expect(getLogById(ctx.db, timed.id).time).toBe("09:30");
+      expect(edit(timed.id, null).time).toBeNull();
+    });
+
+    it("is kept when an update leaves it out, so an older client can't wipe it", () => {
+      ctx = createTestDb();
+      const timed = appointment("15:00");
+      expect(edit(timed.id).time).toBe("15:00");
+    });
+
+    it("is dropped for a category without one", () => {
+      ctx = createTestDb();
+      const meal = createLog(ctx.db, {
+        category: "eating_out",
+        title: "Dylan's",
+        rating: null,
+        date: "2026-09-15",
+        notes: null,
+        people: [],
+        time: "19:00",
+      });
+      expect(meal.time).toBeNull();
+      expect(updateLog(ctx.db, meal.id, { rating: null, date: "2026-09-15", notes: null, people: [], time: "19:00" }).time).toBeNull();
+    });
+
+    it("is kept when attaching to an existing appointment entity", () => {
+      ctx = createTestDb();
+      const first = appointment();
+      const second = createLog(ctx.db, {
+        entityId: first.entityId,
+        rating: null,
+        date: "2026-10-01",
+        notes: null,
+        people: [],
+        time: "11:15",
+      });
+      expect(second.time).toBe("11:15");
+    });
+  });
+
   it("deletes a log", () => {
     ctx = createTestDb();
     const created = createLog(ctx.db, {

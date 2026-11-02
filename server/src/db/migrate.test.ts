@@ -317,6 +317,29 @@ describe("migrations", () => {
     c.close();
   });
 
+  it("0015 adds an optional logs.time: existing logs stay untimed, and setting one reaches the change feed", () => {
+    const dbPath = tmpDb();
+    const db = new Database(dbPath);
+    const journal = JSON.parse(fs.readFileSync(path.join(drizzleDir, "meta", "_journal.json"), "utf8")) as {
+      entries: { tag: string }[];
+    };
+    const tags = journal.entries.map((e) => e.tag);
+    const at = tags.findIndex((t) => t.startsWith("0015_"));
+    for (const tag of tags.slice(0, at)) applyMigrationFile(db, tag);
+
+    db.prepare("INSERT INTO entities (category, title, normalized_title) VALUES ('appointment', 'Dentist', 'dentist')").run();
+    db.prepare("INSERT INTO logs (entity_id, date) VALUES (1, '2026-09-15')").run();
+    applyMigrationFile(db, tags[at]);
+
+    expect(db.prepare("SELECT time FROM logs WHERE id = 1").get()).toEqual({ time: null });
+    const seq = () => (db.prepare("SELECT row_seq FROM logs WHERE id = 1").get() as { row_seq: number }).row_seq;
+    const before = seq();
+    db.prepare("UPDATE logs SET time = '15:00' WHERE id = 1").run();
+    expect(seq()).toBeGreaterThan(before);
+
+    db.close();
+  });
+
   it("0008 creates sync_applied_mutations (plain table, no triggers, not in the change feed)", () => {
     const db = runMigrations(tmpDb());
     const c = db.$client;
@@ -371,6 +394,23 @@ describe("migrations", () => {
       }>
     ).map((r) => r.name);
     expect(triggers.some((t) => t.startsWith("app_settings"))).toBe(false);
+
+    c.close();
+  });
+
+  it("0016 creates voice_commands: server-only, and gone with the device that said them", () => {
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+    c.pragma("foreign_keys = ON");
+
+    const triggers = (c.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string }>)
+      .map((r) => r.name);
+    expect(triggers.some((t) => t.startsWith("voice_commands"))).toBe(false);
+
+    c.prepare("INSERT INTO device_tokens (name, token_hash, created_at) VALUES ('Pixel', 'h', 'x')").run();
+    c.prepare("INSERT INTO voice_commands (device_token_id, action, created, created_at) VALUES (1, 'add_to_list', '[]', 'x')").run();
+    c.prepare("DELETE FROM device_tokens WHERE id = 1").run();
+    expect(c.prepare("SELECT COUNT(*) AS n FROM voice_commands").get()).toEqual({ n: 0 });
 
     c.close();
   });

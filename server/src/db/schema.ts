@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, ListKind, NotificationSlot, SyncEntityType } from "@logger/shared";
+import type { Category, ListKind, NotificationSlot, SyncEntityType, VoiceRecord } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -50,6 +50,8 @@ export const logs = sqliteTable(
     notes: text("notes"),
     // Appointments only: when true, a startup/on-read sweep deletes this log once its date has passed.
     autoDelete: integer("auto_delete", { mode: "boolean" }).notNull().default(false),
+    // Appointments only: optional local time of day, "HH:MM". Null means untimed (all day).
+    time: text("time"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -336,6 +338,22 @@ export const deviceTokens = sqliteTable("device_tokens", {
 });
 
 /**
+ * Every voice command that saved something, and exactly what it saved, so its device can undo it
+ * for a few minutes (`voiceUndoService`). Server-only and not synced, like `device_tokens`; a
+ * revoked device's commands go with it. Pruned after a day.
+ */
+export const voiceCommands = sqliteTable("voice_commands", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Null for a command from a signed-in browser. */
+  deviceTokenId: integer("device_token_id").references(() => deviceTokens.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  /** What the command created, in the order it created it. */
+  created: text("created", { mode: "json" }).$type<VoiceRecord[]>().notNull(),
+  createdAt: text("created_at").notNull(),
+  undoneAt: text("undone_at"),
+});
+
+/**
  * Which items each reminder slot has already announced, so a scheduler tick — every minute, and
  * again after a restart — never repeats one. Per item rather than per slot, so something added
  * after 9pm for tomorrow still gets a late notification of its own. Pruned after 30 days.
@@ -345,7 +363,10 @@ export const notificationDeliveries = sqliteTable(
   "notification_deliveries",
   {
     slot: text("slot").$type<NotificationSlot>().notNull(),
-    /** The local date the slot fired on (`YYYY-MM-DD`), not the item's own date. */
+    /**
+     * The local date the slot fired on (`YYYY-MM-DD`), not the item's own date — except for
+     * `hour_before`, which records the appointment's date (its window can span midnight).
+     */
     firedOn: text("fired_on").notNull(),
     itemKey: text("item_key").notNull(),
     sentAt: text("sent_at").notNull(),

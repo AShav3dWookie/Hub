@@ -43,13 +43,23 @@ describe("parseWithRules — the backup when the model can't be reached", () => 
     });
   });
 
-  it("drops politeness and filler, and accepts a bare item with no verb", () => {
+  it("drops politeness and filler", () => {
     expect(parse("please add some eggs")).toEqual({ listId: null, items: ["eggs"] });
     expect(parse("can you put a new toothbrush on the sainsburys list")).toEqual({
       listId: 2,
       items: ["new toothbrush"],
     });
-    expect(parse("  washing up liquid ")).toEqual({ listId: null, items: ["washing up liquid"] });
+  });
+
+  it("takes a command without add or put only when it names a list", () => {
+    expect(parse("washing up liquid on the shopping list")).toEqual({ listId: null, items: ["washing up liquid"] });
+    expect(parse("bread to sainsburys")).toEqual({ listId: 2, items: ["bread"] });
+  });
+
+  it("leaves anything else to the model rather than putting it on a list", () => {
+    expect(parse("  washing up liquid ")).toBeNull();
+    expect(parse("dentist next tuesday at 3")).toBeNull();
+    expect(parse("what's on tomorrow")).toBeNull();
   });
 
   it("finds nothing to add in a command with no item", () => {

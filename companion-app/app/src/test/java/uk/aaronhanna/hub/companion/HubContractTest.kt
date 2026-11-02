@@ -63,7 +63,7 @@ class HubContractTest {
         val item = "Contract milk ${System.currentTimeMillis()}"
         val reply = (client.sendVoice("add $item to the shopping list") as HubResult.Ok).value
 
-        assertEquals(listOf(item), reply.added)
+        assertEquals("add_to_list", reply.action)
         assertFalse(reply.usedModel)
         assertTrue(reply.message.contains(item))
 
@@ -74,11 +74,46 @@ class HubContractTest {
     }
 
     @Test
+    fun `undo takes a voice command back off the hub, and a repeat is harmless`() {
+        requireHub()
+        val item = "Contract undo ${System.currentTimeMillis()}"
+        val reply = (client.sendVoice("add $item to the shopping list") as HubResult.Ok).value
+        val commandId = reply.commandId!!
+
+        assertEquals(HubResult.Ok(Unit), client.undoVoice(commandId))
+        assertEquals(HubResult.Ok(Unit), client.undoVoice(commandId))
+
+        val lists = JSONArray(http("GET", "/api/lists"))
+        val main = (0 until lists.length()).map { lists.getJSONObject(it) }.first { it.getBoolean("isDefault") }
+        val items = JSONObject(http("GET", "/api/lists/${main.getInt("id")}")).getJSONArray("items")
+        assertFalse((0 until items.length()).any { items.getJSONObject(it).getString("text") == item })
+    }
+
+    @Test
+    fun `another phone can't undo this one's command`() {
+        requireHub()
+        val reply = (client.sendVoice("add Contract other ${System.currentTimeMillis()} to the shopping list") as HubResult.Ok).value
+        val other = JSONObject(http("POST", "/api/device-tokens", JSONObject().put("name", "Other phone")))
+        val otherClient = HubClient(Pairing(hubUrl!!, other.getString("token")))
+
+        val error = (otherClient.undoVoice(reply.commandId!!) as HubResult.Failed).error
+        assertTrue(error is HubError.Rejected)
+    }
+
+    @Test
     fun `nothing to add comes back as the hub's own explanation`() {
         requireHub()
         val error = (client.sendVoice("add") as HubResult.Failed).error
         assertTrue(error is HubError.Rejected)
         assertTrue(error.message.startsWith("Didn't catch anything to add"))
+    }
+
+    @Test
+    fun `without the model, a command that isn't shopping says it needs it rather than guessing`() {
+        requireHub()
+        val error = (client.sendVoice("dentist next tuesday at 3") as HubResult.Failed).error
+        assertTrue(error is HubError.Rejected)
+        assertTrue(error.message, error.message.startsWith("I need the model for that"))
     }
 
     @Test

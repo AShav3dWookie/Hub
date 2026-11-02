@@ -53,8 +53,9 @@ function plannedEvent(
   date: string,
   category: "hang_out" | "appointment" = "appointment",
   people: { name: string }[] = [],
+  time: string | null = null,
 ) {
-  const log = createLog(db, { category, title, rating: null, date, notes: null, people });
+  const log = createLog(db, { category, title, rating: null, date, notes: null, people, time });
   db.update(logs).set({ createdAt: "2026-09-01 10:00:00" }).where(eq(logs.id, log.id)).run();
   return log;
 }
@@ -306,5 +307,98 @@ describe("notificationScheduler", () => {
     await runNotificationTick(ctx.db, at("2026-09-14T12:00:00Z"), { timeZone: TZ, send });
 
     expect(ctx.db.select().from(notificationDeliveries).all().map((r) => r.itemKey)).toEqual(["log:2"]);
+  });
+
+  describe("timed appointments", () => {
+    // Dentist at 15:00 London time on Tuesday 15 September, which is 14:00Z in BST.
+    const dentist = (db: AppDb) => plannedEvent(db, "Dentist", "2026-09-15", "appointment", [], "15:00");
+
+    it("reminds an hour before, naming the time, and not a minute earlier", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      dentist(ctx.db);
+      const { send, sent } = fakeSender();
+
+      await runNotificationTick(ctx.db, at("2026-09-15T12:59:00Z"), { timeZone: TZ, send });
+      expect(sent).toEqual([]);
+
+      await runNotificationTick(ctx.db, at("2026-09-15T13:00:00Z"), { timeZone: TZ, send });
+      expect(sent.map((s) => [s.payload.title, s.payload.body, s.ttlSeconds])).toEqual([
+        ["In an hour", "Dentist at 15:00", 3600],
+      ]);
+    });
+
+    it("sends nothing once it has started", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      dentist(ctx.db);
+      const { send, sent } = fakeSender();
+
+      await runNotificationTick(ctx.db, at("2026-09-15T14:00:00Z"), { timeZone: TZ, send });
+      await runNotificationTick(ctx.db, at("2026-09-15T14:30:00Z"), { timeZone: TZ, send });
+      expect(sent).toEqual([]);
+    });
+
+    it("sends a late reminder inside the hour, expiring at the start, and never twice", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      dentist(ctx.db);
+      const { send, sent } = fakeSender();
+
+      await runNotificationTick(ctx.db, at("2026-09-15T13:40:00Z"), { timeZone: TZ, send });
+      await runNotificationTick(ctx.db, at("2026-09-15T13:41:00Z"), { timeZone: TZ, send });
+      await runNotificationTick(ctx.db, at("2026-09-15T13:59:00Z"), { timeZone: TZ, send });
+      expect(sent.map((s) => [s.payload.body, s.ttlSeconds])).toEqual([["Dentist at 15:00", 20 * 60]]);
+    });
+
+    it("is left out of the 9am reminder, which still names the untimed ones", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      dentist(ctx.db);
+      plannedEvent(ctx.db, "Haircut", "2026-09-15");
+      const { send, sent } = fakeSender();
+
+      await runNotificationTick(ctx.db, at("2026-09-15T08:00:00Z"), { timeZone: TZ, send });
+      expect(sent.map((s) => [s.payload.title, s.payload.body])).toEqual([["Today", "Haircut"]]);
+    });
+
+    it("is still named the night before, with its time", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      dentist(ctx.db);
+      const { send, sent } = fakeSender();
+
+      await runNotificationTick(ctx.db, at("2026-09-14T20:00:00Z"), { timeZone: TZ, send });
+      expect(sent.map((s) => [s.payload.title, s.payload.body])).toEqual([["Tomorrow", "Dentist at 15:00"]]);
+    });
+
+    it("reminds once for an early-morning appointment whose hour starts the day before", async () => {
+      ctx = createTestDb();
+      subscribe(ctx.db);
+      plannedEvent(ctx.db, "Flight", "2026-09-16", "appointment", [], "00:30");
+      const { send, sent } = fakeSender();
+
+      // 23:30 and 00:10 London time, either side of midnight.
+      await runNotificationTick(ctx.db, at("2026-09-15T22:30:00Z"), { timeZone: TZ, send });
+      await runNotificationTick(ctx.db, at("2026-09-15T23:10:00Z"), { timeZone: TZ, send });
+      expect(sent.filter((s) => s.payload.title === "In an hour").map((s) => s.payload.body)).toEqual([
+        "Flight at 00:30",
+      ]);
+    });
+
+    it("waits for a device, and retries when none accepted it", async () => {
+      ctx = createTestDb();
+      dentist(ctx.db);
+      const refused = fakeSender("failed");
+      await runNotificationTick(ctx.db, at("2026-09-15T13:00:00Z"), { timeZone: TZ, send: refused.send });
+
+      subscribe(ctx.db);
+      await runNotificationTick(ctx.db, at("2026-09-15T13:01:00Z"), { timeZone: TZ, send: refused.send });
+      expect(refused.sent).toHaveLength(1);
+
+      const { send, sent } = fakeSender();
+      await runNotificationTick(ctx.db, at("2026-09-15T13:02:00Z"), { timeZone: TZ, send });
+      expect(sent.map((s) => s.payload.body)).toEqual(["Dentist at 15:00"]);
+    });
   });
 });

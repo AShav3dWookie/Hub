@@ -145,6 +145,8 @@ function toLogDTO(snap: LocalSnapshot, log: LogSyncDTO, withPhotos: boolean): Lo
     photos,
     albums,
     autoDelete: log.autoDelete,
+    // A replica row written before times existed has no field at all.
+    time: log.time ?? null,
     createdAt: log.createdAt,
     updatedAt: log.updatedAt,
   };
@@ -510,6 +512,7 @@ export function getCalendarRange(
     logRows.push({
       logId: log.id,
       date: log.date,
+      time: log.time ?? null,
       notes: log.notes,
       entityId: entity.id,
       title: entity.title,
@@ -573,6 +576,7 @@ export function getUpcomingEvents(
       entityTitle: entity.title,
       category: entity.category,
       date: log.date,
+      time: log.time ?? null,
       notes: log.notes,
       createdAt: log.createdAt,
       people: peopleRefs(snap, log.peopleIds),

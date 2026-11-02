@@ -47,24 +47,49 @@ class HubClientTest {
     }
 
     @Test
-    fun `sends the words and reads back what was added`() {
+    fun `sends the words and reads back what was done`() {
         respond(
             200,
-            """{"action":"add","list":{"id":3,"name":"M&S – Bangor"},"added":["Eggs","Milk"],
+            """{"action":"add_to_list","list":{"id":3,"name":"M&S – Bangor"},"added":["Eggs","Milk"],
                "alreadyOnList":["Bread"],"parsedBy":"model","message":"Added Eggs and Milk to M&S – Bangor"}""",
         )
         val reply = client.sendVoice("add eggs, milk and bread to m and s").ok()
 
-        assertEquals("Added Eggs and Milk to M&S – Bangor", reply.message)
-        assertEquals("M&S – Bangor", reply.listName)
-        assertEquals(listOf("Eggs", "Milk"), reply.added)
-        assertEquals(listOf("Bread"), reply.alreadyOnList)
-        assertTrue(reply.usedModel)
+        assertEquals(VoiceReply("add_to_list", "Added Eggs and Milk to M&S – Bangor", usedModel = true), reply)
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/api/voice", request.path)
         assertEquals("add eggs, milk and bread to m and s", JSONObject(request.body.readUtf8()).getString("text"))
+    }
+
+    @Test
+    fun `reads a reply for any action, needing only its action and message`() {
+        respond(200, """{"action":"create_log","parsedBy":"model","message":"Added Dentist, Tue 4 Nov 15:00"}""")
+        assertEquals(
+            VoiceReply("create_log", "Added Dentist, Tue 4 Nov 15:00", usedModel = true),
+            client.sendVoice("dentist next tuesday at 3").ok(),
+        )
+    }
+
+    @Test
+    fun `reads the command's id for Undo, and its absence when nothing was saved`() {
+        respond(200, """{"action":"create_log","parsedBy":"model","message":"Added Dentist","commandId":7}""")
+        assertEquals(7, client.sendVoice("dentist").ok().commandId)
+        respond(200, """{"action":"add_to_list","parsedBy":"model","message":"Eggs is already on Shopping","commandId":null}""")
+        assertEquals(null, client.sendVoice("add eggs").ok().commandId)
+    }
+
+    @Test
+    fun `undo deletes the command, and passes on the hub's refusal`() {
+        respond(204, "")
+        assertEquals(HubResult.Ok(Unit), client.undoVoice(7))
+        val sent = server.takeRequest()
+        assertEquals("DELETE", sent.method)
+        assertEquals("/api/voice/commands/7", sent.path)
+
+        respond(410, """{"error":"Too late to undo: that was more than 5 minutes ago"}""")
+        assertEquals("Too late to undo: that was more than 5 minutes ago", client.undoVoice(7).error().message)
     }
 
     @Test

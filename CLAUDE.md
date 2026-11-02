@@ -83,8 +83,11 @@ Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd c
 ### Category configuration is the single source of truth
 
 `shared/src/categories.ts` → `CATEGORY_FIELDS` declares, per loggable category, which fields apply
-(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `hasRating`, `hasAutoDelete`, `dateGranularity`,
-`dateLabel`). Both the client add forms and server services branch on this. `hasPeople` is true for
+(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `hasRating`, `hasAutoDelete`, `hasTime`,
+`dateGranularity`, `dateLabel`). `hasTime` (appointments only) allows an optional `logs.time`,
+local `HH:MM`; the server nulls it for other categories, an update that omits it keeps it (so an
+older client can't wipe one), and same-day items order untimed-first via `compareTimeOfDay`
+(`shared/src/rules/timeOfDay.ts`). Both the client add forms and server services branch on this. `hasPeople` is true for
 **movie**, **eating_out** and **hang_out**, and also gates photo support via
 `categorySupportsPhotos()` — enforced server-side in `logPhotosService.assertLogSupportsPhotos`, not
 just hidden in the UI. `categories.test.ts` asserts every category has a config and metadata entry,
@@ -186,9 +189,14 @@ Web Push (VAPID, `web-push`) reminders for what Home's "What's on" lists. `docs/
 is the user guide. `NOTIFICATION_SLOTS` in `shared/src/rules/notifications.ts` decides what fires
 and when, and it reuses the widget's own qualification rules (`nextAnnualOccurrence`,
 `isPlannedAhead`) so the two cannot disagree:
-- 9pm "Tomorrow".
-- 9am "Today".
+- 9pm "Tomorrow" (a timed appointment is named with its time: "Dentist at 15:00").
+- 9am "Today", without timed appointments (`untimedOnly`).
 - 9am "In a week", for birthday-tagged important dates only.
+- "In an hour" (`HOUR_BEFORE`, `appointmentsStartingSoon`): a timed appointment, from 60 minutes
+  before its start until the start. Not a fixed slot: its delivery is recorded under the
+  **appointment's** date, not the tick's, so a window spanning midnight still sends once.
+  `isPlannedAhead` counts a timed log as a plan if created before its start (UTC `createdAt` vs
+  local time, so up to the zone's offset out near the start).
 
 `server/src/services/notificationScheduler.ts` `runNotificationTick(db, now, { timeZone, send })`
 has no timetable of its own.
@@ -225,21 +233,41 @@ and a real sender lazily on first use.
 
 ### Voice commands & device tokens
 
-`POST /api/voice { text }` adds spoken items to the shopping lists; `docs/voice.md` is the guide.
-`voiceService.handleVoiceCommand` asks the model parser first and falls back to
-`lib/voiceRules.ts` on *any* failure, so a command is never lost. The parser only proposes
-`{ listId | null, items }`; the service validates the id (unknown → main list), dedupes and
-writes. `lib/voiceModel.ts` is the only importer of `@anthropic-ai/sdk` (Haiku, structured
-output via a plain JSON schema, not the SDK's zod helper, which needs zod v4 while the server is
-on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from config
+`POST /api/voice { text }` turns a spoken command into one **action**; `docs/voice.md` is the
+guide. Actions are code in `server/src/voice/` (`VOICE_ACTIONS` in `actions.ts`, one module
+each: name, zod input, `run`): `add_to_list`, `create_log` (every loggable category, fields from
+`CATEGORY_FIELDS`), `add_important_date`, and `not_supported` (the model must always call one, so
+questions get a 422 rather than landing on a list). The context gives the model today, the next
+35 days by weekday, the lists and the people; voice never creates a list or a person; *when and how* each is used is plain English in
+`server/src/voice/rules.md`, which goes into the system prompt and is copied into `dist/` by the
+server's build script. Teaching voice a new phrasing is a rules edit plus phrase-table lines; a
+new kind of write is a new action module. The response is discriminated by `action`.
+
+`voiceService.handleVoiceCommand` asks the model parser first; it proposes `{ action, input }`,
+the service checks the input against that action's zod schema, and the action checks it against
+real data before writing. *Any* failure falls back to `lib/voiceRules.ts`, which only knows
+`add_to_list`, so a shopping command is never lost. `lib/voiceModel.ts` is the only importer of
+`@anthropic-ai/sdk`: Haiku gets one strict tool per action (schema from the zod input via
+`z.toJSONSchema`) and `tool_choice: any` with parallel calls off, so it must pick exactly one.
+`createApp(db, photosDir, push, voiceParser)`: omitted builds from config
 (`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means rules only, tests pass a fake.
-`npm run voice:check` (`scripts/voiceCheck.ts`) runs real phrases against the real API: a
-**manual** script, never part of `npm test` or CI, because it costs money.
+`npm run voice:check` (`scripts/voiceCheck.ts`) runs the **phrase table** (phrase → expected
+action and fields; every rule gets lines) against the real API: a **manual** script, never
+part of `npm test` or CI, because it costs money.
+
+**Undo.** An action calls `how.record(...)` for every row it creates; the service saves those
+in `voice_commands` (server-only, not synced, cascades with its device token, pruned after a
+day) and returns `commandId`. `DELETE /api/voice/commands/:id` (`voiceUndoService`) deletes
+exactly those rows, newest first, plus an entity the command made if nothing else uses it. Only
+the same device (a browser only its own), within `VOICE_UNDO_WINDOW_MS` (5 min) by the hub's
+clock; another device's command is a 404, a late one a 410, a repeat a 204. It is the one delete
+a device token can make outside list items. The companion app queues the tap in `UndoStore`
+and sends it through `Outbox` ahead of any Got it.
 
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the
 companion app's shopping lists with their shop locations, `PUT …/location` to tag one, and
-`DELETE …/items/:itemId` for Got it) and
+`DELETE …/items/:itemId` for Got it) — and, under `/api/voice`, `DELETE /commands/:id` for Undo —
 nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
 token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
 never mint tokens. Over the WAN those two paths skip Authelia through a regex `location` in nginx

@@ -34,12 +34,14 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   const [author, setAuthor] = useState("");
   const [people, setPeople] = useState<PersonTagInput[]>([]);
   const [autoDelete, setAutoDelete] = useState(true);
+  // "" is untimed: the <input type="time"> value when nothing is picked.
+  const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   // The date, year and auto-delete start filled in; anything else means it has been started.
   useUnsavedChanges(
-    [title, releaseYear, author, notes].some((v) => v.trim() !== "") ||
+    [title, releaseYear, author, notes, time].some((v) => v.trim() !== "") ||
       rating !== null ||
       people.length > 0 ||
       photoFiles.length > 0,
@@ -91,6 +93,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
               notes: notes || null,
               people: fields.hasPeople ? people : [],
               autoDelete: fields.hasAutoDelete ? autoDelete : false,
+              time: fields.hasTime && time ? time : null,
             }
           : {
               category,
@@ -102,6 +105,7 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
               notes: notes || null,
               people: fields.hasPeople ? people : [],
               autoDelete: fields.hasAutoDelete ? autoDelete : false,
+              time: fields.hasTime && time ? time : null,
             },
       );
     } catch {
@@ -216,6 +220,23 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
             onChange={(e) => setDate(e.target.value)}
             className={FIELD_CLASS}
           />
+        </label>
+      )}
+
+      {fields.hasTime && (
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">
+            Time <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span>
+          </span>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            With a time, the reminder comes an hour before instead of at 9am.
+          </span>
         </label>
       )}
 

@@ -14,7 +14,7 @@ import type {
   PersonRef,
   PersonTagInput,
 } from "@logger/shared";
-import { isLoggableCategory } from "@logger/shared";
+import { CATEGORY_FIELDS, isLoggableCategory, type LoggableCategory } from "@logger/shared";
 
 /** Resolve a list of person tag inputs (existing id or new name) into person entity ids, auto-creating as needed. */
 export function resolvePersonIds(db: AppDb, people: PersonTagInput[]): number[] {
@@ -93,9 +93,15 @@ export function toLogDTO(
     photos,
     albums: albumRefs,
     autoDelete: row.autoDelete,
+    time: row.time,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/** A time of day is kept only for categories that have one (appointments); otherwise null. */
+function timeFor(category: LoggableCategory, time: string | null | undefined): string | null {
+  return CATEGORY_FIELDS[category].hasTime ? (time ?? null) : null;
 }
 
 /** A LogDTO with its parent entity inlined. Used by search results, person appearances, album events. */
@@ -149,12 +155,14 @@ export function createLog(db: AppDb, input: CreateLogRequest): LogDTO {
   validateRating(input.rating);
 
   let entityId: number;
+  let category: LoggableCategory;
   if (input.entityId != null) {
     const entity = getEntityById(db, input.entityId);
     if (!isLoggableCategory(entity.category)) {
       throw new BadRequestError(`Cannot log against a ${entity.category} entity`);
     }
     entityId = entity.id;
+    category = entity.category;
   } else if (input.category && input.title) {
     if (!isLoggableCategory(input.category)) {
       throw new BadRequestError(`${input.category} is not a loggable category`);
@@ -164,6 +172,7 @@ export function createLog(db: AppDb, input: CreateLogRequest): LogDTO {
       author: input.author,
     });
     entityId = entity.id;
+    category = input.category;
   } else {
     throw new BadRequestError("Either entityId or category+title is required");
   }
@@ -178,6 +187,7 @@ export function createLog(db: AppDb, input: CreateLogRequest): LogDTO {
       date: input.date,
       notes: input.notes,
       autoDelete: input.autoDelete ?? false,
+      time: timeFor(category, input.time),
     })
     .returning()
     .get();
@@ -205,6 +215,7 @@ export function updateLog(db: AppDb, id: number, input: UpdateLogRequest): LogDT
   }
 
   const personIds = resolvePersonIds(db, input.people ?? []);
+  const { category } = getEntityById(db, existing.entityId);
 
   const updated = db
     .update(logs)
@@ -213,6 +224,8 @@ export function updateLog(db: AppDb, id: number, input: UpdateLogRequest): LogDT
       date: input.date,
       notes: input.notes,
       autoDelete: input.autoDelete ?? false,
+      // Absent keeps the time: a client from before times existed sends none.
+      time: input.time === undefined ? existing.time : timeFor(category as LoggableCategory, input.time),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(logs.id, id))

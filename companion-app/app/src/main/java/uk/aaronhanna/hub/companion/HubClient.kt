@@ -10,13 +10,17 @@ import java.net.URL
 /** `GET /api/voice/status`: who the token belongs to, and which parser commands will get. */
 data class VoiceStatus(val device: String?, val usesModel: Boolean)
 
-/** `POST /api/voice`: what happened to a spoken command. */
+/**
+ * `POST /api/voice`: what happened to a spoken command. The hub's reply also carries each
+ * action's own detail (the list and items for shopping), which the phone doesn't need: it shows
+ * [message], and [action] says which kind of thing was done.
+ */
 data class VoiceReply(
+    val action: String,
     val message: String,
-    val listName: String,
-    val added: List<String>,
-    val alreadyOnList: List<String>,
     val usedModel: Boolean,
+    /** For [HubClient.undoVoice]; null when the command saved nothing. */
+    val commandId: Int? = null,
 )
 
 /** Why a call didn't work, as the person holding the phone needs to hear it. */
@@ -52,13 +56,19 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
         call("POST", "/api/voice", JSONObject().put("text", text)) { reply ->
             val json = JSONObject(reply)
             VoiceReply(
+                action = json.getString("action"),
                 message = json.getString("message"),
-                listName = json.getJSONObject("list").getString("name"),
-                added = json.getJSONArray("added").strings(),
-                alreadyOnList = json.getJSONArray("alreadyOnList").strings(),
                 usedModel = json.getString("parsedBy") == "model",
+                commandId = if (json.isNull("commandId")) null else json.getInt("commandId"),
             )
         }
+
+    /**
+     * Undo a voice command. A repeat is a 204 again; too late, or not this phone's, comes back
+     * [HubError.Rejected] with the hub's reason.
+     */
+    fun undoVoice(commandId: Int): HubResult<Unit> =
+        call("DELETE", "/api/voice/commands/$commandId", null) { }
 
     /** Every shopping list with its location and items — the app's whole cache in one call. */
     fun lists(): HubResult<List<ShopList>> = call("GET", "/api/device/lists", null, ShopList::listFromJson)
@@ -130,6 +140,4 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
     /** The hub's `{ "error": "…" }`, if that's what came back. */
     private fun errorFrom(text: String): HubError? =
         runCatching { JSONObject(text).getString("error") }.getOrNull()?.let { HubError.Rejected(it) }
-
-    private fun org.json.JSONArray.strings(): List<String> = List(length()) { getString(it) }
 }

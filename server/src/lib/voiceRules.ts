@@ -1,6 +1,6 @@
 /**
- * The backup voice parser, used only when the model can't be reached (no API key, no internet,
- * a timeout, a refusal). It understands one shape — "[add|put] <items> [to|on|onto] [the|my]
+ * The backup voice parser, for shopping (`add_to_list`) only, used when the model can't be
+ * reached (no API key, no internet, a timeout, a refusal). It understands one shape — "[add|put] <items> [to|on|onto] [the|my]
  * <list> [list]" — and is deliberately timid:
  *
  *  - It never splits the items. "fish and chips" is one item and "eggs and milk" is two, and
@@ -9,10 +9,15 @@
  *  - A list is matched only when every word you said is a word of exactly one list's name
  *    ("sainsburys" → "Sainsbury's – Bangor"). Anything else goes to the main list.
  *
+ * It only takes a command that says it is shopping: one that starts "add" or "put", or ends by
+ * naming a list. Anything else ("dentist next tuesday at 3") is `null`, and the caller says it
+ * needs the model, rather than putting an appointment on the shopping list.
+ *
  * Everything clever about understanding speech belongs to the model; this exists so a voice
  * command is never simply lost.
  */
-import type { ParsedVoiceCommand, VoiceList } from "./voiceModel.js";
+import type { VoiceList } from "../voice/actions.js";
+import type { AddToListInput } from "../voice/addToList.js";
 
 /** Lowercase words only: "Sainsbury's – Bangor" → ["sainsburys", "bangor"]. */
 function words(s: string): string[] {
@@ -45,10 +50,10 @@ const FILLER = /^(?:some|a|an|the)\s+/i;
  */
 const TARGET_SPLIT = /^(?:(.*)\s+)?(?:to|onto|on)\s+(?:the\s+|my\s+)?(.+?)$/i;
 
-export function parseWithRules(text: string, lists: VoiceList[]): ParsedVoiceCommand {
+export function parseWithRules(text: string, lists: VoiceList[]): AddToListInput | null {
   const command = text.trim().replace(/[.!?]+$/, "").replace(/\s+/g, " ");
-  // The widget only ever adds, so a bare "eggs" with no verb is still an item.
   const body = command.replace(LEAD_IN, "");
+  const saysAdd = body !== command;
 
   const split = TARGET_SPLIT.exec(body);
   if (split) {
@@ -60,5 +65,6 @@ export function parseWithRules(text: string, lists: VoiceList[]): ParsedVoiceCom
     if (namesAList) return { listId: list?.id ?? null, items: [itemPart.replace(FILLER, "").trim()].filter(Boolean) };
   }
 
-  return { listId: null, items: [body.replace(FILLER, "").trim()].filter(Boolean) };
+  // No list named: shopping only if it said "add" or "put".
+  return saysAdd ? { listId: null, items: [body.replace(FILLER, "").trim()].filter(Boolean) } : null;
 }

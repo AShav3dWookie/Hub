@@ -23,3 +23,4 @@ export * from "./rules/gallery.js";
 export * from "./rules/search.js";
 export * from "./rules/personStats.js";
 export * from "./rules/lists.js";
+export * from "./rules/timeOfDay.js";

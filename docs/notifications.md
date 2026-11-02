@@ -5,8 +5,9 @@ The app sends reminders for everything the home screen's "What's on" lists: impo
 
 | When | What |
 | --- | --- |
-| **9pm** the day before | "Tomorrow" — everything happening tomorrow |
-| **9am** on the day | "Today" — everything happening today |
+| **9pm** the day before | "Tomorrow" — everything happening tomorrow, an appointment's time included ("Dentist at 15:00") |
+| **9am** on the day | "Today" — everything happening today, except appointments with a time |
+| **An hour before** | "In an hour" — an appointment with a time, instead of its 9am reminder |
 | **9am**, 7 days before | "In a week" — important dates whose tag contains *birthday* |
 
 Several things in one slot arrive as **one** notification. At 9am, "Today" and "In a week" share
@@ -55,6 +56,14 @@ Settings → **Notifications** → *Turn on notifications*, on each device you w
   already announced isn't repeated; a late item gets its own short notification.
   - A notification also expires at the end of its slot, so a phone that was switched off all
     morning won't announce "Today" at 6pm.
+- **Timed appointments.** An appointment can carry an optional time of day (the *Time* field on
+  the add and edit forms; blank means all day). A timed one is named at 9pm the night before
+  with its time, skips 9am, and gets its own reminder when the hour before it opens. The scheduler
+  ticks every minute, so the reminder lands right at the hour; added inside the hour, it goes out
+  on the next tick; nothing is sent once the appointment has started, and the notification
+  expires at the start. An appointment just after midnight is reminded just before it, the
+  evening before. A timed appointment counts as planned if it was added before its start, so one
+  added that morning for the afternoon still reminds.
 - **Offline-created items** notify once they've synced, because the server does the scheduling.
 - **Birthdays** are matched by tag, case-insensitively: "Birthday", "30th birthday" and so on.
   Other important dates get the 9pm and 9am reminders only.

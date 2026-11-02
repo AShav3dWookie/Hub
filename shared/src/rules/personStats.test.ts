@@ -17,6 +17,7 @@ function appearance(category: Category, people: PersonRef[]): LogWithEntityDTO {
     photos: [],
     albums: [],
     autoDelete: false,
+    time: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     entity: {

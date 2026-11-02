@@ -1,9 +1,12 @@
 import { and, eq, lt } from "drizzle-orm";
 import {
+  HOUR_BEFORE,
   NOTIFICATION_SLOTS,
+  appointmentsStartingSoon,
   itemsOccurringOn,
   summariseNotification,
   type NotificationItem,
+  type NotificationSlot,
   type NotificationSlotConfig,
 } from "@logger/shared";
 import type { AppDb } from "../db/client.js";
@@ -16,7 +19,8 @@ import { listSubscriptions, sendToDevices } from "./pushSubscriptionsService.js"
 
 /**
  * Reminder notifications for upcoming dates: 9pm the evening before, 9am on the day, and 9am a
- * week before a birthday (`NOTIFICATION_SLOTS` in `@logger/shared`).
+ * week before a birthday (`NOTIFICATION_SLOTS` in `@logger/shared`); and an hour before a timed
+ * appointment (`HOUR_BEFORE`), which then skips the 9am one.
  *
  * The scheduler has no timetable of its own. Every tick asks "which slots are open right now?",
  * and sends whatever those slots cover that `notification_deliveries` says hasn't been announced.
@@ -48,15 +52,17 @@ export async function runNotificationTick(
     .run();
 
   const open = NOTIFICATION_SLOTS.filter((s) => minutes >= s.startMinute && minutes < s.endMinute);
-  if (open.length === 0) return { notifications: 0 };
 
   // Nobody to tell. Recording nothing means a device that subscribes later in the window still
   // gets this slot's reminder.
   const devices = listSubscriptions(db);
   if (devices.length === 0) return { notifications: 0 };
 
-  const noteRows = selectImportantDateRows(db);
   const eventRows = selectEventRows(db);
+  let notifications = await remindStartingSoon(db, now, dateISO, minutes, eventRows, devices, send);
+  if (open.length === 0) return { notifications };
+
+  const noteRows = selectImportantDateRows(db);
 
   // Slots opening at the same minute share one notification (9am: Today + In a week).
   const groups = new Map<number, NotificationSlotConfig[]>();
@@ -64,7 +70,6 @@ export async function runNotificationTick(
     groups.set(slot.startMinute, [...(groups.get(slot.startMinute) ?? []), slot]);
   }
 
-  let notifications = 0;
   for (const slots of groups.values()) {
     const pending = slots.map((slot) => ({
       slot,
@@ -104,6 +109,18 @@ export async function runNotificationTick(
   return { notifications };
 }
 
+/** Item keys already announced in `slot` under `firedOn`. */
+function announced(db: AppDb, slot: NotificationSlot, firedOn: string): Set<string> {
+  return new Set(
+    db
+      .select({ itemKey: notificationDeliveries.itemKey })
+      .from(notificationDeliveries)
+      .where(and(eq(notificationDeliveries.slot, slot), eq(notificationDeliveries.firedOn, firedOn)))
+      .all()
+      .map((r) => r.itemKey),
+  );
+}
+
 function unannounced(
   db: AppDb,
   slot: NotificationSlotConfig,
@@ -111,17 +128,49 @@ function unannounced(
   noteRows: ReturnType<typeof selectImportantDateRows>,
   eventRows: ReturnType<typeof selectEventRows>,
 ): NotificationItem[] {
-  const announced = new Set(
-    db
-      .select({ itemKey: notificationDeliveries.itemKey })
-      .from(notificationDeliveries)
-      .where(and(eq(notificationDeliveries.slot, slot.slot), eq(notificationDeliveries.firedOn, dateISO)))
-      .all()
-      .map((r) => r.itemKey),
-  );
+  const done = announced(db, slot.slot, dateISO);
   return itemsOccurringOn(noteRows, eventRows, addDaysISO(dateISO, slot.dayOffset), {
     birthdaysOnly: slot.birthdaysOnly,
-  }).filter((item) => !announced.has(item.key));
+    untimedOnly: slot.untimedOnly,
+  }).filter((item) => !done.has(item.key));
+}
+
+/**
+ * The hour-before reminders whose window is open now and that haven't gone out, as one
+ * notification. Recorded under the appointment's own date rather than today's, so a window that
+ * spans midnight still sends once. Returns the number of notifications sent (0 or 1).
+ */
+async function remindStartingSoon(
+  db: AppDb,
+  now: Date,
+  dateISO: string,
+  minutes: number,
+  eventRows: ReturnType<typeof selectEventRows>,
+  devices: ReturnType<typeof listSubscriptions>,
+  send: PushSender,
+): Promise<number> {
+  const due = appointmentsStartingSoon(eventRows, dateISO, minutes, addDaysISO(dateISO, 1)).filter(
+    ({ dateISO: on, item }) => !announced(db, HOUR_BEFORE.slot, on).has(item.key),
+  );
+  const message = summariseNotification([{ heading: HOUR_BEFORE.heading, items: due.map((d) => d.item) }]);
+  if (!message) return 0;
+
+  const accepted = await sendToDevices(
+    db,
+    devices,
+    { ...message, url: "/", tag: `${HOUR_BEFORE.slot}/${due.map((d) => `${d.dateISO}/${d.item.key}`).join(",")}` },
+    // Worth delivering only until the first of them starts.
+    Math.max(60, Math.min(...due.map((d) => d.startsIn)) * 60),
+    send,
+  );
+  if (accepted === 0) return 0;
+
+  const sentAt = now.toISOString();
+  db.insert(notificationDeliveries)
+    .values(due.map(({ dateISO: on, item }) => ({ slot: HOUR_BEFORE.slot, firedOn: on, itemKey: item.key, sentAt })))
+    .onConflictDoNothing()
+    .run();
+  return 1;
 }
 
 export const TICK_INTERVAL_MS = 60_000;

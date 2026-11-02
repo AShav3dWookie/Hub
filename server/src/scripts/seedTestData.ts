@@ -165,6 +165,7 @@ createLog(db, {
   category: "appointment",
   title: "Dentist checkup",
   date: isoInDays(5),
+  time: "15:00",
   rating: null,
   notes: "Ask about the night guard.",
   people: [],

@@ -1,8 +1,8 @@
 # Voice commands
 
 Say "add eggs and milk to the M&S list" into the companion app's widget and the items land on
-that list. The phone turns speech into text; the server works out what the text means and adds
-the items.
+that list; say "dentist next Tuesday at 3" and it lands in the diary as an appointment. The phone
+turns speech into text; the server works out what the text means and saves it.
 
 ```
  phone ── "add eggs and milk to marks and spencer" ──▶ POST /api/voice
@@ -40,7 +40,7 @@ the items.
 
    ```json
    {
-     "action": "add",
+     "action": "add_to_list",
      "list": { "id": 3, "name": "M&S – Bangor" },
      "added": ["Eggs", "Milk"],
      "alreadyOnList": [],
@@ -49,7 +49,24 @@ the items.
    }
    ```
 
-   On the LAN, `http://<server-ip>:8090/api/voice` works the same way.
+   On the LAN, `http://<server-ip>:8090/api/voice` works the same way. Every reply has
+   `action` (which kind of thing was done), `message` and `parsedBy`; the rest is that action's
+   own detail. A device only needs `message`.
+
+## How it works: actions and rules
+
+The server turns a command into exactly one **action**, and the action does the writing.
+
+- **Actions are code** (`server/src/voice/`): what voice *can* do. Each one is a module with an
+  input schema, checks against the real data, a call into the same services the app's own forms
+  use, and its reply. Today there is one, `add_to_list`.
+- **Rules are text** (`server/src/voice/rules.md`): *when and how* each action is used, in plain
+  English — what counts as a shopping item, how lists are matched, list nicknames. The model
+  reads them with every command. Rules only steer between actions; they can't add a new one.
+
+So teaching voice a new way of saying something means editing the rules (and adding lines to
+the phrase table in `npm run voice:check`); a new *kind* of write means a new action module.
+Rules ship with a release, like code.
 
 ## What it understands
 
@@ -60,14 +77,83 @@ the items.
 - **Which items:** "eggs and milk" is two items; "fish and chips" is one. Quantities stay
   ("6 eggs"); filler goes ("can you add some…").
 - **Items already on the list** aren't added twice; the reply says they were already there.
-- **Adding only, for now.** Removing by voice may come later; the reply's `action` field is
-  there so it can.
+- **Adding only, for now.** Removing by voice may come later as another action.
+
+### Appointments
+
+"Dentist next Tuesday at 3", "haircut on the 14th", "MOT tomorrow at half 9" become appointments
+(`create_log`), with the reply saying exactly what was saved: *Added Dentist, Tue 10 Nov 15:00*.
+
+- **Dates** are worked out where the hub is (`NOTIFY_TIMEZONE`). The model is given today and
+  the next five weeks day by day, and returns an exact date. "Friday" or "this Friday" is the
+  first one coming; **"next Friday" is Friday of next week**; "the 14th" is the next 14th.
+- **Times** without am/pm are daytime: "at 3" is 15:00, "at 9" is 09:00. No time said means an
+  untimed appointment.
+- An appointment in the past, a date that doesn't exist, or a time that isn't one is refused
+  (422) and nothing is saved.
+- New appointments auto-delete once they've passed, like the form's default, unless you say to
+  keep it.
+- Every loggable category goes through the same action, its fields taken from the category
+  configuration; the rules decide which ones voice is used for.
+
+### Hang-outs and eating out, with people
+
+"Dinner with Ada at Dylan's tonight" is **eating out** (a meal out; the title is the place),
+"drinks with Zoe on Friday" a **hang-out** (anything else with people; the title is the
+activity). Both can be in the past ("coffee with Ada yesterday") as well as planned.
+
+- **People are matched by meaning** against everyone the hub knows: "Zo" finds Zoe, "Mo" finds
+  Mo Salah. The model is given each person's id; the server checks every id is really a person.
+- **Voice never creates a person.** A name the hub doesn't know is left off and the reply says
+  so: *Added Bowling (Hang Out) with Ada, Sat 7 Nov. I don't know Aida, so they weren't tagged.*
+  Add Aida in the app, then tag her on the log.
+
+### Important dates
+
+"Ada's birthday is the 3rd of March" adds an important date to Ada (`add_important_date`), the
+same as Settings would: it appears in Home's upcoming dates, and a birthday gets the "In a week"
+reminder, with nothing else to set up.
+
+- **Only people the hub knows**, matched by meaning like tagging. Someone it doesn't know is a
+  422 (*I don't know Aida, so nothing was added*); voice never creates a person.
+- The year is kept if you say one; otherwise the date is stored in the year it next comes round
+  (only the month and day matter to the reminders).
+- The same date under the same name is reported (*Ada's Birthday is already 3 March*) rather
+  than added twice.
+- Something that happens once — "Ada's birthday party on Saturday" — is a hang-out, not an
+  important date.
+
+### Undo
+
+Every command that saved something comes back with a `commandId`, and the companion app's
+reply notification has **Undo** (the notification goes by itself after five minutes, when
+Undo would be too late). It deletes exactly what that command created (the list
+items it added, the appointment and, if the command made it, the appointment's entry) and
+nothing else:
+
+```bash
+curl -X DELETE https://hub.aaronhanna.uk/api/voice/commands/42 -H "Authorization: Bearer hub_..."
+```
+
+- **Five minutes**, by the hub's clock: after that it's a `410` *Too late to undo*.
+- **Only the device that said it.** Another device's command is a `404`, as if it didn't exist.
+  A signed-in browser can undo only commands it sent itself.
+- **Once.** Undoing again is a `204`, so a tap queued twice is harmless.
+- **No signal?** The app queues the tap like *Got it* and sends it when it can, but the five
+  minutes still count from the command, so a long-queued tap can be refused.
+
+### What it won't do
+
+Questions ("what's on tomorrow?"), removing or changing things, and anything else no action
+covers get a 422: *I can't do that by voice (answering questions).* Nothing is saved.
 
 ## The backup parser
 
 When the model can't be reached (no key, no internet, a 10-second timeout, or an answer that
-doesn't fit), a simple set of rules takes over so a command is never lost. It understands
-*"add X to Y"* and matches *Y* only when every word of it is in exactly one list's name. It
+doesn't fit), a simple set of rules takes over so a shopping command is never lost. It understands
+*"add X to Y"* and matches *Y* only when every word of it is in exactly one list's name. It only
+takes a command that starts "add" or "put", or ends by naming a list; anything else (an
+appointment) answers *I need the model for that* rather than landing on the shopping list. It
 **never splits items**, so "eggs and milk" lands as a single entry *Eggs and milk*. That's why
 its replies end in *(simple parser — check it)* and report `"parsedBy": "rules"`.
 
@@ -76,6 +162,9 @@ time it falls back.
 
 ## Security
 
+- **Create only.** Through `/api/voice` a token can add list items, diary entries (an
+  appointment, a log) and important dates. It can't change or delete anything there, except to **undo its own
+  command** within 5 minutes (below).
 - A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
   it reads the shopping lists (names, items, shop locations), tags or clears a list's shop, and
   ticks items off when you tap Got it after leaving a shop.
@@ -124,7 +213,8 @@ paths.
 
 A manual check against the real model. It costs money (well under a penny a run), so it is
 **not** a test: nothing in `npm test`, coverage or CI runs it. Run it after setting up a key,
-changing the prompt in `server/src/lib/voiceModel.ts`, or changing `VOICE_MODEL`.
+changing `server/src/voice/rules.md`, an action, the prompt in `server/src/lib/voiceModel.ts`,
+or `VOICE_MODEL`.
 
 It reads `ANTHROPIC_API_KEY` from the shell or from the repo-root `.env`, the file the dev
 `docker compose` also reads, so one line sets up both.
@@ -133,9 +223,11 @@ It reads `ANTHROPIC_API_KEY` from the shell or from the repo-root `.env`, the fi
 npm run voice:check
 ```
 
-That sends about a dozen phrases ("eggs and milk", "fish and chips", "sains brees", a shop name
-inside an item, a command with nothing to add) and prints each answer, pass or fail, its
-latency, and what the run cost. It exits non-zero if any phrase fails.
+That runs the **phrase table**: each phrase ("eggs and milk", "fish and chips", "sains brees", a
+shop name inside an item, a command with nothing to add) with the action and fields it should
+come back as. It prints each answer, pass or fail, its latency, and what the run cost, and exits
+non-zero if any phrase fails. It is the regression net for the rules: every rule gets lines in
+it, so a rule that quietly breaks another shows up here.
 
 Add `--server` and a device token to also send one command through a running server, which
 proves the *server* has the key (`"parsedBy": "model"`):

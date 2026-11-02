@@ -54,6 +54,21 @@ describe("getChanges", () => {
     expect(page.changes.albums).toHaveLength(1);
   });
 
+  it("carries an appointment's time, and null for an untimed log", () => {
+    ctx = createTestDb();
+    seedLog("Dune");
+    createLog(ctx.db, {
+      category: "appointment",
+      title: "Dentist",
+      rating: null,
+      date: "2026-09-15",
+      notes: null,
+      people: [],
+      time: "15:00",
+    });
+    expect(getChanges(ctx.db).changes.logs.map((l) => l.time)).toEqual([null, "15:00"]);
+  });
+
   it("maps a photo row to its public urls", () => {
     ctx = createTestDb();
     const log = seedLog("Dune");

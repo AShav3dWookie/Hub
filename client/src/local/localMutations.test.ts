@@ -111,6 +111,23 @@ describe("applyLocalMutation", () => {
       expect(env).toMatchObject({ type: "log.update", baseVersion: 4, payload: { logId: 5, rating: 5 } });
     });
 
+    it("keeps the row's time when the update doesn't send one, and changes it when it does", async () => {
+      await seedLocalDb({ logs: [makeLog({ id: 5, entityId: 1, time: "15:00" })] });
+      const base = { logId: 5, rating: null, date: "2024-01-01", notes: null, people: [] };
+
+      await applyLocalMutation({ type: "log.update", input: base });
+      expect((await store<{ time: string | null }>("logs"))[0].time).toBe("15:00");
+      expect("time" in ((await listOutbox())[0].payload as object)).toBe(false);
+
+      await applyLocalMutation({ type: "log.update", input: { ...base, time: "09:30" } });
+      await applyLocalMutation({ type: "log.update", input: { ...base, notes: "bring card" } });
+      expect((await store<{ time: string | null }>("logs"))[0].time).toBe("09:30");
+      // Folded into one envelope, and the later edit didn't lose the earlier time.
+      const envs = await listOutbox();
+      expect(envs).toHaveLength(1);
+      expect(envs[0].payload).toMatchObject({ time: "09:30", notes: "bring card" });
+    });
+
     it("collapses into a still-pending log.create for the same temp row", async () => {
       const created = await applyLocalMutation({
         type: "log.create",

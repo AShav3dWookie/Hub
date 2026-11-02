@@ -26,6 +26,7 @@ export interface FeedRow {
   rating?: number | null;
   date?: string;
   autoDelete?: boolean;
+  time?: string | null;
   author?: string | null;
   releaseYear?: number | null;
   category?: string;
@@ -138,6 +139,8 @@ export interface LogFields {
   date?: string;
   /** Appointment only; the checkbox defaults to checked — pass false to clear it. */
   autoDelete?: boolean;
+  /** Appointment only: `HH:MM`. Left blank (untimed) when absent. */
+  time?: string;
 }
 
 /** Fill and submit the Add form for `category`, returning to the home hub. */
@@ -154,6 +157,7 @@ export async function addLog(page: Page, category: LoggableCategory, f: LogField
   }
   if (cf.dateGranularity === "year" && f.year) await page.getByLabel(cf.dateLabel).fill(f.year);
   if (cf.dateGranularity === "day" && f.date) await page.getByLabel(cf.dateLabel).fill(f.date);
+  if (cf.hasTime && f.time) await page.getByLabel(/^Time/).fill(f.time);
   if (cf.hasAutoDelete && f.autoDelete === false) {
     await page.getByRole("checkbox").uncheck();
   }

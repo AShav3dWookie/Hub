@@ -4,6 +4,7 @@ import { daysInMonth, daysBetween } from "@logger/shared";
 import { LIST_KINDS, LIST_ITEM_MAX_LENGTH, LIST_NAME_MAX_LENGTH } from "@logger/shared";
 import { MAX_SHOP_RADIUS_M, MIN_SHOP_RADIUS_M } from "@logger/shared";
 import { DEVICE_NAME_MAX_LENGTH, VOICE_TEXT_MAX_LENGTH } from "@logger/shared";
+import { TIME_OF_DAY_PATTERN } from "@logger/shared";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
 export const categorySchema = z.enum(CATEGORIES);
@@ -14,6 +15,9 @@ export const personTagSchema = z.object({
   id: z.number().int().positive().optional(),
   name: z.string().trim().min(1).optional(),
 });
+
+/** An appointment's local time of day, 24-hour `HH:MM`. */
+const timeOfDaySchema = z.string().regex(TIME_OF_DAY_PATTERN, "Time must be HH:MM (24-hour)");
 
 export const createEntitySchema = z.object({
   category: categorySchema,
@@ -34,6 +38,7 @@ export const createLogSchema = z
     notes: z.string().nullable().optional().default(null),
     people: z.array(personTagSchema).default([]),
     autoDelete: z.boolean().optional().default(false),
+    time: timeOfDaySchema.nullable().optional(),
   })
   .refine((data) => data.entityId != null || (data.category && data.title), {
     message: "Either entityId or category+title is required",
@@ -45,6 +50,8 @@ export const updateLogSchema = z.object({
   notes: z.string().nullable().optional().default(null),
   people: z.array(personTagSchema).default([]),
   autoDelete: z.boolean().optional().default(false),
+  // Absent (not null) keeps the log's time; see UpdateLogRequest.
+  time: timeOfDaySchema.nullable().optional(),
 });
 
 export const createAlbumSchema = z.object({

@@ -87,6 +87,7 @@ function LogRow({
     log.people.map((p) => ({ id: p.id, name: p.name })),
   );
   const [autoDelete, setAutoDelete] = useState(log.autoDelete);
+  const [time, setTime] = useState(log.time ?? "");
   useUnsavedChanges(formOpen);
 
   const updateLog = useUpdateLog(log.id);
@@ -109,6 +110,7 @@ function LogRow({
       notes: notes || null,
       people: fields.hasPeople ? people : [],
       autoDelete: fields.hasAutoDelete ? autoDelete : false,
+      ...(fields.hasTime ? { time: time || null } : {}),
     });
     setFormOpen(false);
     showToast("Log updated");
@@ -140,6 +142,15 @@ function LogRow({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            className={`mt-2 ${FIELD_CLASS}`}
+          />
+        )}
+        {fields.hasTime && (
+          <input
+            type="time"
+            aria-label="Time (optional)"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
             className={`mt-2 ${FIELD_CLASS}`}
           />
         )}
@@ -192,6 +203,7 @@ function LogRow({
       <div className="flex items-center justify-between">
         <span className="font-medium">
           {formatLogDate(log.date, category)}
+          {log.time && ` at ${log.time}`}
         </span>
         {fields.hasRating && <StarRating value={log.rating} readOnly />}
       </div>
