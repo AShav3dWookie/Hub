@@ -96,6 +96,24 @@ Rules ship with a release, like code.
 - Every loggable category goes through the same action, its fields taken from the category
   configuration; the rules decide which ones voice is used for.
 
+### Undo
+
+Every command that saved something comes back with a `commandId`, and the companion app's
+reply notification has **Undo**. It deletes exactly what that command created (the list
+items it added, the appointment and, if the command made it, the appointment's entry) and
+nothing else:
+
+```bash
+curl -X DELETE https://hub.aaronhanna.uk/api/voice/commands/42 -H "Authorization: Bearer hub_..."
+```
+
+- **Five minutes**, by the hub's clock: after that it's a `410` *Too late to undo*.
+- **Only the device that said it.** Another device's command is a `404`, as if it didn't exist.
+  A signed-in browser can undo only commands it sent itself.
+- **Once.** Undoing again is a `204`, so a tap queued twice is harmless.
+- **No signal?** The app queues the tap like *Got it* and sends it when it can, but the five
+  minutes still count from the command, so a long-queued tap can be refused.
+
 ### What it won't do
 
 Questions ("what's on tomorrow?"), removing or changing things, and anything else no action
@@ -117,7 +135,8 @@ time it falls back.
 ## Security
 
 - **Create only.** Through `/api/voice` a token can add list items and diary entries (an
-  appointment, a log). It can't change or delete anything there.
+  appointment, a log). It can't change or delete anything there, except to **undo its own
+  command** within 5 minutes (below).
 - A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
   it reads the shopping lists (names, items, shop locations), tags or clears a list's shop, and
   ticks items off when you tap Got it after leaving a shop.

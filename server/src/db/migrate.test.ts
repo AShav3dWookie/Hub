@@ -398,6 +398,23 @@ describe("migrations", () => {
     c.close();
   });
 
+  it("0016 creates voice_commands: server-only, and gone with the device that said them", () => {
+    const db = runMigrations(tmpDb());
+    const c = db.$client;
+    c.pragma("foreign_keys = ON");
+
+    const triggers = (c.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string }>)
+      .map((r) => r.name);
+    expect(triggers.some((t) => t.startsWith("voice_commands"))).toBe(false);
+
+    c.prepare("INSERT INTO device_tokens (name, token_hash, created_at) VALUES ('Pixel', 'h', 'x')").run();
+    c.prepare("INSERT INTO voice_commands (device_token_id, action, created, created_at) VALUES (1, 'add_to_list', '[]', 'x')").run();
+    c.prepare("DELETE FROM device_tokens WHERE id = 1").run();
+    expect(c.prepare("SELECT COUNT(*) AS n FROM voice_commands").get()).toEqual({ n: 0 });
+
+    c.close();
+  });
+
   it("0010 re-stamps logs that already had photos, so synced clients get them back", () => {
     // The triggers only cover writes from here on. Anyone already running the app has logs
     // sitting at a row_seq their devices are long past, and no way to reset a replica — so

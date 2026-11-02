@@ -106,7 +106,8 @@ network, where the token would travel unencrypted.
 On the phone: long-press the home screen → **Widgets** → **Hub** → drag **Hub voice** out. Tap
 it, wait for *"What do you need?"*, and speak. Shopping answers with a toast; anything else
 answers with a notification (channel *Voice replies*) showing what was saved and what it heard,
-or a toast if notifications are off. The app needs no microphone permission — it's
+with **Undo** for five minutes (queued like Got it if there's no signal), or a toast if
+notifications are off. The app needs no microphone permission — it's
 the phone's own speech prompt that listens.
 
 ## Shops

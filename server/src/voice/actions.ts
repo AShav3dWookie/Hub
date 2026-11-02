@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AppDb } from "../db/client.js";
-import type { VoiceActionName, VoiceCommandResponse, VoiceParsedBy } from "@logger/shared";
+import type { VoiceActionName, VoiceCommandResponse, VoiceParsedBy, VoiceRecord } from "@logger/shared";
 import { listLists } from "../services/listService.js";
 import { addDaysISO, localTime } from "../lib/localClock.js";
 import { addToList } from "./addToList.js";
@@ -21,8 +21,12 @@ export interface VoiceAction<Input extends z.ZodType = z.ZodType> {
   /** Shown to the model as the tool's description. */
   description: string;
   input: Input;
+  /**
+   * Must `how.record` every row it creates, so Undo can take exactly those away. The reply's
+   * `commandId` is filled in by the caller once the command is saved.
+   */
   // Method syntax, so an action with a narrower input still fits in the registry.
-  run(db: AppDb, input: z.output<Input>, how: VoiceRun): VoiceCommandResponse;
+  run(db: AppDb, input: z.output<Input>, how: VoiceRun): VoiceReplyWithoutId;
 }
 
 export interface VoiceRun {
@@ -32,7 +36,16 @@ export interface VoiceRun {
   /** Local date and minutes past midnight when the command arrived, for "not in the past". */
   today: string;
   nowMinutes: number;
+  /** Note a row this command created, for Undo. */
+  record(created: VoiceRecord): void;
 }
+
+/** An action's reply before the command has an id. */
+export type VoiceReplyWithoutId = VoiceCommandResponse extends infer R
+  ? R extends VoiceCommandResponse
+    ? Omit<R, "commandId">
+    : never
+  : never;
 
 /** When a command arrives, and the zone its dates and times mean (`NOTIFY_TIMEZONE`). */
 export interface VoiceClock {

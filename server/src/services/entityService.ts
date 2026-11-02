@@ -21,6 +21,15 @@ export interface EntityCreationFields {
   author?: string | null;
 }
 
+/** The entity with this category and title (case/whitespace-insensitive), if there is one. */
+export function findEntity(db: AppDb, category: Category, title: string): typeof entities.$inferSelect | undefined {
+  return db
+    .select()
+    .from(entities)
+    .where(and(eq(entities.category, category), eq(entities.normalizedTitle, normalizeTitle(title.trim()))))
+    .get();
+}
+
 /** Find an existing entity by category+title (case/whitespace-insensitive), or create a new one. */
 export function findOrCreateEntity(
   db: AppDb,

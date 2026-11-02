@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, ListKind, NotificationSlot, SyncEntityType } from "@logger/shared";
+import type { Category, ListKind, NotificationSlot, SyncEntityType, VoiceRecord } from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -335,6 +335,22 @@ export const deviceTokens = sqliteTable("device_tokens", {
   tokenHash: text("token_hash").notNull().unique(),
   createdAt: text("created_at").notNull(),
   lastUsedAt: text("last_used_at"),
+});
+
+/**
+ * Every voice command that saved something, and exactly what it saved, so its device can undo it
+ * for a few minutes (`voiceUndoService`). Server-only and not synced, like `device_tokens`; a
+ * revoked device's commands go with it. Pruned after a day.
+ */
+export const voiceCommands = sqliteTable("voice_commands", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Null for a command from a signed-in browser. */
+  deviceTokenId: integer("device_token_id").references(() => deviceTokens.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  /** What the command created, in the order it created it. */
+  created: text("created", { mode: "json" }).$type<VoiceRecord[]>().notNull(),
+  createdAt: text("created_at").notNull(),
+  undoneAt: text("undone_at"),
 });
 
 /**

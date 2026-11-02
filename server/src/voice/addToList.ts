@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { AppError } from "../lib/errors.js";
 import { addListItem, getList, listLists } from "../services/listService.js";
-import { LIST_ITEM_MAX_LENGTH, normalizeTitle, type AddToListReply } from "@logger/shared";
-import type { VoiceAction } from "./actions.js";
+import { LIST_ITEM_MAX_LENGTH, normalizeTitle } from "@logger/shared";
+import type { VoiceAction, VoiceReplyWithoutId } from "./actions.js";
 import { joinNames, tidy } from "./text.js";
 
 const input = z.object({
@@ -28,7 +28,7 @@ export const addToList: VoiceAction<typeof input> = {
   name: "add_to_list",
   description: "Add items to one of the shopping lists.",
   input,
-  run(db, { listId, items: said }, { text, parsedBy }): AddToListReply {
+  run(db, { listId, items: said }, { text, parsedBy, record }): VoiceReplyWithoutId {
     // One entry per distinct item, compared the way the list dedupes them.
     const seen = new Set<string>();
     const items = said.map((item) => tidy(item, LIST_ITEM_MAX_LENGTH)).filter((item) => {
@@ -51,7 +51,8 @@ export const addToList: VoiceAction<typeof input> = {
         if (already.has(normalizeTitle(item))) {
           alreadyOnList.push(item);
         } else {
-          addListItem(db, target.id, { text: item });
+          const created = addListItem(db, target.id, { text: item });
+          record({ kind: "listItem", listId: target.id, id: created.id });
           added.push(item);
         }
       }

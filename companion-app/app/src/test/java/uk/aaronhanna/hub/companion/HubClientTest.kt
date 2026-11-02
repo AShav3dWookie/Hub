@@ -73,6 +73,26 @@ class HubClientTest {
     }
 
     @Test
+    fun `reads the command's id for Undo, and its absence when nothing was saved`() {
+        respond(200, """{"action":"create_log","parsedBy":"model","message":"Added Dentist","commandId":7}""")
+        assertEquals(7, client.sendVoice("dentist").ok().commandId)
+        respond(200, """{"action":"add_to_list","parsedBy":"model","message":"Eggs is already on Shopping","commandId":null}""")
+        assertEquals(null, client.sendVoice("add eggs").ok().commandId)
+    }
+
+    @Test
+    fun `undo deletes the command, and passes on the hub's refusal`() {
+        respond(204, "")
+        assertEquals(HubResult.Ok(Unit), client.undoVoice(7))
+        val sent = server.takeRequest()
+        assertEquals("DELETE", sent.method)
+        assertEquals("/api/voice/commands/7", sent.path)
+
+        respond(410, """{"error":"Too late to undo: that was more than 5 minutes ago"}""")
+        assertEquals("Too late to undo: that was more than 5 minutes ago", client.undoVoice(7).error().message)
+    }
+
+    @Test
     fun `a 401 means the token was refused`() {
         respond(401, """{"error":"Invalid device token"}""")
         assertEquals(HubError.BadToken, client.sendVoice("add eggs").error())

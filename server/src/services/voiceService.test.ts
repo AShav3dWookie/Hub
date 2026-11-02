@@ -49,6 +49,7 @@ describe("handleVoiceCommand", () => {
       alreadyOnList: [],
       parsedBy: "model",
       message: "Added Eggs and Milk to M&S – Bangor",
+      commandId: expect.any(Number),
     });
   });
 
