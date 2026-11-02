@@ -157,6 +157,38 @@ const PHRASES: { say: string; action: VoiceActionName; want: Record<string, unkn
     want: { category: "eating_out", title: "the pantry", date: "2026-11-08", people: [{ id: 12 }] },
   },
 
+  // Important dates
+  {
+    say: "ada's birthday is the 3rd of march",
+    action: "add_important_date",
+    want: { personId: 11, tag: "birthday", month: 3, day: 3, year: null },
+  },
+  {
+    say: "mo's birthday is the 14th of february 1992",
+    action: "add_important_date",
+    want: { personId: 12, tag: "birthday", month: 2, day: 14, year: 1992 },
+  },
+  {
+    say: "zoe and tom's anniversary is june the 12th",
+    action: "add_important_date",
+    want: { personId: 13, tag: "anniversary", month: 6, day: 12, year: null },
+  },
+  {
+    say: "remember that zo started her new job on the 1st of september",
+    action: "add_important_date",
+    want: { personId: 13, tag: "new job", month: 9, day: 1 },
+  },
+  {
+    say: "aida's birthday is on the 9th of may",
+    action: "add_important_date",
+    want: { personId: null, month: 5, day: 9 },
+  },
+  {
+    say: "ada's birthday party on saturday",
+    action: "create_log",
+    want: { category: "hang_out", date: "2026-11-07", people: [{ id: 11 }] },
+  },
+
   // Anything else
   { say: "what's on my list", action: "not_supported", want: {} },
   { say: "what's on tomorrow", action: "not_supported", want: {} },

@@ -7,6 +7,7 @@ import { addDaysISO, localTime } from "../lib/localClock.js";
 import { addToList } from "./addToList.js";
 import { createLog } from "./createLog.js";
 import { notSupported } from "./notSupported.js";
+import { addImportantDate } from "./addImportantDate.js";
 
 /**
  * What voice can do, as code. Each action is one module: a name, an input schema (zod — the
@@ -83,7 +84,7 @@ export interface VoiceContext {
 /** How far ahead `comingDays` runs. */
 export const COMING_DAYS = 35;
 
-export const VOICE_ACTIONS: readonly VoiceAction[] = [addToList, createLog, notSupported];
+export const VOICE_ACTIONS: readonly VoiceAction[] = [addToList, createLog, addImportantDate, notSupported];
 
 export function findVoiceAction(name: string): VoiceAction | undefined {
   return VOICE_ACTIONS.find((a) => a.name === name);

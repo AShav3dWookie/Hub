@@ -57,6 +57,17 @@ command is answered with exactly one action. Each rule here has lines in the phr
   "Zoe", "Mo" is "Mo Salah". Use their id. Someone who isn't in the list gets a null id and the
   name as said; never guess an id for them.
 
+## Important dates: add_important_date
+
+- A date that comes round every year for someone: "Ada's birthday is the 3rd of March", "Zoe
+  and Tom's anniversary is 12 June", "Mo started his new job on 1 September".
+- personId is the person it belongs to, matched by meaning to the context's people as for
+  create_log; null if they aren't there. For a couple, use the first person named.
+- tag says what the date is, short and capitalised: "Birthday", "Anniversary", "New job".
+- month and day as said; year only if a year was said, otherwise null. "The 3rd" with no month
+  means the month it next falls in, from today.
+- Something that happens once (a party, a meal, an appointment) is create_log, not this.
+
 ## Anything else: not_supported
 
 - Questions ("what's on tomorrow?", "what's on my list?"), removing or changing something, and

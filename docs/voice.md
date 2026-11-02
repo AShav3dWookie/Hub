@@ -108,6 +108,21 @@ activity). Both can be in the past ("coffee with Ada yesterday") as well as plan
   so: *Added Bowling (Hang Out) with Ada, Sat 7 Nov. I don't know Aida, so they weren't tagged.*
   Add Aida in the app, then tag her on the log.
 
+### Important dates
+
+"Ada's birthday is the 3rd of March" adds an important date to Ada (`add_important_date`), the
+same as Settings would: it appears in Home's upcoming dates, and a birthday gets the "In a week"
+reminder, with nothing else to set up.
+
+- **Only people the hub knows**, matched by meaning like tagging. Someone it doesn't know is a
+  422 (*I don't know Aida, so nothing was added*); voice never creates a person.
+- The year is kept if you say one; otherwise the date is stored in the year it next comes round
+  (only the month and day matter to the reminders).
+- The same date under the same name is reported (*Ada's Birthday is already 3 March*) rather
+  than added twice.
+- Something that happens once — "Ada's birthday party on Saturday" — is a hang-out, not an
+  important date.
+
 ### Undo
 
 Every command that saved something comes back with a `commandId`, and the companion app's
@@ -146,8 +161,8 @@ time it falls back.
 
 ## Security
 
-- **Create only.** Through `/api/voice` a token can add list items and diary entries (an
-  appointment, a log). It can't change or delete anything there, except to **undo its own
+- **Create only.** Through `/api/voice` a token can add list items, diary entries (an
+  appointment, a log) and important dates. It can't change or delete anything there, except to **undo its own
   command** within 5 minutes (below).
 - A token works for `/api/voice` and `/api/device` **only**. The second is the companion app's:
   it reads the shopping lists (names, items, shop locations), tags or clears a list's shop, and
