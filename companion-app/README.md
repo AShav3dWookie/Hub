@@ -107,7 +107,7 @@ On the phone: long-press the home screen → **Widgets** → **Hub** → drag **
 it, wait for *"What do you need?"*, and speak. Shopping answers with a toast; anything else
 answers with a notification (channel *Voice replies*) showing what was saved and what it heard,
 with **Undo** for five minutes (queued like Got it if there's no signal), or a toast if
-notifications are off. The app needs no microphone permission — it's
+notifications are off. The notification goes by itself after those five minutes. The app needs no microphone permission — it's
 the phone's own speech prompt that listens.
 
 ## Shops
