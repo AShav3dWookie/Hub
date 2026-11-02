@@ -34,6 +34,7 @@ export function selectEventRows(db: AppDb): UpcomingEventLogRow[] {
       entityTitle: entities.title,
       category: entities.category,
       date: logs.date,
+      time: logs.time,
       notes: logs.notes,
       createdAt: logs.createdAt,
     })

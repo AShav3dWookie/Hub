@@ -84,6 +84,11 @@ export interface LogDTO {
    * has passed. Always false for other categories.
    */
   autoDelete: boolean;
+  /**
+   * For categories with hasTime (appointments): the local time of day, `HH:MM`, or null for an
+   * untimed one. Always null for other categories.
+   */
+  time: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -191,6 +196,8 @@ export interface CreateLogRequest {
   people: PersonTagInput[];
   /** Only meaningful for hasAutoDelete categories (appointments); defaults to false. */
   autoDelete?: boolean;
+  /** Only meaningful for hasTime categories (appointments): `HH:MM`, or null/absent for none. */
+  time?: string | null;
 }
 
 export interface UpdateLogRequest {
@@ -200,6 +207,11 @@ export interface UpdateLogRequest {
   people: PersonTagInput[];
   /** Only meaningful for hasAutoDelete categories (appointments); defaults to false. */
   autoDelete?: boolean;
+  /**
+   * hasTime categories (appointments): `HH:MM`, or null to clear it. Absent keeps the time the
+   * log has, so a client that predates times can't wipe one set elsewhere.
+   */
+  time?: string | null;
 }
 
 /** A free-form note attached to any entity (currently only surfaced in the UI for people). */
@@ -260,6 +272,8 @@ export interface UpcomingEventEntry {
   category: "hang_out" | "appointment";
   /** ISO date (YYYY-MM-DD). */
   date: string;
+  /** Appointments only: local `HH:MM`, or null. */
+  time: string | null;
   notes: string | null;
   /** Tagged people (hang-outs only; always [] for appointments). */
   people: PersonRef[];

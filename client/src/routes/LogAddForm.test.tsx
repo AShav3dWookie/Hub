@@ -91,12 +91,36 @@ describe("LogAddForm event categories", () => {
     expect(payload).toMatchObject({ autoDelete: true, rating: null });
   });
 
+  it("appointment: an optional time, queued when picked and null when left blank", async () => {
+    renderWithProviders(<LogAddForm category="appointment" />);
+    const time = screen.getByLabelText(/^Time \(optional\)/) as HTMLInputElement;
+    expect(time.type).toBe("time");
+    expect(time.value).toBe("");
+
+    await userEvent.type(screen.getByLabelText("Title"), "Dentist");
+    fireEvent.change(time, { target: { value: "15:00" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => expect((await queuedLogCreate()).log).toBeDefined());
+    expect((await queuedLogCreate()).payload).toMatchObject({ time: "15:00" });
+  });
+
+  it("appointment: no time picked queues an untimed one", async () => {
+    renderWithProviders(<LogAddForm category="appointment" />);
+    await userEvent.type(screen.getByLabelText("Title"), "Bins");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => expect((await queuedLogCreate()).log).toBeDefined());
+    expect((await queuedLogCreate()).payload).toMatchObject({ time: null });
+  });
+
   it("hang out: people + photos, no rating", () => {
     renderWithProviders(<LogAddForm category="hang_out" />);
     expect(screen.getByText("People")).toBeInTheDocument();
     expect(screen.getByText("Photos & videos")).toBeInTheDocument();
     expect(screen.queryByText("Rating")).not.toBeInTheDocument();
     expect(screen.queryByText("Auto-delete once it's passed")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Time/)).not.toBeInTheDocument();
   });
 });
 

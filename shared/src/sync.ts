@@ -51,6 +51,11 @@ export interface LogSyncDTO extends SyncMeta {
   date: string;
   notes: string | null;
   autoDelete: boolean;
+  /**
+   * `HH:MM` or null. Optional on the wire type because a replica written before times existed
+   * holds rows without it; read it as `time ?? null`.
+   */
+  time?: string | null;
   createdAt: string;
   updatedAt: string;
   /** Tagged person-entity ids. */

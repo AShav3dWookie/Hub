@@ -67,6 +67,24 @@ describe("Home", () => {
     ).toBeTruthy();
   });
 
+  it("shows an appointment's time beside its day, timed ones after the rest of the day", async () => {
+    const dentist = makeEntity({ title: "Dentist", category: "appointment" });
+    const bins = makeEntity({ title: "Bins", category: "appointment" });
+    await seedLocalDb({
+      entities: [dentist, bins],
+      logs: [
+        makeLog({ entityId: dentist.id, date: "2026-06-17", time: "15:00", createdAt: "2026-06-01T00:00:00.000Z" }),
+        makeLog({ entityId: bins.id, date: "2026-06-17", createdAt: "2026-06-01T00:00:00.000Z" }),
+      ],
+    });
+    renderWithProviders(<Home />);
+
+    const dentistRow = (await screen.findByText("Dentist")).closest("a")!;
+    expect(within(dentistRow).getByText("15:00")).toBeInTheDocument();
+    const binsRow = screen.getByText("Bins").closest("a")!;
+    expect(binsRow.compareDocumentPosition(dentistRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("merges upcoming events into the buckets alongside important dates", async () => {
     await seedUpcoming();
     const bowlingEntity = makeEntity({ title: "Bowling", category: "hang_out" });

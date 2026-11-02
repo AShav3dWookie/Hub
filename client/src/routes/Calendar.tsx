@@ -229,6 +229,11 @@ export function Calendar({
                       <span
                         className={`h-2.5 w-2.5 shrink-0 rounded-full ${CATEGORY_DOT[item.category]}`}
                       />
+                      {item.time && (
+                        <span className="text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
+                          {item.time}
+                        </span>
+                      )}
                       <span className="font-medium dark:text-white">{item.title}</span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">
                         {item.tag ? `${item.tag} · ` : ""}

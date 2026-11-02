@@ -20,6 +20,7 @@ const logRow = (id: number, title: string) => ({
   photos: [],
   albums: [],
   autoDelete: false,
+  time: null,
   createdAt: NOW,
   updatedAt: NOW,
   entity: { id, category: "movie" as const, title, createdAt: NOW, releaseYear: null, author: null },

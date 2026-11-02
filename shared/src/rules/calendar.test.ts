@@ -153,6 +153,25 @@ describe("buildCalendarRange important-date placement", () => {
 });
 
 describe("buildCalendarRange ordering", () => {
+  it("orders a day untimed first, then by time, and carries the time through", () => {
+    const result = buildCalendarRange(
+      [
+        log({ logId: 1, title: "Dentist", category: "appointment", time: "15:00" }),
+        log({ logId: 2, title: "Zoo" }),
+        log({ logId: 3, title: "Haircut", category: "appointment", time: "09:30" }),
+      ],
+      [note({ noteId: 9, eventDate: "1990-09-03", entityName: "Ziggy" })],
+      "2026-09-01",
+      "2026-09-30",
+    );
+    expect(result.items.map((i) => [i.title, i.time ?? null])).toEqual([
+      ["Ziggy", null],
+      ["Zoo", null],
+      ["Haircut", "09:30"],
+      ["Dentist", "15:00"],
+    ]);
+  });
+
   it("sorts by date first", () => {
     const result = buildCalendarRange(
       [log({ logId: 1, date: "2026-09-10" }), log({ logId: 2, date: "2026-09-02" })],

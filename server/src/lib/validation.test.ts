@@ -57,6 +57,16 @@ describe("updateLogSchema", () => {
     });
     expect(() => updateLogSchema.parse({})).toThrow();
   });
+
+  it("takes a 24-hour HH:MM time, null to clear it, and leaves it absent when not sent", () => {
+    expect(updateLogSchema.parse({ date: "2024-02-02", time: "15:00" }).time).toBe("15:00");
+    expect(updateLogSchema.parse({ date: "2024-02-02", time: null }).time).toBeNull();
+    expect("time" in updateLogSchema.parse({ date: "2024-02-02" })).toBe(false);
+    for (const time of ["3pm", "24:00", "9:30", "15:00:00"]) {
+      expect(() => updateLogSchema.parse({ date: "2024-02-02", time })).toThrow();
+      expect(() => createLogSchema.parse({ entityId: 1, date: "2024-02-02", time })).toThrow();
+    }
+  });
 });
 
 describe("searchQuerySchema", () => {

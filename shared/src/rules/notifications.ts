@@ -1,6 +1,7 @@
 import { nextAnnualOccurrence, toISODate } from "../dates.js";
 import type { ImportantDateNoteRow } from "./importantDates.js";
 import { EVENT_CATEGORIES, isPlannedAhead, type UpcomingEventLogRow } from "./upcomingEvents.js";
+import { compareTimeOfDay, minutesOfDay } from "./timeOfDay.js";
 
 /**
  * Push-notification rules: which items a reminder slot covers and what the notification says.
@@ -10,7 +11,8 @@ import { EVENT_CATEGORIES, isPlannedAhead, type UpcomingEventLogRow } from "./up
  * notification names. They are built from the same qualification rules the widget uses.
  */
 
-export type NotificationSlot = "morning" | "week_ahead" | "evening";
+/** `hour_before` is not a fixed-time slot: see `HOUR_BEFORE` and `appointmentsStartingSoon`. */
+export type NotificationSlot = "morning" | "week_ahead" | "evening" | "hour_before";
 
 export interface NotificationSlotConfig {
   slot: NotificationSlot;
@@ -27,14 +29,24 @@ export interface NotificationSlotConfig {
   dayOffset: number;
   /** Only important dates whose tag is a birthday. */
   birthdaysOnly: boolean;
+  /** Leave out timed appointments: they get their own reminder an hour before instead. */
+  untimedOnly: boolean;
 }
 
 /** In send order: slots sharing a start time are merged into one notification, in this order. */
 export const NOTIFICATION_SLOTS: readonly NotificationSlotConfig[] = [
-  { slot: "morning", heading: "Today", startMinute: 9 * 60, endMinute: 12 * 60, dayOffset: 0, birthdaysOnly: false },
-  { slot: "week_ahead", heading: "In a week", startMinute: 9 * 60, endMinute: 12 * 60, dayOffset: 7, birthdaysOnly: true },
-  { slot: "evening", heading: "Tomorrow", startMinute: 21 * 60, endMinute: 24 * 60, dayOffset: 1, birthdaysOnly: false },
+  { slot: "morning", heading: "Today", startMinute: 9 * 60, endMinute: 12 * 60, dayOffset: 0, birthdaysOnly: false, untimedOnly: true },
+  { slot: "week_ahead", heading: "In a week", startMinute: 9 * 60, endMinute: 12 * 60, dayOffset: 7, birthdaysOnly: true, untimedOnly: false },
+  { slot: "evening", heading: "Tomorrow", startMinute: 21 * 60, endMinute: 24 * 60, dayOffset: 1, birthdaysOnly: false, untimedOnly: false },
 ];
+
+/**
+ * A timed appointment's own reminder. Its window runs from `leadMinutes` before the start up to
+ * the start (exclusive): the scheduler's minute tick sends it as the window opens, and nothing is
+ * sent once the appointment has begun. It replaces the 9am "Today" for that appointment; the 9pm
+ * "Tomorrow" the night before still names it, with its time.
+ */
+export const HOUR_BEFORE = { slot: "hour_before", heading: "In an hour", leadMinutes: 60 } as const;
 
 export interface NotificationItem {
   /** Stable identity used to never notify about the same thing twice: `note:<id>` or `log:<id>`. */
@@ -49,6 +61,7 @@ export function isBirthdayTag(tag: string | null | undefined): boolean {
 }
 
 interface Sortable extends NotificationItem {
+  time: string | null;
   name: string;
   kind: number;
   id: number;
@@ -63,13 +76,15 @@ interface Sortable extends NotificationItem {
  * - Hang-outs and appointments on that date that were planned ahead (`isPlannedAhead`); a log
  *   written after the fact is history, not a reminder.
  *
- * Ordered by name, then notes before logs, then id.
+ * `untimedOnly` leaves out appointments with a time (the 9am slot: they remind an hour before).
+ *
+ * Ordered as the day reads: untimed first, then by time, then name, notes before logs, id.
  */
 export function itemsOccurringOn(
   noteRows: Iterable<ImportantDateNoteRow>,
   eventRows: Iterable<UpcomingEventLogRow>,
   dateISO: string,
-  { birthdaysOnly = false }: { birthdaysOnly?: boolean } = {},
+  { birthdaysOnly = false, untimedOnly = false }: { birthdaysOnly?: boolean; untimedOnly?: boolean } = {},
 ): NotificationItem[] {
   const date = new Date(`${dateISO}T00:00:00.000Z`);
   const items: Sortable[] = [];
@@ -82,6 +97,7 @@ export function itemsOccurringOn(
     items.push({
       key: `note:${row.noteId}`,
       label: `${row.entityName} — ${row.tag}`,
+      time: null,
       name: row.entityName,
       kind: 0,
       id: row.noteId,
@@ -92,11 +108,11 @@ export function itemsOccurringOn(
     for (const row of eventRows) {
       if (!EVENT_CATEGORIES.includes(row.category)) continue;
       if (row.date !== dateISO || !isPlannedAhead(row)) continue;
-      const withWho =
-        row.people.length > 0 ? ` with ${row.people.map((p) => p.name).join(", ")}` : "";
+      if (untimedOnly && row.time) continue;
       items.push({
         key: `log:${row.logId}`,
-        label: `${row.entityTitle}${withWho}`,
+        label: eventLabel(row),
+        time: row.time ?? null,
         name: row.entityTitle,
         kind: 1,
         id: row.logId,
@@ -104,8 +120,57 @@ export function itemsOccurringOn(
     }
   }
 
-  items.sort((a, b) => a.name.localeCompare(b.name) || a.kind - b.kind || a.id - b.id);
+  items.sort(
+    (a, b) =>
+      compareTimeOfDay(a.time, b.time) || a.name.localeCompare(b.name) || a.kind - b.kind || a.id - b.id,
+  );
   return items.map(({ key, label }) => ({ key, label }));
+}
+
+/** "Bowling with Ada, Zoe", "Dentist at 15:00". */
+function eventLabel(row: UpcomingEventLogRow): string {
+  const withWho = row.people.length > 0 ? ` with ${row.people.map((p) => p.name).join(", ")}` : "";
+  return `${row.entityTitle}${withWho}${row.time ? ` at ${row.time}` : ""}`;
+}
+
+export interface StartingSoon {
+  /** The appointment's own date: what its delivery is recorded under, so a reminder whose window
+   * spans midnight is still sent once. */
+  dateISO: string;
+  item: NotificationItem;
+  /** Minutes until it starts, 1–60: how long the reminder is still worth delivering. */
+  startsIn: number;
+}
+
+/**
+ * Timed appointments whose hour-before window is open at local `minutes` past midnight on
+ * `dateISO`: starting within the next `HOUR_BEFORE.leadMinutes`, not yet started. Tomorrow's are
+ * looked at too, so a 00:30 appointment reminds at 23:30. Only plans count (`isPlannedAhead`),
+ * as for every other reminder. Ordered by start, then title, then id.
+ */
+export function appointmentsStartingSoon(
+  eventRows: Iterable<UpcomingEventLogRow>,
+  dateISO: string,
+  minutes: number,
+  tomorrowISO: string,
+): StartingSoon[] {
+  const soon: (StartingSoon & { title: string; id: number })[] = [];
+  for (const row of eventRows) {
+    if (row.category !== "appointment" || !row.time || !isPlannedAhead(row)) continue;
+    const dayOffset = row.date === dateISO ? 0 : row.date === tomorrowISO ? 24 * 60 : null;
+    if (dayOffset === null) continue;
+    const startsIn = dayOffset + minutesOfDay(row.time) - minutes;
+    if (startsIn <= 0 || startsIn > HOUR_BEFORE.leadMinutes) continue;
+    soon.push({
+      dateISO: row.date,
+      item: { key: `log:${row.logId}`, label: eventLabel(row) },
+      startsIn,
+      title: row.entityTitle,
+      id: row.logId,
+    });
+  }
+  soon.sort((a, b) => a.startsIn - b.startsIn || a.title.localeCompare(b.title) || a.id - b.id);
+  return soon.map(({ dateISO: date, item, startsIn }) => ({ dateISO: date, item, startsIn }));
 }
 
 export interface NotificationSection {

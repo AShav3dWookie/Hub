@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { CalendarHeart, ChevronRight, Images, PlusCircle } from "lucide-react";
-import { CATEGORY_META } from "@logger/shared";
+import { CATEGORY_META, compareTimeOfDay } from "@logger/shared";
 import type { ImportantDateEntry, UpcomingEventEntry } from "@logger/shared";
 import { useGallery, useUpcomingImportantDates, useUpcomingEvents } from "../api/hooks.js";
 import { MediaThumb } from "../components/MediaThumb.js";
@@ -15,6 +15,8 @@ interface UpcomingRow {
   secondary: string;
   /** ISO date used for sorting within a bucket. */
   date: string;
+  /** An appointment's `HH:MM`, shown beside the weekday; null when untimed. */
+  time: string | null;
 }
 
 function importantDateRow(entry: ImportantDateEntry): UpcomingRow {
@@ -24,6 +26,7 @@ function importantDateRow(entry: ImportantDateEntry): UpcomingRow {
     primary: entry.entityName,
     secondary: `${entry.tag} · ${entry.nextOccurrence}`,
     date: entry.nextOccurrence,
+    time: null,
   };
 }
 
@@ -35,6 +38,7 @@ function eventRow(entry: UpcomingEventEntry): UpcomingRow {
     primary: entry.entityTitle,
     secondary: `${CATEGORY_META[entry.category].label} · ${entry.date}${withWho}`,
     date: entry.date,
+    time: entry.time,
   };
 }
 
@@ -61,6 +65,7 @@ function UpcomingWidget({ title, rows }: { title: string; rows: UpcomingRow[] })
               {/* The right half of this row used to be empty: justify-between with one child. */}
               <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
                 {weekdayShort(row.date)}
+                {row.time && <span className="tabular-nums">{row.time}</span>}
                 <ChevronRight size={16} aria-hidden />
               </span>
             </Link>
@@ -106,7 +111,9 @@ export function Home() {
   const { data: importantDates } = useUpcomingImportantDates();
   const { data: events } = useUpcomingEvents();
 
-  const byDate = (a: UpcomingRow, b: UpcomingRow) => a.date.localeCompare(b.date);
+  // The same order the shared rules give each list: by day, untimed first, then by time.
+  const byDate = (a: UpcomingRow, b: UpcomingRow) =>
+    a.date.localeCompare(b.date) || compareTimeOfDay(a.time, b.time);
   const todayRows = [
     ...(importantDates?.today ?? []).map(importantDateRow),
     ...(events?.today ?? []).map(eventRow),

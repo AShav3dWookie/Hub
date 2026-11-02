@@ -66,6 +66,11 @@ export interface CategoryFieldsConfig {
    * throwaway future reminders that shouldn't accumulate as history).
    */
   hasAutoDelete: boolean;
+  /**
+   * Whether a log can carry an optional time of day (`HH:MM`, local) alongside its date.
+   * Appointments only: a timed one is ordered by its time and reminded an hour before.
+   */
+  hasTime: boolean;
   /** Whether the log date field is a full date picker or a year-only input. */
   dateGranularity: DateGranularity;
   /** Label to show for the log date field (e.g. "Date Watched", "Year Read"). */
@@ -83,6 +88,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: true,
     hasRating: true,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "day",
     dateLabel: "Date Watched",
   },
@@ -92,6 +98,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: false,
     hasRating: true,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "year",
     dateLabel: "Year Watched",
   },
@@ -101,6 +108,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: false,
     hasRating: true,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "year",
     dateLabel: "Year Read",
   },
@@ -110,6 +118,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: true,
     hasRating: true,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "day",
     dateLabel: "Date Went",
   },
@@ -119,6 +128,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: false,
     hasRating: true,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "year",
     dateLabel: "Year Played",
   },
@@ -128,6 +138,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: true,
     hasRating: false,
     hasAutoDelete: false,
+    hasTime: false,
     dateGranularity: "day",
     dateLabel: "Date",
   },
@@ -137,6 +148,7 @@ export const CATEGORY_FIELDS: Record<LoggableCategory, CategoryFieldsConfig> = {
     hasPeople: false,
     hasRating: false,
     hasAutoDelete: true,
+    hasTime: true,
     dateGranularity: "day",
     dateLabel: "Date",
   },

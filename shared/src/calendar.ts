@@ -24,6 +24,8 @@ export interface CalendarItem {
   tag?: string;
   /** kind === "log". */
   logId?: number;
+  /** kind === "log", appointments only: local `HH:MM`, or null. */
+  time?: string | null;
   /** kind === "important_date". */
   noteId?: number;
 }
@@ -32,6 +34,6 @@ export interface CalendarItem {
 export interface CalendarRangeResponse {
   from: string;
   to: string;
-  /** Sorted by date, then title, then kind, then logId ?? noteId. */
+  /** Sorted by date, then time (untimed first), then title, then kind, then logId ?? noteId. */
   items: CalendarItem[];
 }

@@ -1,6 +1,7 @@
 import type { Category } from "../categories.js";
 import type { CalendarItem, CalendarRangeResponse } from "../calendar.js";
 import { daysInMonth, pad2 } from "../dates.js";
+import { compareTimeOfDay } from "./timeOfDay.js";
 
 /**
  * Calendar range assembly, shared by the server's `calendarService` and the offline client's
@@ -21,6 +22,8 @@ export const CALENDAR_LOG_CATEGORIES: readonly Category[] = [
 export interface CalendarLogRow {
   logId: number;
   date: string;
+  /** Appointments' local `HH:MM`; null or absent when untimed. */
+  time?: string | null;
   notes: string | null;
   entityId: number;
   title: string;
@@ -71,6 +74,7 @@ export function buildCalendarRange(
       entityId: row.entityId,
       entityCategory: row.category,
       logId: row.logId,
+      time: row.time ?? null,
     });
   }
 
@@ -102,6 +106,7 @@ export function buildCalendarRange(
   items.sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
+      compareTimeOfDay(a.time, b.time) ||
       a.title.localeCompare(b.title) ||
       a.kind.localeCompare(b.kind) ||
       (a.logId ?? a.noteId ?? 0) - (b.logId ?? b.noteId ?? 0),
