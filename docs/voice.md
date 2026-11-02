@@ -40,7 +40,7 @@ the items.
 
    ```json
    {
-     "action": "add",
+     "action": "add_to_list",
      "list": { "id": 3, "name": "M&S – Bangor" },
      "added": ["Eggs", "Milk"],
      "alreadyOnList": [],
@@ -49,7 +49,24 @@ the items.
    }
    ```
 
-   On the LAN, `http://<server-ip>:8090/api/voice` works the same way.
+   On the LAN, `http://<server-ip>:8090/api/voice` works the same way. Every reply has
+   `action` (which kind of thing was done), `message` and `parsedBy`; the rest is that action's
+   own detail. A device only needs `message`.
+
+## How it works: actions and rules
+
+The server turns a command into exactly one **action**, and the action does the writing.
+
+- **Actions are code** (`server/src/voice/`): what voice *can* do. Each one is a module with an
+  input schema, checks against the real data, a call into the same services the app's own forms
+  use, and its reply. Today there is one, `add_to_list`.
+- **Rules are text** (`server/src/voice/rules.md`): *when and how* each action is used, in plain
+  English — what counts as a shopping item, how lists are matched, list nicknames. The model
+  reads them with every command. Rules only steer between actions; they can't add a new one.
+
+So teaching voice a new way of saying something means editing the rules (and adding lines to
+the phrase table in `npm run voice:check`); a new *kind* of write means a new action module.
+Rules ship with a release, like code.
 
 ## What it understands
 
@@ -60,8 +77,7 @@ the items.
 - **Which items:** "eggs and milk" is two items; "fish and chips" is one. Quantities stay
   ("6 eggs"); filler goes ("can you add some…").
 - **Items already on the list** aren't added twice; the reply says they were already there.
-- **Adding only, for now.** Removing by voice may come later; the reply's `action` field is
-  there so it can.
+- **Adding only, for now.** Removing by voice may come later as another action.
 
 ## The backup parser
 
@@ -124,7 +140,8 @@ paths.
 
 A manual check against the real model. It costs money (well under a penny a run), so it is
 **not** a test: nothing in `npm test`, coverage or CI runs it. Run it after setting up a key,
-changing the prompt in `server/src/lib/voiceModel.ts`, or changing `VOICE_MODEL`.
+changing `server/src/voice/rules.md`, an action, the prompt in `server/src/lib/voiceModel.ts`,
+or `VOICE_MODEL`.
 
 It reads `ANTHROPIC_API_KEY` from the shell or from the repo-root `.env`, the file the dev
 `docker compose` also reads, so one line sets up both.
@@ -133,9 +150,11 @@ It reads `ANTHROPIC_API_KEY` from the shell or from the repo-root `.env`, the fi
 npm run voice:check
 ```
 
-That sends about a dozen phrases ("eggs and milk", "fish and chips", "sains brees", a shop name
-inside an item, a command with nothing to add) and prints each answer, pass or fail, its
-latency, and what the run cost. It exits non-zero if any phrase fails.
+That runs the **phrase table**: each phrase ("eggs and milk", "fish and chips", "sains brees", a
+shop name inside an item, a command with nothing to add) with the action and fields it should
+come back as. It prints each answer, pass or fail, its latency, and what the run cost, and exits
+non-zero if any phrase fails. It is the regression net for the rules: every rule gets lines in
+it, so a rule that quietly breaks another shows up here.
 
 Add `--server` and a device token to also send one command through a running server, which
 proves the *server* has the key (`"parsedBy": "model"`):

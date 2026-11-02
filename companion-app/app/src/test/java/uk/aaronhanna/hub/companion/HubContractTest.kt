@@ -63,7 +63,7 @@ class HubContractTest {
         val item = "Contract milk ${System.currentTimeMillis()}"
         val reply = (client.sendVoice("add $item to the shopping list") as HubResult.Ok).value
 
-        assertEquals(listOf(item), reply.added)
+        assertEquals("add_to_list", reply.action)
         assertFalse(reply.usedModel)
         assertTrue(reply.message.contains(item))
 

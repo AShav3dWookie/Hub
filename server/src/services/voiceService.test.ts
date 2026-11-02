@@ -22,7 +22,7 @@ describe("handleVoiceCommand", () => {
 
   const itemsOn = (id: number) => getList(ctx.db, id).items.map((i) => i.text);
   const model = (answer: { listId: number | null; items: string[] }): VoiceParser =>
-    vi.fn().mockResolvedValue(answer);
+    vi.fn().mockResolvedValue({ action: "add_to_list", input: answer });
 
   it("adds what the model understood to the list it chose", async () => {
     const { ms } = setup();
@@ -34,7 +34,7 @@ describe("handleVoiceCommand", () => {
 
     expect(itemsOn(ms.id)).toEqual(["Eggs", "Milk"]);
     expect(result).toEqual({
-      action: "add",
+      action: "add_to_list",
       list: { id: ms.id, name: "M&S – Bangor" },
       added: ["Eggs", "Milk"],
       alreadyOnList: [],
@@ -47,7 +47,7 @@ describe("handleVoiceCommand", () => {
     const { main, ms } = setup();
     const parser = model({ listId: null, items: ["Eggs"] });
     await handleVoiceCommand(ctx.db, "add eggs", parser);
-    expect(vi.mocked(parser).mock.calls[0][1].map((l) => l.id).sort()).toEqual([main.id, ms.id].sort());
+    expect(vi.mocked(parser).mock.calls[0][1].lists.map((l) => l.id).sort()).toEqual([main.id, ms.id].sort());
   });
 
   it("uses the main list when the model names none", async () => {
@@ -73,6 +73,17 @@ describe("handleVoiceCommand", () => {
     expect(result.parsedBy).toBe("rules");
     expect(itemsOn(main.id)).toEqual(["Eggs and milk"]);
     expect(result.message).toBe("Added Eggs and milk to Shopping (simple parser — check it)");
+  });
+
+  it.each([
+    ["an action that doesn't exist", { action: "delete_everything", input: {} }],
+    ["input that doesn't fit the action", { action: "add_to_list", input: { list: "Tesco", items: "eggs" } }],
+  ])("falls back to the rules when the model answers with %s", async (_case, answer) => {
+    const { main } = setup();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await handleVoiceCommand(ctx.db, "add eggs", vi.fn().mockResolvedValue(answer));
+    expect(result.parsedBy).toBe("rules");
+    expect(itemsOn(main.id)).toEqual(["Eggs"]);
   });
 
   it("uses the rules alone when there's no model configured", async () => {
