@@ -66,6 +66,16 @@ class VoiceUndoTest {
     }
 
     @Test
+    fun `a reply goes by itself when Undo stops working, but an undo on its way stays`() {
+        VoiceReplies.show(context, dentist, "dentist next tuesday at 3")
+        assertEquals(5 * 60_000L, reply()!!.timeoutAfter)
+
+        tapUndo()
+        assertEquals("Undoing: Added Dentist, Tue 10 Nov 15:00", reply()!!.title())
+        assertEquals("no timeout while it waits for the hub", 0L, reply()!!.timeoutAfter)
+    }
+
+    @Test
     fun `Undo is sent to the hub, and the reply says it's done`() {
         VoiceReplies.show(context, dentist, "dentist next tuesday at 3")
         tapUndo()

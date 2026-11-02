@@ -126,7 +126,8 @@ reminder, with nothing else to set up.
 ### Undo
 
 Every command that saved something comes back with a `commandId`, and the companion app's
-reply notification has **Undo**. It deletes exactly what that command created (the list
+reply notification has **Undo** (the notification goes by itself after five minutes, when
+Undo would be too late). It deletes exactly what that command created (the list
 items it added, the appointment and, if the command made it, the appointment's entry) and
 nothing else:
 

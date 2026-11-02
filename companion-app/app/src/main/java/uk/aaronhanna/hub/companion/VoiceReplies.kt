@@ -12,9 +12,9 @@ import org.json.JSONObject
 
 /**
  * How the phone answers a voice command. Shopping keeps its toast: it's quick, and the list is
- * right there to check. Anything else — an appointment — is a notification that stays until
- * dismissed, saying exactly what the hub saved and what it heard, so a misheard date is caught,
- * with **Undo** while the hub still allows it.
+ * right there to check. Anything else — an appointment — is a notification saying exactly what
+ * the hub saved and what it heard, so a misheard date is caught, with **Undo**. It goes by itself
+ * once the hub stops allowing Undo, so replies never pile up waiting to be dismissed.
  *
  * Undo goes through [Outbox] like "Got it": queued at once, sent when the hub can be reached. The
  * hub judges the time limit by its own clock, so a tap queued with no signal can still be too late.
@@ -26,6 +26,9 @@ object VoiceReplies {
     const val EXTRA_COMMAND_ID = "commandId"
     const val EXTRA_MESSAGE = "message"
 
+    /** The hub's `VOICE_UNDO_WINDOW_MS`: how long a reply stays up. */
+    const val UNDO_WINDOW_MS = 5 * 60_000L
+
     /** Returns false when it couldn't post (notifications are off), for the caller to toast instead. */
     fun show(context: Context, reply: VoiceReply, heard: String, now: Long = System.currentTimeMillis()): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
@@ -33,6 +36,7 @@ object VoiceReplies {
             .setContentTitle(reply.message)
             .setContentText("You said “$heard”")
             .setStyle(NotificationCompat.BigTextStyle().bigText("You said “$heard”"))
+            .setTimeoutAfter(UNDO_WINDOW_MS)
         reply.commandId?.let { builder.addAction(0, "Undo", undoIntent(context, it, reply.message)) }
         // One per command: a second command shouldn't replace the first's reply.
         notify(context, reply.commandId ?: (now % Int.MAX_VALUE).toInt(), builder)
