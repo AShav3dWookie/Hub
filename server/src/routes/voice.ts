@@ -36,7 +36,7 @@ export function createVoiceRouter(db: AppDb, parser?: VoiceParser | null): Route
   // Express 4 doesn't forward a rejected promise, so the async work is chained to next.
   router.post("/", (req, res, next) => {
     const { text } = voiceCommandSchema.parse(req.body);
-    handleVoiceCommand(db, text, getParser())
+    handleVoiceCommand(db, text, getParser(), { now: new Date(), timeZone: config.notifyTimezone })
       .then((result) => res.json(result))
       .catch(next);
   });

@@ -82,6 +82,14 @@ class HubContractTest {
     }
 
     @Test
+    fun `without the model, a command that isn't shopping says it needs it rather than guessing`() {
+        requireHub()
+        val error = (client.sendVoice("dentist next tuesday at 3") as HubResult.Failed).error
+        assertTrue(error is HubError.Rejected)
+        assertTrue(error.message, error.message.startsWith("I need the model for that"))
+    }
+
+    @Test
     fun `a token the hub never issued is refused`() {
         requireHub()
         val stranger = HubClient(Pairing(hubUrl!!, "hub_" + "n".repeat(43)))

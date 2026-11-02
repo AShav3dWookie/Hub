@@ -5,6 +5,11 @@ import { VOICE_ACTIONS } from "../voice/actions.js";
 import { addToList } from "../voice/addToList.js";
 
 const CONTEXT = {
+  today: "2026-11-02",
+  weekday: "Monday",
+  time: "10:00",
+  timeZone: "Europe/London",
+  comingDays: ["Tuesday 2026-11-03"],
   lists: [
     { id: 1, name: "Shopping" },
     { id: 2, name: "M&S – Bangor" },

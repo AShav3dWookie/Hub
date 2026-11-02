@@ -2,7 +2,10 @@ import type { z } from "zod";
 import type { AppDb } from "../db/client.js";
 import type { VoiceActionName, VoiceCommandResponse, VoiceParsedBy } from "@logger/shared";
 import { listLists } from "../services/listService.js";
+import { addDaysISO, localTime } from "../lib/localClock.js";
 import { addToList } from "./addToList.js";
+import { createLog } from "./createLog.js";
+import { notSupported } from "./notSupported.js";
 
 /**
  * What voice can do, as code. Each action is one module: a name, an input schema (zod — the
@@ -26,6 +29,15 @@ export interface VoiceRun {
   /** The words as heard, for error messages. */
   text: string;
   parsedBy: VoiceParsedBy;
+  /** Local date and minutes past midnight when the command arrived, for "not in the past". */
+  today: string;
+  nowMinutes: number;
+}
+
+/** When a command arrives, and the zone its dates and times mean (`NOTIFY_TIMEZONE`). */
+export interface VoiceClock {
+  now: Date;
+  timeZone: string;
 }
 
 /** A list as the model sees it: enough to choose one by name, nothing more. */
@@ -39,15 +51,47 @@ export interface VoiceList {
  * ids. It is the model's view only: every action re-checks what comes back against the database.
  */
 export interface VoiceContext {
+  /** Local `YYYY-MM-DD`, its weekday and the time, so "next Tuesday at 3" can become a date. */
+  today: string;
+  weekday: string;
+  time: string;
+  timeZone: string;
+  /**
+   * The next five weeks, "Tuesday 2026-11-03" from tomorrow on. A model is far better at finding
+   * "the first Tuesday" in a list than at counting days, which it got wrong in voice:check.
+   */
+  comingDays: string[];
   lists: VoiceList[];
 }
 
-export const VOICE_ACTIONS: readonly VoiceAction[] = [addToList];
+/** How far ahead `comingDays` runs. */
+export const COMING_DAYS = 35;
+
+export const VOICE_ACTIONS: readonly VoiceAction[] = [addToList, createLog, notSupported];
 
 export function findVoiceAction(name: string): VoiceAction | undefined {
   return VOICE_ACTIONS.find((a) => a.name === name);
 }
 
-export function buildVoiceContext(db: AppDb): VoiceContext {
-  return { lists: listLists(db, "shopping").map(({ id, name }) => ({ id, name })) };
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function buildVoiceContext(db: AppDb, clock: VoiceClock): VoiceContext {
+  return { ...describeClock(clock), lists: listLists(db, "shopping").map(({ id, name }) => ({ id, name })) };
+}
+
+/** The date-and-time half of the context: no data, so voice:check builds it the same way. */
+export function describeClock({ now, timeZone }: VoiceClock): Omit<VoiceContext, "lists"> {
+  const { dateISO, minutes } = localTime(now, timeZone);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const weekdayOf = (iso: string) => WEEKDAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
+  return {
+    today: dateISO,
+    weekday: weekdayOf(dateISO),
+    time: `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
+    timeZone,
+    comingDays: Array.from({ length: COMING_DAYS }, (_, i) => {
+      const iso = addDaysISO(dateISO, i + 1);
+      return `${weekdayOf(iso)} ${iso}`;
+    }),
+  };
 }

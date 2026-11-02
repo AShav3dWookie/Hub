@@ -18,4 +18,34 @@ command is answered with exactly one action. Each rule here has lines in the phr
 - A shop's name inside an item is part of the item: "tesco value beans" to M&S is the item
   "Tesco value beans" on M&S.
 - Fix an obvious mishearing only when the intended item is clear.
-- If the command asks to add nothing, use add_to_list with no items.
+- If a command plainly about shopping names nothing to add ("add to the Tesco list"), use
+  add_to_list with no items.
+
+## The diary: create_log
+
+- An appointment is something booked for a day or a time: the dentist, a doctor's appointment, a
+  haircut, an MOT, a meeting, a delivery. "Dentist next Tuesday at 3" is an appointment, never a
+  shopping item. Its category is appointment.
+- The title is what it is, short, with its first letter capitalised: "Dentist", "Haircut",
+  "Car MOT". Leave out the date and time words.
+- Work out the exact date from today in the context. Look days up in its comingDays list rather
+  than counting:
+  - "today", "tomorrow", "the day after tomorrow" are what they say.
+  - A weekday on its own, "on Friday" and "this Friday" mean the first Friday in comingDays.
+  - "Next Friday" means the Friday of next week, the week (Monday to Sunday) after this one: on a
+    Monday, "next Tuesday" is eight days away, not tomorrow. Next week starts at the first Monday
+    in comingDays.
+  - "A week on Friday" is the second Friday in comingDays.
+  - "The 14th" means the next 14th on or after today; "the 14th of March" the next 14 March on or
+    after today.
+- Time: an hour said without am or pm is in the daytime: 1 to 7 is the afternoon ("at 3" is 15:00),
+  8 to 11 the morning, 12 is noon. "Half 3" is 15:30, "quarter past 9" 09:15, "quarter to 4"
+  15:45. No time said means null.
+- autoDelete: null, unless they ask to keep it as a record, then false.
+- Anything else worth keeping goes in notes ("bring the letter"); otherwise null.
+
+## Anything else: not_supported
+
+- Questions ("what's on tomorrow?", "what's on my list?"), removing or changing something, and
+  anything no other action can do are not_supported, with a few words saying what was asked.
+  Never put a question or a request like that on the shopping list.

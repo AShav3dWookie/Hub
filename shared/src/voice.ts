@@ -1,3 +1,5 @@
+import type { LoggableCategory } from "./categories.js";
+
 /**
  * `POST /api/voice` — a spoken command, already turned into text by the phone, applied to the
  * hub. The server picks one of a fixed set of **actions** (server/src/voice/) for it, steered by
@@ -30,7 +32,7 @@ export interface VoiceStatusResponse {
 }
 
 /** What voice can do. Each one is a module in server/src/voice/. */
-export type VoiceActionName = "add_to_list";
+export type VoiceActionName = "add_to_list" | "create_log" | "not_supported";
 
 interface VoiceReplyBase {
   action: VoiceActionName;
@@ -48,5 +50,20 @@ export interface AddToListReply extends VoiceReplyBase {
   alreadyOnList: string[];
 }
 
-/** Discriminated by `action`. A device needs only `action` and `message`. */
-export type VoiceCommandResponse = AddToListReply;
+export interface CreateLogReply extends VoiceReplyBase {
+  action: "create_log";
+  log: {
+    id: number;
+    entityId: number;
+    category: LoggableCategory;
+    title: string;
+    date: string;
+    time: string | null;
+  };
+}
+
+/**
+ * Discriminated by `action`. A device needs only `action` and `message`. (`not_supported` never
+ * answers 200: it is a 422 carrying the reason.)
+ */
+export type VoiceCommandResponse = AddToListReply | CreateLogReply;

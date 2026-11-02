@@ -1,9 +1,18 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
-import { handleVoiceCommand } from "./voiceService.js";
+import { handleVoiceCommand as handle } from "./voiceService.js";
+import type { AddToListReply } from "@logger/shared";
+import type { AppDb } from "../db/client.js";
 import { addListItem, createList, getList, listLists } from "./listService.js";
 import type { VoiceParser } from "../lib/voiceModel.js";
 import { AppError } from "../lib/errors.js";
+
+/** Monday 2 November 2026, 10:00 in London (GMT, so 10:00Z). */
+const CLOCK = { now: new Date("2026-11-02T10:00:00Z"), timeZone: "Europe/London" };
+
+/** The shopping tests below: every reply is an add_to_list one. */
+const handleVoiceCommand = (db: AppDb, text: string, parser: VoiceParser | null) =>
+  handle(db, text, parser, CLOCK) as Promise<AddToListReply>;
 
 describe("handleVoiceCommand", () => {
   let ctx: ReturnType<typeof createTestDb>;
@@ -84,6 +93,34 @@ describe("handleVoiceCommand", () => {
     const result = await handleVoiceCommand(ctx.db, "add eggs", vi.fn().mockResolvedValue(answer));
     expect(result.parsedBy).toBe("rules");
     expect(itemsOn(main.id)).toEqual(["Eggs"]);
+  });
+
+  it("answers that it needs the model for anything but shopping when there's no model", async () => {
+    setup();
+    const err = await handleVoiceCommand(ctx.db, "dentist next tuesday at 3", null).catch((e: unknown) => e);
+    expect(err).toMatchObject({ statusCode: 422, message: expect.stringMatching(/^I need the model for that/) });
+    expect(listLists(ctx.db).every((l) => getList(ctx.db, l.id).items.length === 0)).toBe(true);
+  });
+
+  it("answers the same when the model fails on a command that isn't shopping", async () => {
+    setup();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failing: VoiceParser = vi.fn().mockRejectedValue(new Error("timeout"));
+    const err = await handleVoiceCommand(ctx.db, "haircut on the 14th", failing).catch((e: unknown) => e);
+    expect(err).toMatchObject({ statusCode: 422, message: expect.stringMatching(/^I need the model for that/) });
+  });
+
+  it("gives the model the local date, weekday and time where the hub is", async () => {
+    setup();
+    const parser = model({ listId: null, items: ["Eggs"] });
+    // 23:30Z on Friday 31 July is already 00:30 on Saturday 1 August in London (BST).
+    await handle(ctx.db, "add eggs", parser, { now: new Date("2026-07-31T23:30:00Z"), timeZone: "Europe/London" });
+    expect(vi.mocked(parser).mock.calls[0][1]).toMatchObject({
+      today: "2026-08-01",
+      weekday: "Saturday",
+      time: "00:30",
+      timeZone: "Europe/London",
+    });
   });
 
   it("uses the rules alone when there's no model configured", async () => {
