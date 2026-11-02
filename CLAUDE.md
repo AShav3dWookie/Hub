@@ -377,6 +377,13 @@ content-type for multipart `FormData` uploads. Query keys in use: `["entity", id
 Every write hook goes through `useRefreshingMutation`, which queues the outbox envelope and then
 invalidates and syncs. Add a write by writing that one expression, not the five-line wiring.
 
+**A form that holds a draft calls `useUnsavedChanges(dirty)`** (`lib/unsavedChanges.ts`). The app
+moves onto a newly deployed build by reloading — at launch, and on each return to the foreground
+(`sw/appUpdate.ts`, throttled to one `/api/health` check per 5 min) — and that reload waits while
+any form is dirty, a field has focus or a mutation is in flight, offering a "tap to update" toast
+instead. A new form that skips the hook can be reloaded away mid-edit. The plugin's own
+reload-on-activate is routed through the same gate via `registerSW`'s `onNeedReload`.
+
 Tailwind with `dark:` variants throughout; icons from `lucide-react`. The repeated class strings live
 in `components/ui.tsx` (`FIELD_CLASS`, `CARD_CLASS`, the button/chip/action shapes, `SECTION_HEADING`,
 `ROW_LINK`) — use them rather than pasting the string again. Reusable components: `Lightbox`

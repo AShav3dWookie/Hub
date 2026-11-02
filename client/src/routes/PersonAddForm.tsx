@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { useCreateEntity } from "../api/hooks.js";
 import { useToast } from "../components/ToastProvider.js";
 import { useOnlineStatus } from "../api/localHooks.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 export function PersonAddForm() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(name.trim() !== "");
   const online = useOnlineStatus();
   const createEntity = useCreateEntity();
   const navigate = useNavigate();

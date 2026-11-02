@@ -33,6 +33,7 @@ import {
   useClearThumbnailCache,
 } from "../api/localHooks.js";
 import { useAuthStatus, useChangePassword } from "../api/auth.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 import {
   requestNotificationPermission,
   useDisablePush,
@@ -259,6 +260,8 @@ function DevicesSection({ online }: { online: boolean }) {
   const [name, setName] = useState("");
   const [created, setCreated] = useState<CreatedDeviceTokenDTO | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<number | null>(null);
+  // A new token is shown once and never again, so a reload while it is up would lose it.
+  useUnsavedChanges(name.trim() !== "" || created !== null);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -409,6 +412,7 @@ function PasswordSection({ online }: { online: boolean }) {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges([current, next, confirm].some((v) => v !== ""));
 
   function validate(): string | null {
     if (!current || !next || !confirm) return "Fill in all three fields.";

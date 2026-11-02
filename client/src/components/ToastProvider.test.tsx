@@ -20,6 +20,18 @@ function Harness({ messages }: { messages: string[] }) {
   );
 }
 
+function TapHarness({ onTap }: { onTap: () => void }) {
+  const { showToast } = useToast();
+  return (
+    <button
+      type="button"
+      onClick={() => showToast("Hub 1.3.0 is ready — tap to update", { onTap, persist: true })}
+    >
+      show update
+    </button>
+  );
+}
+
 function renderToasts(messages: string[]) {
   return render(
     <ToastProvider>
@@ -80,6 +92,34 @@ describe("ToastProvider", () => {
     renderToasts(["saved"]);
     click("saved");
     expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("runs a tappable toast's action when it is tapped, and goes away", () => {
+    const onTap = vi.fn();
+    render(
+      <ToastProvider>
+        <TapHarness onTap={onTap} />
+      </ToastProvider>,
+    );
+    act(() => screen.getByText("show update").click());
+
+    act(() => screen.getByRole("button", { name: "Hub 1.3.0 is ready — tap to update" }).click());
+
+    expect(onTap).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("keeps a persistent toast up until it is tapped", () => {
+    render(
+      <ToastProvider>
+        <TapHarness onTap={() => {}} />
+      </ToastProvider>,
+    );
+    act(() => screen.getByText("show update").click());
+
+    advance(60_000);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Hub 1.3.0 is ready");
   });
 
   it("can show a message again after the first was dismissed", () => {

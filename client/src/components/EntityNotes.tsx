@@ -18,6 +18,7 @@ import {
   useDeleteEntityNote,
 } from "../api/hooks.js";
 import { useToast } from "./ToastProvider.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 const CATEGORY_BADGE_STYLES: Record<NoteCategory, string> = {
   general: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
@@ -78,6 +79,7 @@ function NoteRow({
   const [tag, setTag] = useState(note.tag ?? "");
   const [eventDate, setEventDate] = useState(note.eventDate ?? "");
   const isImportantDate = note.category === "important_date";
+  useUnsavedChanges(formOpen);
 
   const updateNote = useUpdateEntityNote(entityId, note.id);
   const deleteNote = useDeleteEntityNote(entityId);
@@ -280,6 +282,7 @@ export function EntityNotes({
   const [newTag, setNewTag] = useState("");
   const [newEventDate, setNewEventDate] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<NoteCategory>>(new Set());
+  useUnsavedChanges([newBody, newTag, newEventDate].some((v) => v.trim() !== ""));
 
   const createNote = useCreateEntityNote(entityId);
   const { showToast } = useToast();

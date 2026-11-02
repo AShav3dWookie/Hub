@@ -12,6 +12,7 @@ import { useOnlineStatus } from "../api/localHooks.js";
 import { updateDateRange } from "../lib/updateDateRange.js";
 import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
 import { resolveServerId } from "../sync/resolveServerId.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 export function AlbumAddForm() {
   const [title, setTitle] = useState("");
@@ -22,6 +23,12 @@ export function AlbumAddForm() {
   const [events, setEvents] = useState<LogWithEntityDTO[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(
+    [title, dateStart, dateEnd, notes].some((v) => v.trim() !== "") ||
+      people.length > 0 ||
+      events.length > 0 ||
+      photoFiles.length > 0,
+  );
 
   const createAlbum = useCreateAlbum();
   const uploadPhotos = useUploadAlbumPhotosById();

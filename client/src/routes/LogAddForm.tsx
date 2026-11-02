@@ -11,6 +11,7 @@ import { useToast } from "../components/ToastProvider.js";
 import { useOnlineStatus } from "../api/localHooks.js";
 import { MAX_MEDIA_PER_LOG, rejectMediaSelection } from "../lib/mediaSelection.js";
 import { resolveServerId } from "../sync/resolveServerId.js";
+import { useUnsavedChanges } from "../lib/unsavedChanges.js";
 
 export function LogAddForm({ category }: { category: LoggableCategory }) {
   const fields = CATEGORY_FIELDS[category];
@@ -36,6 +37,13 @@ export function LogAddForm({ category }: { category: LoggableCategory }) {
   const [notes, setNotes] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // The date, year and auto-delete start filled in; anything else means it has been started.
+  useUnsavedChanges(
+    [title, releaseYear, author, notes].some((v) => v.trim() !== "") ||
+      rating !== null ||
+      people.length > 0 ||
+      photoFiles.length > 0,
+  );
 
   const { data: suggestions } = useEntityAutocomplete(category, debouncedTitle);
   const createLog = useCreateLog();
