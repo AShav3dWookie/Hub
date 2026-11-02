@@ -235,7 +235,10 @@ and a real sender lazily on first use.
 
 `POST /api/voice { text }` turns a spoken command into one **action**; `docs/voice.md` is the
 guide. Actions are code in `server/src/voice/` (`VOICE_ACTIONS` in `actions.ts`, one module
-each: name, zod input, `run`); *when and how* each is used is plain English in
+each: name, zod input, `run`): `add_to_list`, `create_log` (every loggable category, fields from
+`CATEGORY_FIELDS`), `add_important_date`, and `not_supported` (the model must always call one, so
+questions get a 422 rather than landing on a list). The context gives the model today, the next
+35 days by weekday, the lists and the people; voice never creates a list or a person; *when and how* each is used is plain English in
 `server/src/voice/rules.md`, which goes into the system prompt and is copied into `dist/` by the
 server's build script. Teaching voice a new phrasing is a rules edit plus phrase-table lines; a
 new kind of write is a new action module. The response is discriminated by `action`.

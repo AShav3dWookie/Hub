@@ -32,12 +32,13 @@ export interface VoiceStatusResponse {
 }
 
 /** What voice can do. Each one is a module in server/src/voice/. */
-export type VoiceActionName = "add_to_list" | "create_log" | "not_supported";
+export type VoiceActionName = "add_to_list" | "create_log" | "add_important_date" | "not_supported";
 
 /** One row a voice command created, as recorded for Undo. */
 export type VoiceRecord =
   | { kind: "listItem"; listId: number; id: number }
   | { kind: "log"; id: number }
+  | { kind: "note"; id: number }
   /** Only an entity the command itself created; undo removes it if nothing else uses it. */
   | { kind: "entity"; id: number };
 
@@ -83,4 +84,10 @@ export interface CreateLogReply extends VoiceReplyBase {
  * Discriminated by `action`. A device needs only `action` and `message`. (`not_supported` never
  * answers 200: it is a 422 carrying the reason.)
  */
-export type VoiceCommandResponse = AddToListReply | CreateLogReply;
+export interface AddImportantDateReply extends VoiceReplyBase {
+  action: "add_important_date";
+  /** Null when the person already had this date, so nothing was written. */
+  note: { id: number; entityId: number; tag: string; eventDate: string } | null;
+}
+
+export type VoiceCommandResponse = AddToListReply | CreateLogReply | AddImportantDateReply;

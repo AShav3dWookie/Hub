@@ -4,6 +4,7 @@ import { entityNotes, entities, logPeople, logs, voiceCommands } from "../db/sch
 import { AppError, NotFoundError } from "../lib/errors.js";
 import { deleteListItem } from "./listService.js";
 import { deleteLog } from "./logService.js";
+import { deleteEntityNote } from "./entityNotesService.js";
 import { VOICE_UNDO_WINDOW_MS, type VoiceActionName, type VoiceRecord } from "@logger/shared";
 
 /** Long enough for any Undo to have been tapped; the table is a short-lived log, not history. */
@@ -62,6 +63,7 @@ export function undoVoiceCommand(db: AppDb, id: number, deviceId: number | null,
     for (const record of [...command.created].reverse()) {
       if (record.kind === "listItem") ignoreMissing(() => deleteListItem(db, record.listId, record.id));
       else if (record.kind === "log") ignoreMissing(() => deleteLog(db, record.id));
+      else if (record.kind === "note") ignoreMissing(() => deleteEntityNote(db, record.id));
       else removeEntityIfUnused(db, record.id);
     }
     db.update(voiceCommands)
