@@ -18,6 +18,18 @@ function row(overrides: Partial<UpcomingEventLogRow> = {}): UpcomingEventLogRow 
 }
 
 describe("isPlannedAhead", () => {
+  it("counts a timed appointment created earlier the same day as a plan", () => {
+    const dentist = { date: "2026-09-03", time: "15:00" };
+    expect(isPlannedAhead({ ...dentist, createdAt: "2026-09-03T10:00:00.000Z" })).toBe(true);
+    expect(isPlannedAhead({ ...dentist, createdAt: "2026-09-03 14:59:00" })).toBe(true);
+  });
+
+  it("rejects a timed appointment created at or after its start", () => {
+    const dentist = { date: "2026-09-03", time: "15:00" };
+    expect(isPlannedAhead({ ...dentist, createdAt: "2026-09-03T15:00:00.000Z" })).toBe(false);
+    expect(isPlannedAhead({ ...dentist, createdAt: "2026-09-04T09:00:00.000Z" })).toBe(false);
+  });
+
   it("accepts a log created before the day it happens", () => {
     expect(isPlannedAhead({ createdAt: "2026-09-01T10:00:00.000Z", date: "2026-09-03" })).toBe(true);
   });
@@ -90,6 +102,24 @@ describe("bucketUpcomingEvents", () => {
       today,
     );
     expect(result.next7Days.map((e) => e.entityTitle)).toEqual(["Museum", "Aquarium", "Zoo"]);
+  });
+
+  it("orders a day's events untimed first, then by time, then title", () => {
+    const result = bucketUpcomingEvents(
+      [
+        row({ logId: 1, entityTitle: "Dentist", category: "appointment", time: "15:00" }),
+        row({ logId: 2, entityTitle: "Zoo" }),
+        row({ logId: 3, entityTitle: "Haircut", category: "appointment", time: "09:30" }),
+        row({ logId: 4, entityTitle: "Aquarium" }),
+      ],
+      today,
+    );
+    expect(result.today.map((e) => [e.entityTitle, e.time])).toEqual([
+      ["Aquarium", null],
+      ["Zoo", null],
+      ["Haircut", "09:30"],
+      ["Dentist", "15:00"],
+    ]);
   });
 
   it("carries notes and tagged people through", () => {

@@ -277,6 +277,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           date: input.date,
           notes: input.notes ?? null,
           autoDelete: input.autoDelete ?? false,
+          time: input.time ?? null,
           createdAt: now,
           updatedAt: now,
           peopleIds,
@@ -295,6 +296,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             notes: row.notes,
             people: peopleIds.map((pid) => ({ id: pid })),
             autoDelete: row.autoDelete,
+            time: row.time,
           },
           affects: [{ store: "logs", id }],
         });
@@ -311,6 +313,8 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             date: m.input.date,
             notes: m.input.notes ?? null,
             autoDelete: m.input.autoDelete ?? false,
+            // Absent keeps the time, as on the server.
+            time: m.input.time === undefined ? (row.time ?? null) : m.input.time,
             peopleIds,
             updatedAt: now,
             _localDirty: true,
@@ -325,6 +329,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           notes: m.input.notes ?? null,
           people: peopleIds.map((pid) => ({ id: pid })),
           autoDelete: m.input.autoDelete ?? false,
+          ...(m.input.time === undefined ? {} : { time: m.input.time }),
         };
 
         const create = logId < 0 ? await pendingCreateFor(logId) : undefined;
@@ -335,6 +340,7 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
             notes: payload.notes,
             people: payload.people,
             autoDelete: payload.autoDelete,
+            ...("time" in payload ? { time: payload.time } : {}),
           });
           return row ?? { id: logId };
         }
@@ -343,7 +349,8 @@ export async function applyLocalMutation(m: LocalMutation): Promise<LocalMutatio
           (r) => r.type === "log.update" && (r.payload as { logId: number }).logId === logId,
         );
         if (prior) {
-          prior.payload = payload;
+          // Merged, so an earlier edit's time survives a later one that didn't send any.
+          prior.payload = { ...(prior.payload as object), ...payload };
           await outbox.put(prior);
         } else {
           await enqueue({

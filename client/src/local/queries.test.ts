@@ -84,6 +84,20 @@ describe("getEntityDetail", () => {
     expect(detail.logs[1].photos[0].thumbnailUrl).toContain("_thumb");
   });
 
+  it("reads a replica row from before times existed as untimed, and a timed one as timed", () => {
+    const dentist = makeEntity({ title: "Dentist", category: "appointment" });
+    const old = makeLog({ entityId: dentist.id, date: "2024-01-01" });
+    expect("time" in old).toBe(false);
+    const timed = makeLog({ entityId: dentist.id, date: "2024-09-09", time: "15:00" });
+
+    const detail = q.getEntityDetail(snap({ entities: [dentist], logs: [old, timed] }), dentist.id);
+    if (detail.type !== "entity") throw new Error("expected entity");
+    expect(detail.logs.map((l) => [l.date, l.time])).toEqual([
+      ["2024-09-09", "15:00"],
+      ["2024-01-01", null],
+    ]);
+  });
+
   it("derives photo.kind from the stored mime type", () => {
     const movie = makeEntity({ title: "Heat", category: "movie" });
     const img = makePhoto({ logId: 0, mimeType: "image/jpeg" });

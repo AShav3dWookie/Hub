@@ -83,8 +83,11 @@ Run a single test file: `cd server && npx vitest run <path-substring>` (or `cd c
 ### Category configuration is the single source of truth
 
 `shared/src/categories.ts` → `CATEGORY_FIELDS` declares, per loggable category, which fields apply
-(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `hasRating`, `hasAutoDelete`, `dateGranularity`,
-`dateLabel`). Both the client add forms and server services branch on this. `hasPeople` is true for
+(`hasPeople`, `hasReleaseYear`, `hasAuthor`, `hasRating`, `hasAutoDelete`, `hasTime`,
+`dateGranularity`, `dateLabel`). `hasTime` (appointments only) allows an optional `logs.time`,
+local `HH:MM`; the server nulls it for other categories, an update that omits it keeps it (so an
+older client can't wipe one), and same-day items order untimed-first via `compareTimeOfDay`
+(`shared/src/rules/timeOfDay.ts`). Both the client add forms and server services branch on this. `hasPeople` is true for
 **movie**, **eating_out** and **hang_out**, and also gates photo support via
 `categorySupportsPhotos()` — enforced server-side in `logPhotosService.assertLogSupportsPhotos`, not
 just hidden in the UI. `categories.test.ts` asserts every category has a config and metadata entry,
@@ -186,9 +189,14 @@ Web Push (VAPID, `web-push`) reminders for what Home's "What's on" lists. `docs/
 is the user guide. `NOTIFICATION_SLOTS` in `shared/src/rules/notifications.ts` decides what fires
 and when, and it reuses the widget's own qualification rules (`nextAnnualOccurrence`,
 `isPlannedAhead`) so the two cannot disagree:
-- 9pm "Tomorrow".
-- 9am "Today".
+- 9pm "Tomorrow" (a timed appointment is named with its time: "Dentist at 15:00").
+- 9am "Today", without timed appointments (`untimedOnly`).
 - 9am "In a week", for birthday-tagged important dates only.
+- "In an hour" (`HOUR_BEFORE`, `appointmentsStartingSoon`): a timed appointment, from 60 minutes
+  before its start until the start. Not a fixed slot: its delivery is recorded under the
+  **appointment's** date, not the tick's, so a window spanning midnight still sends once.
+  `isPlannedAhead` counts a timed log as a plan if created before its start (UTC `createdAt` vs
+  local time, so up to the zone's offset out near the start).
 
 `server/src/services/notificationScheduler.ts` `runNotificationTick(db, now, { timeZone, send })`
 has no timetable of its own.

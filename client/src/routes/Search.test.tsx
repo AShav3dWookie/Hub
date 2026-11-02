@@ -31,6 +31,7 @@ describe("Search", () => {
     photos: [],
     albums: [],
     autoDelete: false,
+    time: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...over,

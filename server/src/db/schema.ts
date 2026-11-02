@@ -50,6 +50,8 @@ export const logs = sqliteTable(
     notes: text("notes"),
     // Appointments only: when true, a startup/on-read sweep deletes this log once its date has passed.
     autoDelete: integer("auto_delete", { mode: "boolean" }).notNull().default(false),
+    // Appointments only: optional local time of day, "HH:MM". Null means untimed (all day).
+    time: text("time"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -345,7 +347,10 @@ export const notificationDeliveries = sqliteTable(
   "notification_deliveries",
   {
     slot: text("slot").$type<NotificationSlot>().notNull(),
-    /** The local date the slot fired on (`YYYY-MM-DD`), not the item's own date. */
+    /**
+     * The local date the slot fired on (`YYYY-MM-DD`), not the item's own date — except for
+     * `hour_before`, which records the appointment's date (its window can span midnight).
+     */
     firedOn: text("fired_on").notNull(),
     itemKey: text("item_key").notNull(),
     sentAt: text("sent_at").notNull(),

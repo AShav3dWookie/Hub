@@ -19,6 +19,7 @@ export function getCalendarRange(db: AppDb, from: string, to: string): CalendarR
     .select({
       logId: logs.id,
       date: logs.date,
+      time: logs.time,
       notes: logs.notes,
       entityId: entities.id,
       title: entities.title,

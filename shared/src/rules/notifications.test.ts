@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  HOUR_BEFORE,
   NOTIFICATION_SLOTS,
+  appointmentsStartingSoon,
   isBirthdayTag,
   itemsOccurringOn,
   summariseNotification,
@@ -120,6 +122,81 @@ describe("itemsOccurringOn", () => {
   });
 });
 
+describe("itemsOccurringOn with times", () => {
+  const dentist = event({ logId: 7, entityTitle: "Dentist", category: "appointment", time: "15:00" });
+
+  it("names a timed appointment's time", () => {
+    expect(itemsOccurringOn([], [dentist], "2026-09-15")).toEqual([{ key: "log:7", label: "Dentist at 15:00" }]);
+  });
+
+  it("leaves timed appointments out of an untimed-only slot, and keeps the rest", () => {
+    const bowling = event({ logId: 8 });
+    const haircut = event({ logId: 9, entityTitle: "Haircut", category: "appointment" });
+    expect(
+      itemsOccurringOn([note()], [dentist, bowling, haircut], "2026-09-15", { untimedOnly: true }).map((i) => i.key),
+    ).toEqual(["log:8", "log:9", "note:1"]);
+  });
+
+  it("lists the untimed first, then by time", () => {
+    const haircut = event({ logId: 9, entityTitle: "Haircut", category: "appointment", time: "09:30" });
+    expect(itemsOccurringOn([note()], [dentist, haircut], "2026-09-15").map((i) => i.label)).toEqual([
+      "Sarah — Birthday",
+      "Haircut at 09:30",
+      "Dentist at 15:00",
+    ]);
+  });
+});
+
+describe("appointmentsStartingSoon", () => {
+  const dentist = event({ logId: 7, entityTitle: "Dentist", category: "appointment", time: "15:00" });
+  const at = (hh: number, mm: number) => hh * 60 + mm;
+  const soon = (rows: UpcomingEventLogRow[], minutes: number, date = "2026-09-15") =>
+    appointmentsStartingSoon(rows, date, minutes, "2026-09-16");
+
+  it("is an hour long", () => {
+    expect(HOUR_BEFORE.leadMinutes).toBe(60);
+  });
+
+  it("opens exactly an hour before the start, and not a minute earlier", () => {
+    expect(soon([dentist], at(14, 0))).toEqual([
+      { dateISO: "2026-09-15", item: { key: "log:7", label: "Dentist at 15:00" }, startsIn: 60 },
+    ]);
+    expect(soon([dentist], at(13, 59))).toEqual([]);
+  });
+
+  it("stays open up to the start and closes at it", () => {
+    expect(soon([dentist], at(14, 59))).toHaveLength(1);
+    expect(soon([dentist], at(15, 0))).toEqual([]);
+    expect(soon([dentist], at(16, 0))).toEqual([]);
+  });
+
+  it("ignores untimed appointments, hang-outs and other days", () => {
+    const rows = [
+      event({ logId: 1, category: "appointment" }),
+      event({ logId: 2, time: "15:00" }),
+      event({ logId: 3, category: "appointment", time: "15:00", date: "2026-09-14" }),
+    ];
+    expect(soon(rows, at(14, 30))).toEqual([]);
+  });
+
+  it("never reminds about one logged after it started", () => {
+    expect(soon([{ ...dentist, createdAt: "2026-09-15T15:30:00.000Z" }], at(14, 30))).toEqual([]);
+  });
+
+  it("reaches across midnight to tomorrow's early appointment, under its own date", () => {
+    const early = event({ logId: 4, entityTitle: "Flight", category: "appointment", time: "00:30", date: "2026-09-16" });
+    expect(soon([early], at(23, 30))).toEqual([
+      { dateISO: "2026-09-16", item: { key: "log:4", label: "Flight at 00:30" }, startsIn: 60 },
+    ]);
+    expect(soon([early], at(23, 29))).toEqual([]);
+  });
+
+  it("orders by start, then title", () => {
+    const rows = [dentist, event({ logId: 5, entityTitle: "Car MOT", category: "appointment", time: "14:45" })];
+    expect(soon(rows, at(14, 10)).map((s) => s.item.key)).toEqual(["log:5", "log:7"]);
+  });
+});
+
 describe("summariseNotification", () => {
   const a = { key: "note:1", label: "Sarah — Birthday" };
   const b = { key: "log:2", label: "Dentist" };
@@ -172,5 +249,9 @@ describe("NOTIFICATION_SLOTS", () => {
 
   it("closes the morning slots at midday and the evening slot at midnight", () => {
     expect(NOTIFICATION_SLOTS.map((s) => s.endMinute)).toEqual([720, 720, 1440]);
+  });
+
+  it("leaves timed appointments out of 9am only: the night before still names them", () => {
+    expect(NOTIFICATION_SLOTS.filter((s) => s.untimedOnly).map((s) => s.slot)).toEqual(["morning"]);
   });
 });

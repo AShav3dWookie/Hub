@@ -295,6 +295,7 @@ function buildLogSyncDTOs(db: AppDb, rows: LogRow[]): LogSyncDTO[] {
     date: r.date,
     notes: r.notes,
     autoDelete: r.autoDelete,
+    time: r.time,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     peopleIds: peopleByLog.get(r.id) ?? [],

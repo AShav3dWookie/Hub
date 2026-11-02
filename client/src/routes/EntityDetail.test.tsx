@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders } from "../test/renderWithProviders.js";
@@ -34,6 +34,7 @@ function log(overrides: Partial<LogDTO> = {}): LogDTO {
     photos: [],
     albums: [],
     autoDelete: false,
+    time: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -271,6 +272,32 @@ describe("EntityDetail log edit mode", () => {
       type: "log.update",
       payload: { logId: 1, notes: "second viewing", people: [] },
     });
+  });
+
+  it("shows an appointment's time and edits it, or clears it", async () => {
+    setEntity("appointment", [log({ date: "2024-03-05", time: "15:00", rating: null })]);
+    renderDetail({ editing: true });
+    expect(await screen.findByText("2024-03-05 at 15:00")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const time = screen.getByLabelText("Time (optional)") as HTMLInputElement;
+    expect(time.value).toBe("15:00");
+    fireEvent.change(time, { target: { value: "" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect((await pendingOutbox())[0]).toMatchObject({ type: "log.update", payload: { logId: 1, time: null } });
+  });
+
+  it("doesn't send a time for a category without one", async () => {
+    setEntity("movie", [log({ notes: "first viewing" })]);
+    renderDetail({ editing: true });
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(screen.queryByLabelText("Time (optional)")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(async () => expect(await pendingOutbox()).toHaveLength(1));
+    expect("time" in ((await pendingOutbox())[0].payload as object)).toBe(false);
   });
 
   it("cancels an edit without calling the API", async () => {

@@ -149,6 +149,17 @@ describe("server and offline client read parity", () => {
       expect(local.getUpcomingEvents(fx.snap, TODAY)).toEqual(serverUpcomingEvents(fx.db, TODAY));
     });
 
+    it("agrees on a day with timed appointments: untimed first, then by time", () => {
+      const events = local.getUpcomingEvents(fx.snap, TODAY);
+      expect(events).toEqual(serverUpcomingEvents(fx.db, TODAY));
+      const appointments = events.next7Days.filter((e) => e.category === "appointment");
+      expect(appointments.map((e) => [e.entityTitle, e.time])).toEqual([
+        ["Dentist", null],
+        ["Haircut", "09:30"],
+        ["Physio", "15:00"],
+      ]);
+    });
+
     it("agrees on both widgets across a range of days", () => {
       for (let offset = -400; offset <= 400; offset += 37) {
         const day = new Date(TODAY);

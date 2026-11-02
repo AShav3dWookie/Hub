@@ -1,6 +1,6 @@
 import { createTestDb } from "../../server/src/testUtils/testDb.js";
 import type { AppDb } from "../../server/src/db/client.js";
-import { logPhotos } from "../../server/src/db/schema.js";
+import { logPhotos, logs } from "../../server/src/db/schema.js";
 import { createBareEntity } from "../../server/src/services/entityService.js";
 import { createLog } from "../../server/src/services/logService.js";
 import { createEntityNote } from "../../server/src/services/entityNotesService.js";
@@ -314,6 +314,25 @@ export function createParityFixture(): ParityFixture {
     people: [],
     autoDelete: false,
   });
+  // Same day as the dentist, timed: they must follow it, in time order, on both sides.
+  createLog(db, {
+    category: "appointment",
+    title: "Physio",
+    rating: null,
+    date: dayOffset(2),
+    time: "15:00",
+    notes: null,
+    people: [],
+  });
+  createLog(db, {
+    category: "appointment",
+    title: "Haircut",
+    rating: null,
+    date: dayOffset(2),
+    time: "09:30",
+    notes: null,
+    people: [],
+  });
   createLog(db, {
     category: "appointment",
     title: "Past appointment",
@@ -374,6 +393,11 @@ export function createParityFixture(): ParityFixture {
   addListItem(db, ms.id, { text: "Flowers" });
   updateList(db, tesco.id, { isDefault: true });
   setListLocation(db, ms.id, { latitude: 53.2274, longitude: -4.1293, radiusM: 75 });
+
+  // Logs were created at the real clock, which is after TODAY, so none would count as planned
+  // ahead and the upcoming-events checks would compare two empty lists. Created a month before
+  // TODAY instead, they are plans, and the widgets have something to agree on.
+  db.update(logs).set({ createdAt: "2026-08-01 09:00:00" }).run();
 
   return { db, snap: snapshotFromServer(db), cleanup };
 }
