@@ -47,24 +47,29 @@ class HubClientTest {
     }
 
     @Test
-    fun `sends the words and reads back what was added`() {
+    fun `sends the words and reads back what was done`() {
         respond(
             200,
-            """{"action":"add","list":{"id":3,"name":"M&S – Bangor"},"added":["Eggs","Milk"],
+            """{"action":"add_to_list","list":{"id":3,"name":"M&S – Bangor"},"added":["Eggs","Milk"],
                "alreadyOnList":["Bread"],"parsedBy":"model","message":"Added Eggs and Milk to M&S – Bangor"}""",
         )
         val reply = client.sendVoice("add eggs, milk and bread to m and s").ok()
 
-        assertEquals("Added Eggs and Milk to M&S – Bangor", reply.message)
-        assertEquals("M&S – Bangor", reply.listName)
-        assertEquals(listOf("Eggs", "Milk"), reply.added)
-        assertEquals(listOf("Bread"), reply.alreadyOnList)
-        assertTrue(reply.usedModel)
+        assertEquals(VoiceReply("add_to_list", "Added Eggs and Milk to M&S – Bangor", usedModel = true), reply)
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/api/voice", request.path)
         assertEquals("add eggs, milk and bread to m and s", JSONObject(request.body.readUtf8()).getString("text"))
+    }
+
+    @Test
+    fun `reads a reply for any action, needing only its action and message`() {
+        respond(200, """{"action":"create_log","parsedBy":"model","message":"Added Dentist, Tue 4 Nov 15:00"}""")
+        assertEquals(
+            VoiceReply("create_log", "Added Dentist, Tue 4 Nov 15:00", usedModel = true),
+            client.sendVoice("dentist next tuesday at 3").ok(),
+        )
     }
 
     @Test

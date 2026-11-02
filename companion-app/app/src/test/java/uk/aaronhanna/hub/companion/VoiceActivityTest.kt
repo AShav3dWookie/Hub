@@ -69,7 +69,7 @@ class VoiceActivityTest {
         pair()
         server.enqueue(
             MockResponse().setBody(
-                """{"action":"add","list":{"id":1,"name":"Shopping"},"added":["Eggs"],"alreadyOnList":[],
+                """{"action":"add_to_list","list":{"id":1,"name":"Shopping"},"added":["Eggs"],"alreadyOnList":[],
                    "parsedBy":"model","message":"Added Eggs to Shopping"}""",
             ),
         )

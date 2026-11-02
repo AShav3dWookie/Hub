@@ -225,16 +225,24 @@ and a real sender lazily on first use.
 
 ### Voice commands & device tokens
 
-`POST /api/voice { text }` adds spoken items to the shopping lists; `docs/voice.md` is the guide.
-`voiceService.handleVoiceCommand` asks the model parser first and falls back to
-`lib/voiceRules.ts` on *any* failure, so a command is never lost. The parser only proposes
-`{ listId | null, items }`; the service validates the id (unknown → main list), dedupes and
-writes. `lib/voiceModel.ts` is the only importer of `@anthropic-ai/sdk` (Haiku, structured
-output via a plain JSON schema, not the SDK's zod helper, which needs zod v4 while the server is
-on zod 3). `createApp(db, photosDir, push, voiceParser)`: omitted builds from config
+`POST /api/voice { text }` turns a spoken command into one **action**; `docs/voice.md` is the
+guide. Actions are code in `server/src/voice/` (`VOICE_ACTIONS` in `actions.ts`, one module
+each: name, zod input, `run`); *when and how* each is used is plain English in
+`server/src/voice/rules.md`, which goes into the system prompt and is copied into `dist/` by the
+server's build script. Teaching voice a new phrasing is a rules edit plus phrase-table lines; a
+new kind of write is a new action module. The response is discriminated by `action`.
+
+`voiceService.handleVoiceCommand` asks the model parser first; it proposes `{ action, input }`,
+the service checks the input against that action's zod schema, and the action checks it against
+real data before writing. *Any* failure falls back to `lib/voiceRules.ts`, which only knows
+`add_to_list`, so a shopping command is never lost. `lib/voiceModel.ts` is the only importer of
+`@anthropic-ai/sdk`: Haiku gets one strict tool per action (schema from the zod input via
+`z.toJSONSchema`) and `tool_choice: any` with parallel calls off, so it must pick exactly one.
+`createApp(db, photosDir, push, voiceParser)`: omitted builds from config
 (`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means rules only, tests pass a fake.
-`npm run voice:check` (`scripts/voiceCheck.ts`) runs real phrases against the real API: a
-**manual** script, never part of `npm test` or CI, because it costs money.
+`npm run voice:check` (`scripts/voiceCheck.ts`) runs the **phrase table** (phrase → expected
+action and fields; every rule gets lines) against the real API: a **manual** script, never
+part of `npm test` or CI, because it costs money.
 
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the

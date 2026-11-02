@@ -1,7 +1,8 @@
 /**
  * `POST /api/voice` — a spoken command, already turned into text by the phone, applied to the
- * lists. Only adding is supported so far; `action` is in the response so removing can follow
- * without changing its shape.
+ * hub. The server picks one of a fixed set of **actions** (server/src/voice/) for it, steered by
+ * the rules in server/src/voice/rules.md; the response's `action` says which ran, and the rest
+ * of it is that action's detail.
  */
 
 /** Longer than any sensible spoken command; stops a stuck microphone sending a transcript. */
@@ -28,14 +29,24 @@ export interface VoiceStatusResponse {
   parser: VoiceParsedBy;
 }
 
-export interface VoiceCommandResponse {
-  action: "add";
+/** What voice can do. Each one is a module in server/src/voice/. */
+export type VoiceActionName = "add_to_list";
+
+interface VoiceReplyBase {
+  action: VoiceActionName;
+  parsedBy: VoiceParsedBy;
+  /** One line for the device to show, e.g. "Added Eggs and Milk to Tesco". */
+  message: string;
+}
+
+export interface AddToListReply extends VoiceReplyBase {
+  action: "add_to_list";
   list: { id: number; name: string };
   /** Items newly put on the list. */
   added: string[];
   /** Items the list already had, so nothing was written for them. */
   alreadyOnList: string[];
-  parsedBy: VoiceParsedBy;
-  /** One line for the device to show, e.g. "Added eggs, milk to Tesco". */
-  message: string;
 }
+
+/** Discriminated by `action`. A device needs only `action` and `message`. */
+export type VoiceCommandResponse = AddToListReply;

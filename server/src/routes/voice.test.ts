@@ -44,18 +44,20 @@ describe("POST /api/voice", () => {
     const res = await say(app, "add eggs to the shopping list", token);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ action: "add", added: ["Eggs"], parsedBy: "rules" });
+    expect(res.body).toMatchObject({ action: "add_to_list", added: ["Eggs"], parsedBy: "rules" });
     const lists = (await request(app).get("/api/lists")).body as { name: string; itemCount: number }[];
     expect(lists.find((l) => l.name === "Shopping")?.itemCount).toBe(1);
   });
 
   it("uses the model it was given", async () => {
-    const parser: VoiceParser = vi.fn().mockResolvedValue({ listId: null, items: ["Eggs", "Milk"] });
+    const parser: VoiceParser = vi
+      .fn()
+      .mockResolvedValue({ action: "add_to_list", input: { listId: null, items: ["Eggs", "Milk"] } });
     const { app, token } = await setup({ parser });
     const res = await say(app, "add eggs and milk", token);
 
     expect(res.body).toMatchObject({ added: ["Eggs", "Milk"], parsedBy: "model" });
-    expect(parser).toHaveBeenCalledWith("add eggs and milk", expect.any(Array));
+    expect(parser).toHaveBeenCalledWith("add eggs and milk", { lists: expect.any(Array) });
   });
 
   describe("GET /api/voice/status — the companion app's Test connection", () => {
