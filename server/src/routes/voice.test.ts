@@ -83,6 +83,39 @@ describe("POST /api/voice", () => {
     expect(vi.mocked(parser).mock.calls[0][1]).toMatchObject({ timeZone: "Europe/London" });
   });
 
+  describe("DELETE /api/voice/commands/:id — Undo", () => {
+    it("takes back what the device's command added, and is harmless to repeat", async () => {
+      const { app, token } = await setup({ auth: true });
+      const said = await say(app, "add eggs to the shopping list", token);
+      expect(said.body.commandId).toEqual(expect.any(Number));
+      const undo = () =>
+        request(app).delete(`/api/voice/commands/${said.body.commandId}`).set("Authorization", `Bearer ${token}`);
+
+      expect((await undo()).status).toBe(204);
+      expect((await undo()).status).toBe(204);
+      const { getList, listLists } = await import("../services/listService.js");
+      expect(listLists(ctx.db).every((l) => getList(ctx.db, l.id).items.length === 0)).toBe(true);
+    });
+
+    it("is a 404 for another device's command", async () => {
+      const { app, token } = await setup({ auth: true });
+      const { createDeviceToken } = await import("../services/deviceTokensService.js");
+      const other = createDeviceToken(ctx.db, "Tablet").token;
+      const said = await say(app, "add eggs to the shopping list", token);
+
+      const res = await request(app)
+        .delete(`/api/voice/commands/${said.body.commandId}`)
+        .set("Authorization", `Bearer ${other}`);
+      expect(res.status).toBe(404);
+    });
+
+    it("needs a token or a session", async () => {
+      const { app, token } = await setup({ auth: true });
+      const said = await say(app, "add eggs to the shopping list", token);
+      expect((await request(app).delete(`/api/voice/commands/${said.body.commandId}`)).status).toBe(401);
+    });
+  });
+
   describe("GET /api/voice/status — the companion app's Test connection", () => {
     it("names the device and says it would use the rules backup without a model", async () => {
       const { app, token } = await setup({ auth: true });

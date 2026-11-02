@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AppError } from "../lib/errors.js";
 import { createLog as createLogEntry } from "../services/logService.js";
+import { findEntity } from "../services/entityService.js";
 import {
   CATEGORY_FIELDS,
   CATEGORY_META,
@@ -9,10 +10,9 @@ import {
   isTimeOfDay,
   minutesOfDay,
   type CategoryFieldsConfig,
-  type CreateLogReply,
   type LoggableCategory,
 } from "@logger/shared";
-import type { VoiceAction } from "./actions.js";
+import type { VoiceAction, VoiceReplyWithoutId } from "./actions.js";
 import { describeDay, tidy } from "./text.js";
 
 /**
@@ -77,7 +77,7 @@ export const createLog: VoiceAction<typeof input> = {
   name: "create_log",
   description: "Add an entry to the diary: an appointment, a hang-out, a meal out, something watched, read or played.",
   input,
-  run(db, said, { text, parsedBy, today, nowMinutes }): CreateLogReply {
+  run(db, said, { text, parsedBy, today, nowMinutes, record }): VoiceReplyWithoutId {
     const { category } = said;
     const fields = CATEGORY_FIELDS[category];
 
@@ -95,6 +95,8 @@ export const createLog: VoiceAction<typeof input> = {
       if (gone) throw new AppError(422, `${title}, ${when} is in the past, so nothing was added`);
     }
 
+    // Undo takes the entry away too, but only if this command made it.
+    const isNew = !findEntity(db, category, title);
     const rating = fields.hasRating && said.rating != null && said.rating >= 1 && said.rating <= 5 ? said.rating : null;
     const log = createLogEntry(db, {
       category,
@@ -108,6 +110,8 @@ export const createLog: VoiceAction<typeof input> = {
       releaseYear: fields.hasReleaseYear ? said.releaseYear : null,
       author: fields.hasAuthor ? said.author?.trim() || null : null,
     });
+    if (isNew) record({ kind: "entity", id: log.entityId });
+    record({ kind: "log", id: log.id });
 
     // An appointment is the usual case and needs no label; anything else says what it was.
     const what = category === "appointment" ? title : `${title} (${CATEGORY_META[category].label})`;

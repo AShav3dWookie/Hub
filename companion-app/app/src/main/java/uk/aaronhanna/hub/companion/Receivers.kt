@@ -81,6 +81,15 @@ class LeaveActionReceiver : BroadcastReceiver() {
     }
 }
 
+/** Undo on a voice reply. */
+class VoiceUndoReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != VoiceReplies.ACTION_UNDO) return
+        val commandId = intent.getIntExtra(VoiceReplies.EXTRA_COMMAND_ID, -1).takeIf { it >= 0 } ?: return
+        VoiceReplies.onUndo(context, commandId, intent.getStringExtra(VoiceReplies.EXTRA_MESSAGE).orEmpty())
+    }
+}
+
 /** Play Services forgets geofences on a reboot (and an app update); put them back from the copy. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

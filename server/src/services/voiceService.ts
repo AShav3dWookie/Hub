@@ -5,7 +5,8 @@ import { buildVoiceContext, findVoiceAction, type VoiceAction, type VoiceClock }
 import { addToList } from "../voice/addToList.js";
 import { localTime } from "../lib/localClock.js";
 import { AppError } from "../lib/errors.js";
-import type { VoiceCommandResponse, VoiceParsedBy } from "@logger/shared";
+import type { VoiceCommandResponse, VoiceParsedBy, VoiceRecord } from "@logger/shared";
+import { recordVoiceCommand } from "./voiceUndoService.js";
 
 /** The parser's answer, checked: a real action, and input that fits that action's schema. */
 function checkCall(call: VoiceCall): { action: VoiceAction; input: unknown } {
@@ -32,6 +33,8 @@ export async function handleVoiceCommand(
   text: string,
   parseWithModel: VoiceParser | null,
   clock: VoiceClock,
+  /** The device token that sent it, or null for a signed-in browser. Only it may undo. */
+  deviceId: number | null = null,
 ): Promise<VoiceCommandResponse> {
   const context = buildVoiceContext(db, clock);
 
@@ -55,5 +58,15 @@ export async function handleVoiceCommand(
   }
 
   const { dateISO: today, minutes: nowMinutes } = localTime(clock.now, clock.timeZone);
-  return call.action.run(db, call.input, { text, parsedBy, today, nowMinutes });
+  const action = call.action;
+  const input = call.input;
+  return db.transaction(() => {
+    const created: VoiceRecord[] = [];
+    const record = (r: VoiceRecord) => void created.push(r);
+    const reply = action.run(db, input, { text, parsedBy, today, nowMinutes, record });
+    const commandId =
+      created.length > 0 ? recordVoiceCommand(db, { action: action.name, created, deviceId, now: clock.now }) : null;
+    const done: VoiceCommandResponse = { ...reply, commandId };
+    return done;
+  });
 }

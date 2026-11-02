@@ -19,6 +19,8 @@ data class VoiceReply(
     val action: String,
     val message: String,
     val usedModel: Boolean,
+    /** For [HubClient.undoVoice]; null when the command saved nothing. */
+    val commandId: Int? = null,
 )
 
 /** Why a call didn't work, as the person holding the phone needs to hear it. */
@@ -57,8 +59,16 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
                 action = json.getString("action"),
                 message = json.getString("message"),
                 usedModel = json.getString("parsedBy") == "model",
+                commandId = if (json.isNull("commandId")) null else json.getInt("commandId"),
             )
         }
+
+    /**
+     * Undo a voice command. A repeat is a 204 again; too late, or not this phone's, comes back
+     * [HubError.Rejected] with the hub's reason.
+     */
+    fun undoVoice(commandId: Int): HubResult<Unit> =
+        call("DELETE", "/api/voice/commands/$commandId", null) { }
 
     /** Every shopping list with its location and items — the app's whole cache in one call. */
     fun lists(): HubResult<List<ShopList>> = call("GET", "/api/device/lists", null, ShopList::listFromJson)

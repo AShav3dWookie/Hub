@@ -34,9 +34,24 @@ export interface VoiceStatusResponse {
 /** What voice can do. Each one is a module in server/src/voice/. */
 export type VoiceActionName = "add_to_list" | "create_log" | "not_supported";
 
+/** One row a voice command created, as recorded for Undo. */
+export type VoiceRecord =
+  | { kind: "listItem"; listId: number; id: number }
+  | { kind: "log"; id: number }
+  /** Only an entity the command itself created; undo removes it if nothing else uses it. */
+  | { kind: "entity"; id: number };
+
+/** How long a voice command can be undone from the device that said it. */
+export const VOICE_UNDO_WINDOW_MS = 5 * 60_000;
+
 interface VoiceReplyBase {
   action: VoiceActionName;
   parsedBy: VoiceParsedBy;
+  /**
+   * For `DELETE /api/voice/commands/:id` (Undo), within `VOICE_UNDO_WINDOW_MS`. Null when the
+   * command saved nothing (every item was already on the list).
+   */
+  commandId: number | null;
   /** One line for the device to show, e.g. "Added Eggs and Milk to Tesco". */
   message: string;
 }

@@ -252,10 +252,19 @@ real data before writing. *Any* failure falls back to `lib/voiceRules.ts`, which
 action and fields; every rule gets lines) against the real API: a **manual** script, never
 part of `npm test` or CI, because it costs money.
 
+**Undo.** An action calls `how.record(...)` for every row it creates; the service saves those
+in `voice_commands` (server-only, not synced, cascades with its device token, pruned after a
+day) and returns `commandId`. `DELETE /api/voice/commands/:id` (`voiceUndoService`) deletes
+exactly those rows, newest first, plus an entity the command made if nothing else uses it. Only
+the same device (a browser only its own), within `VOICE_UNDO_WINDOW_MS` (5 min) by the hub's
+clock; another device's command is a 404, a late one a 410, a repeat a 204. It is the one delete
+a device token can make outside list items. The companion app queues the tap in `UndoStore`
+and sends it through `Outbox` ahead of any Got it.
+
 Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` stores only a SHA-256
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the
 companion app's shopping lists with their shop locations, `PUT …/location` to tag one, and
-`DELETE …/items/:itemId` for Got it) and
+`DELETE …/items/:itemId` for Got it) — and, under `/api/voice`, `DELETE /commands/:id` for Undo —
 nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
 token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
 never mint tokens. Over the WAN those two paths skip Authelia through a regex `location` in nginx

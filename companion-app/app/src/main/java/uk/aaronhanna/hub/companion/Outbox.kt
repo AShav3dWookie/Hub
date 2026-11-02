@@ -12,12 +12,14 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 /**
- * "Got it" taps on their way to the hub. A tap takes the item off the saved copy at once
- * ([ShopStore.tickOff]), so it can't reappear at the next shop, and is then sent from here:
+ * "Got it" and Undo taps on their way to the hub. An Undo waits in [UndoStore] and goes first,
+ * since the hub only allows it for a few minutes. A "Got it" tap takes the item off the saved
+ * copy at once ([ShopStore.tickOff]), so it can't reappear at the next shop. Both are sent:
  *  - by [OutboxWorker], which WorkManager runs once the phone is online and retries with backoff
  *    until the hub answers — before the hub is on the WAN, that means once you're home;
  *  - by [Shops.refresh], before it reads the lists, whenever the app reaches the hub anyway.
- * The hub treats a delete of an already-gone item as done, so sending one twice is harmless.
+ * The hub treats a delete of an already-gone item, and a second undo, as done, so sending one
+ * twice is harmless.
  */
 object Outbox {
     const val WORK_NAME = "outbox"
@@ -35,10 +37,27 @@ object Outbox {
      */
     fun flush(context: Context, timeoutMs: Int = 15_000): HubError? {
         val store = ShopStore(context)
-        if (store.pending().isEmpty()) return null
+        val undos = UndoStore(context)
+        if (store.pending().isEmpty() && undos.pending().isEmpty()) return null
         // Unpaired is a token problem as far as the queue is concerned: pairing again sends it.
         val pairing = PairingStore(context).load() ?: return HubError.BadToken
         val client = HubClient(pairing, timeoutMs)
+        for (undo in undos.pending()) {
+            when (val outcome = client.undoVoice(undo.commandId)) {
+                is HubResult.Ok -> {
+                    undos.sent(undo.commandId)
+                    VoiceReplies.undone(context, undo)
+                }
+                is HubResult.Failed -> when (val error = outcome.error) {
+                    // Too late, or no longer this phone's: say so, and stop trying.
+                    is HubError.Rejected -> {
+                        undos.sent(undo.commandId)
+                        VoiceReplies.couldNotUndo(context, undo, error.message)
+                    }
+                    else -> return error
+                }
+            }
+        }
         for (ticked in store.pending()) {
             when (val outcome = client.removeItem(ticked.listId, ticked.itemId)) {
                 is HubResult.Ok -> store.sent(ticked)
