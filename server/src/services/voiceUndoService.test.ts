@@ -19,7 +19,7 @@ const later = (ms: number) => new Date(NOW.getTime() + ms);
 const appointment = (title: string, date = "2026-11-10", time: string | null = "15:00"): VoiceParser =>
   vi.fn().mockResolvedValue({
     action: "create_log",
-    input: { category: "appointment", title, date, time, autoDelete: null, rating: null, releaseYear: null, author: null, notes: null },
+    input: { category: "appointment", title, date, time, autoDelete: null, rating: null, releaseYear: null, author: null, notes: null, people: [] },
   });
 const shopping = (...items: string[]): VoiceParser =>
   vi.fn().mockResolvedValue({ action: "add_to_list", input: { listId: null, items } });

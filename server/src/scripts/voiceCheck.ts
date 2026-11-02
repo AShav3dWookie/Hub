@@ -51,6 +51,11 @@ const CONTEXT: VoiceContext = {
     { id: 3, name: "Sainsbury's – Bangor" },
     { id: 4, name: "Tesco Bangor" },
   ],
+  people: [
+    { id: 11, name: "Ada" },
+    { id: 12, name: "Mo Salah" },
+    { id: 13, name: "Zoe" },
+  ],
 };
 
 /**
@@ -120,6 +125,38 @@ const PHRASES: { say: string; action: VoiceActionName; want: Record<string, unkn
     want: { category: "appointment", date: "2026-11-12", time: "14:00", autoDelete: false },
   },
 
+  // Hang-outs and eating out, with people. "Tonight" is today.
+  {
+    say: "dinner with ada at dylan's tonight",
+    action: "create_log",
+    want: { category: "eating_out", title: "dylan's", date: "2026-11-02", people: [{ id: 11 }] },
+  },
+  {
+    say: "drinks with zoe on friday",
+    action: "create_log",
+    want: { category: "hang_out", title: "drinks", date: "2026-11-06", people: [{ id: 13 }] },
+  },
+  {
+    say: "lunch with zo and mo at wetherspoons tomorrow",
+    action: "create_log",
+    want: { category: "eating_out", title: "wetherspoons", date: "2026-11-03", people: [{ id: 13 }, { id: 12 }] },
+  },
+  {
+    say: "bowling with aida on saturday",
+    action: "create_log",
+    want: { category: "hang_out", title: "bowling", date: "2026-11-07", people: [{ id: null, name: "aida" }] },
+  },
+  {
+    say: "coffee with ada yesterday",
+    action: "create_log",
+    want: { category: "hang_out", date: "2026-11-01", people: [{ id: 11 }] },
+  },
+  {
+    say: "breakfast at the pantry with mo on sunday",
+    action: "create_log",
+    want: { category: "eating_out", title: "the pantry", date: "2026-11-08", people: [{ id: 12 }] },
+  },
+
   // Anything else
   { say: "what's on my list", action: "not_supported", want: {} },
   { say: "what's on tomorrow", action: "not_supported", want: {} },
@@ -131,6 +168,10 @@ const loose = (s: string) => s.toLowerCase().replace(/[-–]/g, " ").replace(/\s
 
 function normalise(field: string, value: unknown): unknown {
   if (field === "listId") return value ?? MAIN_LIST;
+  // People compare by id, or by name when there's no id ("?aida"), in any order.
+  if (field === "people" && Array.isArray(value)) {
+    return (value as { id: number | null; name?: string }[]).map((p) => p.id ?? `?${loose(p.name ?? "")}`).sort();
+  }
   if (typeof value === "string") return loose(value);
   if (Array.isArray(value)) return value.map((v) => normalise(field, v));
   return value;

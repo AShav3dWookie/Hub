@@ -96,6 +96,18 @@ Rules ship with a release, like code.
 - Every loggable category goes through the same action, its fields taken from the category
   configuration; the rules decide which ones voice is used for.
 
+### Hang-outs and eating out, with people
+
+"Dinner with Ada at Dylan's tonight" is **eating out** (a meal out; the title is the place),
+"drinks with Zoe on Friday" a **hang-out** (anything else with people; the title is the
+activity). Both can be in the past ("coffee with Ada yesterday") as well as planned.
+
+- **People are matched by meaning** against everyone the hub knows: "Zo" finds Zoe, "Mo" finds
+  Mo Salah. The model is given each person's id; the server checks every id is really a person.
+- **Voice never creates a person.** A name the hub doesn't know is left off and the reply says
+  so: *Added Bowling (Hang Out) with Ada, Sat 7 Nov. I don't know Aida, so they weren't tagged.*
+  Add Aida in the app, then tag her on the log.
+
 ### Undo
 
 Every command that saved something comes back with a `commandId`, and the companion app's

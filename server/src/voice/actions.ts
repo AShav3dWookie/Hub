@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { AppDb } from "../db/client.js";
+import { listPeople, type VoicePerson } from "./people.js";
 import type { VoiceActionName, VoiceCommandResponse, VoiceParsedBy, VoiceRecord } from "@logger/shared";
 import { listLists } from "../services/listService.js";
 import { addDaysISO, localTime } from "../lib/localClock.js";
@@ -75,6 +76,8 @@ export interface VoiceContext {
    */
   comingDays: string[];
   lists: VoiceList[];
+  /** Everyone who can be tagged, so "Zo" can find Zoe. Voice never creates a person. */
+  people: VoicePerson[];
 }
 
 /** How far ahead `comingDays` runs. */
@@ -89,11 +92,15 @@ export function findVoiceAction(name: string): VoiceAction | undefined {
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function buildVoiceContext(db: AppDb, clock: VoiceClock): VoiceContext {
-  return { ...describeClock(clock), lists: listLists(db, "shopping").map(({ id, name }) => ({ id, name })) };
+  return {
+    ...describeClock(clock),
+    lists: listLists(db, "shopping").map(({ id, name }) => ({ id, name })),
+    people: listPeople(db),
+  };
 }
 
 /** The date-and-time half of the context: no data, so voice:check builds it the same way. */
-export function describeClock({ now, timeZone }: VoiceClock): Omit<VoiceContext, "lists"> {
+export function describeClock({ now, timeZone }: VoiceClock): Omit<VoiceContext, "lists" | "people"> {
   const { dateISO, minutes } = localTime(now, timeZone);
   const pad = (n: number) => String(n).padStart(2, "0");
   const weekdayOf = (iso: string) => WEEKDAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];

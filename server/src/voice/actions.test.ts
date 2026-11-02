@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
 import { createList } from "../services/listService.js";
+import { createBareEntity } from "../services/entityService.js";
 import { VOICE_ACTIONS, buildVoiceContext, describeClock, findVoiceAction } from "./actions.js";
 import { loadVoiceRules } from "./rules.js";
 
@@ -24,6 +25,17 @@ describe("voice actions", () => {
     expect(comingDays).toHaveLength(35);
     expect(comingDays.slice(0, 2)).toEqual(["Tuesday 2026-11-03", "Wednesday 2026-11-04"]);
     expect(comingDays.at(-1)).toBe("Monday 2026-12-07");
+  });
+
+  it("tells the model about everyone who can be tagged, by name", () => {
+    ctx = createTestDb();
+    const zoe = createBareEntity(ctx.db, "person", "Zoe");
+    const ada = createBareEntity(ctx.db, "person", "Ada");
+    createBareEntity(ctx.db, "movie", "Dune");
+    expect(buildVoiceContext(ctx.db, { now: new Date(), timeZone: "Europe/London" }).people).toEqual([
+      { id: ada.id, name: "Ada" },
+      { id: zoe.id, name: "Zoe" },
+    ]);
   });
 
   it("tells the model about the shopping lists by id and name only", () => {
