@@ -13,7 +13,8 @@ import {
   type LoggableCategory,
 } from "@logger/shared";
 import type { VoiceAction, VoiceReplyWithoutId } from "./actions.js";
-import { describeDay, tidy } from "./text.js";
+import { describeDay, joinNames, tidy } from "./text.js";
+import { listPeople } from "./people.js";
 
 /**
  * One action for every loggable category. Its fields and their descriptions come from
@@ -59,6 +60,18 @@ const input = z.object({
     .nullable()
     .describe(`Only for ${having("hasReleaseYear")}: the year it came out, if said, else null.`),
   author: z.string().nullable().describe(`Only for ${having("hasAuthor")}: the author, if said, else null.`),
+  people: z
+    .array(
+      z.object({
+        id: z
+          .number()
+          .int()
+          .nullable()
+          .describe("Their id from the context's people, matched by meaning; null if they aren't there."),
+        name: z.string().describe("The name as said."),
+      }),
+    )
+    .describe(`Only for ${having("hasPeople")}: everyone it was with. Empty for anything else.`),
   notes: z
     .string()
     .nullable()
@@ -95,6 +108,20 @@ export const createLog: VoiceAction<typeof input> = {
       if (gone) throw new AppError(422, `${title}, ${when} is in the past, so nothing was added`);
     }
 
+    // People are tagged only by an id the hub knows: voice never creates a person. Anyone the
+    // model couldn't match is left off and named in the reply.
+    const known = new Map(listPeople(db).map((p) => [p.id, p.name]));
+    const tagged: { id: number; name: string }[] = [];
+    const unknown: string[] = [];
+    for (const person of fields.hasPeople ? said.people : []) {
+      const name = person.id != null ? known.get(person.id) : undefined;
+      if (name !== undefined) {
+        if (!tagged.some((t) => t.id === person.id)) tagged.push({ id: person.id!, name });
+      } else if (person.name.trim() && !unknown.includes(tidy(person.name))) {
+        unknown.push(tidy(person.name));
+      }
+    }
+
     // Undo takes the entry away too, but only if this command made it.
     const isNew = !findEntity(db, category, title);
     const rating = fields.hasRating && said.rating != null && said.rating >= 1 && said.rating <= 5 ? said.rating : null;
@@ -105,7 +132,7 @@ export const createLog: VoiceAction<typeof input> = {
       time,
       rating,
       notes: said.notes?.trim() || null,
-      people: [],
+      people: tagged.map(({ id }) => ({ id })),
       autoDelete: fields.hasAutoDelete ? (said.autoDelete ?? true) : false,
       releaseYear: fields.hasReleaseYear ? said.releaseYear : null,
       author: fields.hasAuthor ? said.author?.trim() || null : null,
@@ -115,11 +142,16 @@ export const createLog: VoiceAction<typeof input> = {
 
     // An appointment is the usual case and needs no label; anything else says what it was.
     const what = category === "appointment" ? title : `${title} (${CATEGORY_META[category].label})`;
+    const withWho = tagged.length > 0 ? ` with ${joinNames(tagged.map((t) => t.name))}` : "";
+    const skipped =
+      unknown.length > 0
+        ? `. I don't know ${joinNames(unknown)}, so they weren't tagged`
+        : "";
     return {
       action: "create_log",
-      log: { id: log.id, entityId: log.entityId, category, title, date, time },
+      log: { id: log.id, entityId: log.entityId, category, title, date, time, people: tagged },
       parsedBy,
-      message: `Added ${what}, ${when}`,
+      message: `Added ${what}${withWho}, ${when}${skipped}`,
     };
   },
 };

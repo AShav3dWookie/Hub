@@ -73,6 +73,7 @@ describe("POST /api/voice", () => {
         releaseYear: null,
         author: null,
         notes: null,
+        people: [],
       },
     });
     const { app, token } = await setup({ auth: true, parser });

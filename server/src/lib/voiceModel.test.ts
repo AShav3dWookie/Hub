@@ -10,6 +10,7 @@ const CONTEXT = {
   time: "10:00",
   timeZone: "Europe/London",
   comingDays: ["Tuesday 2026-11-03"],
+  people: [{ id: 9, name: "Zoe" }],
   lists: [
     { id: 1, name: "Shopping" },
     { id: 2, name: "M&S – Bangor" },

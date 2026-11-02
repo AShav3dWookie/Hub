@@ -74,6 +74,8 @@ export interface CreateLogReply extends VoiceReplyBase {
     title: string;
     date: string;
     time: string | null;
+    /** Who was tagged. Names the hub didn't know are left off and named in `message`. */
+    people: { id: number; name: string }[];
   };
 }
 

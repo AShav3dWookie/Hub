@@ -44,6 +44,19 @@ command is answered with exactly one action. Each rule here has lines in the phr
 - autoDelete: null, unless they ask to keep it as a record, then false.
 - Anything else worth keeping goes in notes ("bring the letter"); otherwise null.
 
+## Hang-outs and eating out: create_log
+
+- A meal out with or without someone (breakfast, brunch, lunch, dinner, a meal, a takeaway eaten
+  out) is eating_out, and its title is the place ("Dylan's", "Wetherspoons"). If no place was
+  said, the title is the meal ("Dinner").
+- Seeing people for anything else (drinks, coffee, a walk, bowling, the cinema, a party) is a
+  hang_out, and its title is the activity, short: "Drinks", "Coffee", "Bowling".
+- These can be in the past ("yesterday", "last night") as well as planned. "Tonight" and "this
+  morning" are today.
+- people: everyone it was with. Match each name by meaning to the context's people: "Zo" is
+  "Zoe", "Mo" is "Mo Salah". Use their id. Someone who isn't in the list gets a null id and the
+  name as said; never guess an id for them.
+
 ## Anything else: not_supported
 
 - Questions ("what's on tomorrow?", "what's on my list?"), removing or changing something, and

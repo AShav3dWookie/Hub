@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createTestDb } from "../testUtils/testDb.js";
 import { handleVoiceCommand } from "../services/voiceService.js";
-import { getLogById } from "../services/logService.js";
+import { createLog as createLogEntry, getLogById } from "../services/logService.js";
+import { createBareEntity, findEntity } from "../services/entityService.js";
 import { getChanges } from "../services/syncService.js";
 import type { VoiceParser } from "../lib/voiceModel.js";
 import type { CreateLogInput } from "./createLog.js";
@@ -16,6 +17,7 @@ const UNSAID: Omit<CreateLogInput, "category" | "title" | "date"> = {
   releaseYear: null,
   author: null,
   notes: null,
+  people: [],
 };
 
 const fails = (p: Promise<unknown>) => p.catch((e: unknown) => e);
@@ -120,6 +122,72 @@ describe("create_log", () => {
     expect(meal.message).toBe("Added Dylan's (Eating Out), Fri 30 Oct");
     if (meal.action !== "create_log") throw new Error("expected create_log");
     expect(getLogById(ctx.db, meal.log.id).rating).toBeNull();
+  });
+});
+
+describe("create_log with people", () => {
+  let ctx: ReturnType<typeof createTestDb>;
+  afterEach(() => ctx?.cleanup());
+
+  function people() {
+    ctx = createTestDb();
+    const ada = createBareEntity(ctx.db, "person", "Ada");
+    const zoe = createBareEntity(ctx.db, "person", "Zoe");
+    return { ada, zoe };
+  }
+  const say = (input: Partial<CreateLogInput>) =>
+    handleVoiceCommand(
+      ctx.db,
+      "…",
+      vi.fn().mockResolvedValue({
+        action: "create_log",
+        input: { category: "eating_out", title: "Dylan's", date: "2026-11-02", ...UNSAID, ...input },
+      }),
+      CLOCK,
+    );
+  const taggedOn = async (reply: Awaited<ReturnType<typeof say>>) => {
+    if (reply.action !== "create_log") throw new Error("expected create_log");
+    return getLogById(ctx.db, reply.log.id).people.map((p) => p.name);
+  };
+
+  it("tags the people the model matched, and says who", async () => {
+    const { ada, zoe } = people();
+    const reply = await say({ people: [{ id: zoe.id, name: "zo" }, { id: ada.id, name: "Ada" }] });
+    expect(reply.message).toBe("Added Dylan's (Eating Out) with Zoe and Ada, Mon 2 Nov");
+    expect(await taggedOn(reply)).toEqual(expect.arrayContaining(["Ada", "Zoe"]));
+  });
+
+  it("leaves off a name it doesn't know, says so, and never creates the person", async () => {
+    const { ada } = people();
+    const reply = await say({
+      category: "hang_out",
+      title: "Bowling",
+      people: [{ id: ada.id, name: "Ada" }, { id: null, name: "aida" }],
+    });
+    expect(reply.message).toBe("Added Bowling (Hang Out) with Ada, Mon 2 Nov. I don't know Aida, so they weren't tagged");
+    expect(await taggedOn(reply)).toEqual(["Ada"]);
+    expect(findEntity(ctx.db, "person", "Aida")).toBeUndefined();
+  });
+
+  it("treats an id that isn't a person as unknown", async () => {
+    people();
+    const film = createLogEntry(ctx.db, { category: "movie", title: "Dune", rating: null, date: "2026-01-01", notes: null, people: [] });
+    const reply = await say({ people: [{ id: film.entityId, name: "Dune" }, { id: 9999, name: "Bob" }] });
+    expect(reply.message).toBe("Added Dylan's (Eating Out), Mon 2 Nov. I don't know Dune and Bob, so they weren't tagged");
+    expect(await taggedOn(reply)).toEqual([]);
+  });
+
+  it("tags someone named twice once", async () => {
+    const { ada } = people();
+    const reply = await say({ people: [{ id: ada.id, name: "Ada" }, { id: ada.id, name: "ada" }] });
+    expect(await taggedOn(reply)).toEqual(["Ada"]);
+  });
+
+  it("ignores people for a category that has none", async () => {
+    const { ada } = people();
+    const reply = await say({ category: "appointment", title: "Dentist", date: "2026-11-03", people: [{ id: ada.id, name: "Ada" }] });
+    expect(reply.message).toBe("Added Dentist, Tue 3 Nov");
+    expect(await taggedOn(reply)).toEqual([]);
   });
 });
 
