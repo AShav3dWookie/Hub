@@ -4,6 +4,7 @@ import { handleVoiceCommand } from "../services/voiceService.js";
 import { createLog as createLogEntry, getLogById } from "../services/logService.js";
 import { createBareEntity, findEntity } from "../services/entityService.js";
 import { getChanges } from "../services/syncService.js";
+import { logs } from "../db/schema.js";
 import type { VoiceParser } from "../lib/voiceModel.js";
 import type { CreateLogInput } from "./createLog.js";
 
@@ -37,7 +38,9 @@ describe("create_log", () => {
     });
     return handleVoiceCommand(ctx.db, text, parser, CLOCK);
   }
-  const logCount = () => getChanges(ctx.db).changes.logs.length;
+  // Counted in the table, not through getChanges: the change feed sweeps passed auto-delete
+  // appointments against the real clock, so CLOCK's 2 Nov ones vanished from it on 3 Nov.
+  const logCount = () => ctx.db.select({ id: logs.id }).from(logs).all().length;
 
   it("adds a timed appointment and says exactly what was saved", async () => {
     ctx = createTestDb();
