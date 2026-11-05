@@ -3,6 +3,7 @@ import type { AppDb } from "../db/client.js";
 import { pushSubscriptions } from "../db/schema.js";
 import { NotFoundError } from "../lib/errors.js";
 import type { PushPayload, PushSender, PushTarget } from "../lib/webPush.js";
+import { writeLog } from "./serverLogService.js";
 
 /**
  * Devices that have turned notifications on, keyed by their push endpoint. Re-subscribing the
@@ -92,8 +93,11 @@ export async function sendToDevices(
     .map((r) => r.device.endpoint);
 
   if (gone.length > 0) {
-    // eslint-disable-next-line no-console
-    console.warn(`[push] removing ${gone.length} subscription(s) the push service reports gone`);
+    writeLog(db, {
+      level: "info",
+      source: "notifications",
+      message: `Removed ${gone.length} device(s) the push service reports gone`,
+    });
     db.delete(pushSubscriptions).where(inArray(pushSubscriptions.endpoint, gone)).run();
   }
   if (delivered.length > 0) {

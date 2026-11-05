@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { errorHandler } from "./errorHandler.js";
+import { createErrorHandler, errorHandler } from "./errorHandler.js";
+import { createTestDb } from "../testUtils/testDb.js";
+import { listLogs } from "../services/serverLogService.js";
 import { NotFoundError, BadRequestError, AppError } from "../lib/errors.js";
 
 function mockRes() {
@@ -52,5 +54,28 @@ describe("errorHandler", () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: "Internal server error" });
     spy.mockRestore();
+  });
+});
+
+describe("createErrorHandler with a database", () => {
+  it("puts a 500 in the hub's log with its stack, and leaves a 4xx out", () => {
+    const ctx = createTestDb();
+    try {
+      const handler = createErrorHandler(ctx.db);
+      const request = { method: "POST", originalUrl: "/api/voice?x=1" } as Request;
+      handler(new Error("disk full"), request, mockRes(), next);
+      handler(new NotFoundError("no such log"), request, mockRes(), next);
+
+      expect(listLogs(ctx.db)).toEqual([
+        expect.objectContaining({
+          level: "error",
+          source: "http",
+          message: "500 on POST /api/voice: disk full",
+          data: { stack: expect.stringContaining("disk full") },
+        }),
+      ]);
+    } finally {
+      ctx.cleanup();
+    }
   });
 });

@@ -1,6 +1,15 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import type { Category, ListKind, NotificationSlot, SyncEntityType, VoiceRecord } from "@logger/shared";
+import type {
+  Category,
+  DeviceTokenScope,
+  ListKind,
+  NotificationSlot,
+  ServerLogLevel,
+  ServerLogSource,
+  SyncEntityType,
+  VoiceRecord,
+} from "@logger/shared";
 
 /**
  * Delta-sync bookkeeping columns, present on every table the change-feed
@@ -333,6 +342,8 @@ export const deviceTokens = sqliteTable("device_tokens", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
+  /** What the token may do — see DEVICE_TOKEN_SCOPES. Tokens from before scopes are the phone's. */
+  scope: text("scope").$type<DeviceTokenScope>().notNull().default("device"),
   createdAt: text("created_at").notNull(),
   lastUsedAt: text("last_used_at"),
 });
@@ -377,5 +388,25 @@ export const notificationDeliveries = sqliteTable(
       table.firedOn,
       table.itemKey,
     ),
+  }),
+);
+
+/**
+ * The hub's own log (`serverLogService`): what it did and why — voice commands, startup config,
+ * 500s, reminders. Server-only and not synced, like `device_tokens`; read with a `logs` token
+ * (`GET /api/device/logs`). Kept 14 days, capped at 10,000 rows.
+ */
+export const serverLogs = sqliteTable(
+  "server_logs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: text("at").notNull(),
+    level: text("level").$type<ServerLogLevel>().notNull(),
+    source: text("source").$type<ServerLogSource>().notNull(),
+    message: text("message").notNull(),
+    data: text("data", { mode: "json" }).$type<Record<string, unknown>>(),
+  },
+  (table) => ({
+    atIdx: index("server_logs_at_idx").on(table.at),
   }),
 );

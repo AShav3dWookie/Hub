@@ -16,12 +16,13 @@ import {
   Copy,
   RefreshCw,
   Send,
+  ScrollText,
   Smartphone,
   Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { DEVICE_NAME_MAX_LENGTH, type CreatedDeviceTokenDTO } from "@logger/shared";
+import { DEVICE_NAME_MAX_LENGTH, type CreatedDeviceTokenDTO, type DeviceTokenScope } from "@logger/shared";
 import {
   useOnlineStatus,
   useSyncStatus,
@@ -258,6 +259,7 @@ function DevicesSection({ online }: { online: boolean }) {
   const revokeToken = useRevokeDeviceToken();
   const { showToast } = useToast();
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<DeviceTokenScope>("device");
   const [created, setCreated] = useState<CreatedDeviceTokenDTO | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<number | null>(null);
   // A new token is shown once and never again, so a reload while it is up would lose it.
@@ -268,8 +270,9 @@ function DevicesSection({ online }: { online: boolean }) {
     const value = name.trim();
     if (!value) return;
     try {
-      setCreated(await createToken.mutateAsync(value));
+      setCreated(await createToken.mutateAsync({ name: value, scope }));
       setName("");
+      setScope("device");
     } catch {
       showToast("Couldn't add the device");
     }
@@ -298,7 +301,8 @@ function DevicesSection({ online }: { online: boolean }) {
   return (
     <Section title="Devices">
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Devices like the companion app&apos;s voice widget use a token instead of your password.
+        Devices like the companion app&apos;s voice widget use a token instead of your password. A
+        logs token can only read the hub&apos;s logs, for <code>npm run hub:logs</code> on a PC.
       </p>
 
       {!online && (
@@ -313,11 +317,16 @@ function DevicesSection({ online }: { online: boolean }) {
           {devices.map((device) => (
             <li key={device.id} className="flex flex-col gap-2 py-2">
               <div className="flex items-center gap-3">
-                <Smartphone size={20} aria-hidden className="shrink-0 text-slate-500" />
+                {device.scope === "logs" ? (
+                  <ScrollText size={20} aria-hidden className="shrink-0 text-slate-500" />
+                ) : (
+                  <Smartphone size={20} aria-hidden className="shrink-0 text-slate-500" />
+                )}
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium dark:text-white">{device.name}</span>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
-                    Last used {relativeTime(device.lastUsedAt ? Date.parse(device.lastUsedAt) : null)}
+                    {device.scope === "logs" ? "Logs only · " : ""}Last used{" "}
+                    {relativeTime(device.lastUsedAt ? Date.parse(device.lastUsedAt) : null)}
                   </span>
                 </div>
                 {confirmingRevoke !== device.id && (
@@ -357,7 +366,9 @@ function DevicesSection({ online }: { online: boolean }) {
       {created && (
         <div className="flex flex-col gap-2 rounded-md bg-amber-50 p-3 dark:bg-amber-950">
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Copy this token into {created.name} now — it won&apos;t be shown again.
+            {created.scope === "logs"
+              ? "Copy this token into the PC's .env as HUB_LOGS_TOKEN now — it won't be shown again."
+              : `Copy this token into ${created.name} now — it won't be shown again.`}
           </p>
           <input
             readOnly
@@ -382,24 +393,36 @@ function DevicesSection({ online }: { online: boolean }) {
         </div>
       )}
 
-      <form onSubmit={handleAdd} className="flex gap-2">
+      <form onSubmit={handleAdd} className="flex flex-col gap-2">
         <input
           type="text"
           aria-label="New device name"
-          placeholder="e.g. Pixel 6"
+          placeholder={scope === "logs" ? "e.g. Desktop PC" : "e.g. Pixel 6"}
           value={name}
           maxLength={DEVICE_NAME_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           disabled={!online}
-          className={`min-w-0 flex-1 ${FIELD_CLASS}`}
+          className={`min-w-0 ${FIELD_CLASS}`}
         />
-        <button
-          type="submit"
-          disabled={!online || !name.trim() || createToken.isPending}
-          className={PRIMARY_BUTTON_SM_CLASS}
-        >
-          Add device
-        </button>
+        <div className="flex gap-2">
+          <select
+            aria-label="What the token can do"
+            value={scope}
+            onChange={(e) => setScope(e.target.value as DeviceTokenScope)}
+            disabled={!online}
+            className={`min-w-0 flex-1 ${FIELD_CLASS}`}
+          >
+            <option value="device">Phone app: voice and lists</option>
+            <option value="logs">Logs only: read from a PC</option>
+          </select>
+          <button
+            type="submit"
+            disabled={!online || !name.trim() || createToken.isPending}
+            className={PRIMARY_BUTTON_SM_CLASS}
+          >
+            Add device
+          </button>
+        </div>
       </form>
     </Section>
   );

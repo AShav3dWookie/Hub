@@ -16,6 +16,31 @@ import type { PushSender } from "../lib/webPush.js";
 import { selectImportantDateRows } from "./importantDatesService.js";
 import { selectEventRows } from "./upcomingEventsService.js";
 import { listSubscriptions, sendToDevices } from "./pushSubscriptionsService.js";
+import { writeLog, writeLogOnce } from "./serverLogService.js";
+
+/** A reminder no device accepts is retried every minute; it is logged once an hour. */
+const UNDELIVERED_LOG_MS = 60 * 60 * 1000;
+
+/** What a send came to, in the hub's log (docs/logs.md). */
+function logReminder(
+  db: AppDb,
+  now: Date,
+  message: { title: string; body: string },
+  accepted: number,
+  devices: number,
+): void {
+  const what = `"${message.title}: ${message.body}"`;
+  if (accepted > 0) {
+    writeLog(db, { level: "info", source: "notifications", message: `Sent ${what} to ${accepted} of ${devices} device(s)` }, now);
+  } else {
+    writeLogOnce(
+      db,
+      { level: "warn", source: "notifications", message: `No device accepted ${what}; retrying each minute` },
+      UNDELIVERED_LOG_MS,
+      now,
+    );
+  }
+}
 
 /**
  * Reminder notifications for upcoming dates: 9pm the evening before, 9am on the day, and 9am a
@@ -90,6 +115,7 @@ export async function runNotificationTick(
       Math.max(60, (endMinute - minutes) * 60),
       send,
     );
+    logReminder(db, now, message, accepted, devices.length);
     // Only a notification that reached at least one device counts as announced; otherwise the
     // next tick tries again, until the slot closes.
     if (accepted === 0) continue;
@@ -163,6 +189,7 @@ async function remindStartingSoon(
     Math.max(60, Math.min(...due.map((d) => d.startsIn)) * 60),
     send,
   );
+  logReminder(db, now, message, accepted, devices.length);
   if (accepted === 0) return 0;
 
   const sentAt = now.toISOString();
@@ -187,8 +214,16 @@ export function startNotificationScheduler(db: AppDb, options: TickOptions): () 
     running = true;
     runNotificationTick(db, new Date(), options)
       .catch((err: unknown) => {
-        // eslint-disable-next-line no-console
-        console.error("[notifications] tick failed:", err);
+        writeLogOnce(
+          db,
+          {
+            level: "error",
+            source: "notifications",
+            message: `Reminder tick failed: ${(err as Error)?.message ?? String(err)}`,
+            data: { stack: (err as Error)?.stack ?? null },
+          },
+          UNDELIVERED_LOG_MS,
+        );
       })
       .finally(() => {
         running = false;

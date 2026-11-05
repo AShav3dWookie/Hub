@@ -6,9 +6,18 @@
 
 export const DEVICE_NAME_MAX_LENGTH = 60;
 
+/**
+ * What a token may do. `device` is the companion app: voice, its lists, Undo — create only.
+ * `logs` reads the hub's logs (`GET /api/device/logs`, `npm run hub:logs`) and nothing else.
+ * Neither can do the other's job.
+ */
+export const DEVICE_TOKEN_SCOPES = ["device", "logs"] as const;
+export type DeviceTokenScope = (typeof DEVICE_TOKEN_SCOPES)[number];
+
 export interface DeviceTokenDTO {
   id: number;
   name: string;
+  scope: DeviceTokenScope;
   createdAt: string;
   /** Null until the device first uses it. */
   lastUsedAt: string | null;
@@ -21,4 +30,6 @@ export interface CreatedDeviceTokenDTO extends DeviceTokenDTO {
 
 export interface CreateDeviceTokenRequest {
   name: string;
+  /** Defaults to `device`. */
+  scope?: DeviceTokenScope;
 }

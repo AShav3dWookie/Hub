@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import type { AppDb } from "../db/client.js";
 import { deviceTokens } from "../db/schema.js";
 import { NotFoundError } from "../lib/errors.js";
-import type { CreatedDeviceTokenDTO, DeviceTokenDTO } from "@logger/shared";
+import type { CreatedDeviceTokenDTO, DeviceTokenDTO, DeviceTokenScope } from "@logger/shared";
 
 type Row = typeof deviceTokens.$inferSelect;
 
@@ -13,15 +13,18 @@ const TOKEN_PREFIX = "hub_";
 const hashToken = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
 
 function toDTO(r: Row): DeviceTokenDTO {
-  return { id: r.id, name: r.name, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt };
+  return { id: r.id, name: r.name, scope: r.scope, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt };
 }
 
-/** Mint a token for a named device. The returned `token` is the only copy that will ever exist. */
-export function createDeviceToken(db: AppDb, name: string): CreatedDeviceTokenDTO {
+/**
+ * Mint a token for a named device. The returned `token` is the only copy that will ever exist.
+ * `scope` is what it may do: the phone's `device` jobs, or reading the logs (DEVICE_TOKEN_SCOPES).
+ */
+export function createDeviceToken(db: AppDb, name: string, scope: DeviceTokenScope = "device"): CreatedDeviceTokenDTO {
   const token = TOKEN_PREFIX + crypto.randomBytes(32).toString("base64url");
   const row = db
     .insert(deviceTokens)
-    .values({ name: name.trim(), tokenHash: hashToken(token), createdAt: new Date().toISOString() })
+    .values({ name: name.trim(), scope, tokenHash: hashToken(token), createdAt: new Date().toISOString() })
     .returning()
     .get();
   return { ...toDTO(row), token };

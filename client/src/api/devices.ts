@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreatedDeviceTokenDTO, DeviceTokenDTO } from "@logger/shared";
+import type { CreatedDeviceTokenDTO, DeviceTokenDTO, DeviceTokenScope } from "@logger/shared";
 import { api } from "./client.js";
 
 const DEVICES_KEY = ["device-tokens"];
@@ -20,7 +20,8 @@ export function useDeviceTokens(enabled = true) {
 export function useCreateDeviceToken() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => api.post<CreatedDeviceTokenDTO>("/device-tokens", { name }),
+    mutationFn: ({ name, scope = "device" }: { name: string; scope?: DeviceTokenScope }) =>
+      api.post<CreatedDeviceTokenDTO>("/device-tokens", { name, scope }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: DEVICES_KEY }),
   });
 }

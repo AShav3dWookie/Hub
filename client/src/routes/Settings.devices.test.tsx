@@ -14,7 +14,7 @@ import { useOnlineStatus } from "../api/localHooks.js";
  * The Devices section, against a small in-memory stand-in for the server's device-token
  * endpoints. Assertions are about what the screen shows; the fake only plays the server.
  */
-let devices: { id: number; name: string; createdAt: string; lastUsedAt: string | null }[];
+let devices: { id: number; name: string; scope: string; createdAt: string; lastUsedAt: string | null }[];
 let nextId: number;
 
 function fakeServer(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -26,8 +26,8 @@ function fakeServer(input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   const method = init?.method ?? "GET";
   if (method === "GET") return json(devices);
   if (method === "POST") {
-    const { name } = JSON.parse(String(init?.body)) as { name: string };
-    const device = { id: nextId++, name, createdAt: new Date().toISOString(), lastUsedAt: null };
+    const { name, scope } = JSON.parse(String(init?.body)) as { name: string; scope: string };
+    const device = { id: nextId++, name, scope, createdAt: new Date().toISOString(), lastUsedAt: null };
     devices.push(device);
     return json({ ...device, token: `hub_secret-for-${name.replace(/\s/g, "-")}` }, 201);
   }
@@ -44,7 +44,7 @@ const section = () => screen.getByRole("heading", { name: "Devices" }).parentEle
 describe("Settings → Devices", () => {
   beforeEach(() => {
     devices = [
-      { id: 1, name: "Old tablet", createdAt: "2026-01-01T00:00:00.000Z", lastUsedAt: null },
+      { id: 1, name: "Old tablet", scope: "device", createdAt: "2026-01-01T00:00:00.000Z", lastUsedAt: null },
     ];
     nextId = 2;
     vi.stubGlobal("fetch", vi.fn(fakeServer));
@@ -74,6 +74,23 @@ describe("Settings → Devices", () => {
     await user.click(within(section()).getByRole("button", { name: "Done" }));
     expect(within(section()).queryByRole("textbox", { name: "Token for Pixel 6" })).not.toBeInTheDocument();
     expect(within(section()).getByText("Pixel 6")).toBeInTheDocument();
+  });
+
+  it("adds a logs-only token for the PC, says where it goes, and marks it in the list", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Settings />);
+    await within(section()).findByText("Old tablet");
+
+    await user.type(within(section()).getByRole("textbox", { name: "New device name" }), "Desktop PC");
+    await user.selectOptions(within(section()).getByRole("combobox", { name: "What the token can do" }), "logs");
+    await user.click(within(section()).getByRole("button", { name: "Add device" }));
+
+    expect(await within(section()).findByRole("textbox", { name: "Token for Desktop PC" })).toBeInTheDocument();
+    expect(within(section()).getByText(/\.env as HUB_LOGS_TOKEN/)).toBeInTheDocument();
+    expect(await within(section()).findByText(/Logs only · Last used/)).toBeInTheDocument();
+    // The phone's kind of token stays the default for the next one.
+    expect(within(section()).getByRole("combobox", { name: "What the token can do" })).toHaveValue("device");
+    expect(within(section()).getAllByText(/Last used/)).toHaveLength(2);
   });
 
   it("removes a device only after confirming", async () => {

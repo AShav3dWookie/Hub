@@ -157,8 +157,9 @@ appointment) answers *I need the model for that* rather than landing on the shop
 **never splits items**, so "eggs and milk" lands as a single entry *Eggs and milk*. That's why
 its replies end in *(simple parser — check it)* and report `"parsedBy": "rules"`.
 
-The server logs `[voice] model parser failed, using the rules backup: …` with the reason each
-time it falls back.
+Every command goes into the hub's log — what was heard, which parser understood it, the action
+and input the model chose, and why it fell back when it did — readable from the PC with
+`npm run hub:logs -- --source voice` ([logs.md](logs.md)). A fallback is logged as a warning.
 
 ## Security
 
