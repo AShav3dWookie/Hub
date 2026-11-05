@@ -20,8 +20,8 @@ export function createDeviceTokensRouter(db: AppDb): Router {
   });
 
   router.post("/", (req, res) => {
-    const { name } = createDeviceTokenSchema.parse(req.body);
-    res.status(201).json(createDeviceToken(db, name));
+    const { name, scope } = createDeviceTokenSchema.parse(req.body);
+    res.status(201).json(createDeviceToken(db, name, scope));
   });
 
   router.delete("/:id", (req, res) => {

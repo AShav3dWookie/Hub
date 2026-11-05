@@ -3,7 +3,8 @@ import { CATEGORIES, LOGGABLE_CATEGORIES, NOTE_CATEGORIES } from "@logger/shared
 import { daysInMonth, daysBetween } from "@logger/shared";
 import { LIST_KINDS, LIST_ITEM_MAX_LENGTH, LIST_NAME_MAX_LENGTH } from "@logger/shared";
 import { MAX_SHOP_RADIUS_M, MIN_SHOP_RADIUS_M } from "@logger/shared";
-import { DEVICE_NAME_MAX_LENGTH, VOICE_TEXT_MAX_LENGTH } from "@logger/shared";
+import { DEVICE_NAME_MAX_LENGTH, DEVICE_TOKEN_SCOPES, VOICE_TEXT_MAX_LENGTH } from "@logger/shared";
+import { SERVER_LOG_LEVELS, SERVER_LOG_SOURCES } from "@logger/shared";
 import { TIME_OF_DAY_PATTERN } from "@logger/shared";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "./passwordHash.js";
 
@@ -110,6 +111,16 @@ export const createListItemSchema = z.object({
 
 export const createDeviceTokenSchema = z.object({
   name: z.string().trim().min(1).max(DEVICE_NAME_MAX_LENGTH),
+  scope: z.enum(DEVICE_TOKEN_SCOPES).default("device"),
+});
+
+/** `GET /api/device/logs` — see serverLogService.listLogs. */
+export const serverLogsQuerySchema = z.object({
+  since: z.string().trim().min(1).optional(),
+  level: z.enum(SERVER_LOG_LEVELS).optional(),
+  source: z.enum(SERVER_LOG_SOURCES).optional(),
+  limit: z.coerce.number().int().min(1).max(5000).optional(),
+  format: z.enum(["json", "text"]).default("json"),
 });
 
 export const voiceCommandSchema = z.object({

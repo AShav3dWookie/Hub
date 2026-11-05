@@ -268,11 +268,32 @@ Devices authenticate with `Authorization: Bearer hub_…`. `device_tokens` store
 (server-only, not synced). `requireDeviceOrSession` guards `/api/voice` and `/api/device` (the
 companion app's shopping lists with their shop locations, `PUT …/location` to tag one, and
 `DELETE …/items/:itemId` for Got it) — and, under `/api/voice`, `DELETE /commands/:id` for Undo —
-nothing else: a valid token passes, a present-but-wrong one is a 401 even with auth off, no
-token falls through to `requireAuth`. `/api/device-tokens` is session-only, so a device can
-never mint tokens. Over the WAN those two paths skip Authelia through a regex `location` in nginx
-(`^/api/(voice|device)(/|$)`, in `docker/nginx.prod.conf` and `docs/voice.md`), never a prefix,
-which would also expose `/api/device-tokens`.
+nothing else: a valid token of the route's **scope** passes, a real token of the other scope is
+a 403, a present-but-wrong one is a 401 even with auth off, no token falls through to
+`requireAuth`. Scopes (`device_tokens.scope`): `device` is the phone (everything above); `logs`
+reads `GET /api/device/logs` and nothing else (see *The hub's log*). `/api/device-tokens` is
+session-only, so a device can never mint tokens. Over the WAN those two paths skip Authelia
+through a regex `location` in nginx (`^/api/(voice|device)(/|$)`, in `docker/nginx.prod.conf`
+and `docs/voice.md`), never a prefix, which would also expose `/api/device-tokens`.
+
+### The hub's log
+
+`server_logs` (server-only, not synced) is the hub's own record of what it did and why;
+`docs/logs.md` is the guide. Write with `serverLogService.writeLog(db, { level, source,
+message, data })` — it also echoes to the console (except under Vitest), never throws, and
+prunes to 14 days / 10,000 rows. Something that would repeat every minute uses `writeLogOnce`
+with a window. Sources: `server` (the startup line in `index.ts`: version, voice model or
+rules-only, time zone), `voice` (every command in `voiceService`: text, `parsedBy`, action,
+input, `modelError`/`modelAnswer`, reply or refusal, ms — a rules fallback is a `warn`),
+`http` (500s from `createErrorHandler(db)` with the stack; refused tokens, path only), and
+`notifications` (sends, undelivered reminders, gone devices). Never log a token, a password or
+a key.
+
+**When the user asks what the hub did, read it yourself:** `npm run hub:logs -- --since 2h
+--source voice` (Git Bash, from the host), configured by `HUB_URL` (default
+`https://hub.aaronhanna.uk`) and `HUB_LOGS_TOKEN` (a *Logs only* token from Settings → Devices)
+in the root `.env`. `GET /api/device/logs` is mounted ahead of the `/api/device` router, whose
+guard would refuse a logs token, and under it so it shares the Authelia bypass.
 
 ### Android companion app (`companion-app/`)
 

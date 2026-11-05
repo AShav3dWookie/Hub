@@ -20,12 +20,13 @@ import { createListsRouter } from "./routes/lists.js";
 import { createDeviceTokensRouter } from "./routes/deviceTokens.js";
 import { createVoiceRouter } from "./routes/voice.js";
 import { createDeviceRouter } from "./routes/device.js";
+import { createServerLogsRouter } from "./routes/serverLogs.js";
 import { requireDeviceOrSession } from "./middleware/deviceAuth.js";
 import type { VoiceParser } from "./lib/voiceModel.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createNotificationsRouter, type PushOptions } from "./routes/notifications.js";
 import { requireAuth } from "./middleware/auth.js";
-import { errorHandler } from "./middleware/errorHandler.js";
+import { createErrorHandler } from "./middleware/errorHandler.js";
 
 export function createApp(
   db: AppDb,
@@ -92,6 +93,9 @@ export function createApp(
   app.use("/api/device-tokens", requireAuth, createDeviceTokensRouter(db));
   // A device token or a session: the companion app's widget calls this, not a browser.
   app.use("/api/voice", requireDeviceOrSession(db), createVoiceRouter(db, voiceParser));
+  // The hub's own log, for a logs token or a session (docs/logs.md). Ahead of /api/device, whose
+  // guard would refuse a logs token; under it so it shares the companion app's Authelia bypass.
+  app.use("/api/device/logs", requireDeviceOrSession(db, "logs"), createServerLogsRouter(db));
   // The companion app's list cache and shop tagging (#5). Narrow on purpose — see routes/device.ts.
   app.use("/api/device", requireDeviceOrSession(db), createDeviceRouter(db));
   app.use("/api/sync", requireAuth, createSyncRouter(db, photosDir));
@@ -119,7 +123,7 @@ export function createApp(
     });
   }
 
-  app.use(errorHandler);
+  app.use(createErrorHandler(db));
 
   return app;
 }

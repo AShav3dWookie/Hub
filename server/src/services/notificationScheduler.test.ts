@@ -9,6 +9,7 @@ import { createEntityNote } from "./entityNotesService.js";
 import { createLog } from "./logService.js";
 import { listSubscriptions, upsertSubscription } from "./pushSubscriptionsService.js";
 import { DELIVERY_RETENTION_DAYS, runNotificationTick } from "./notificationScheduler.js";
+import { listLogs } from "./serverLogService.js";
 
 const TZ = "Europe/London";
 
@@ -400,5 +401,29 @@ describe("notificationScheduler", () => {
       await runNotificationTick(ctx.db, at("2026-09-15T13:02:00Z"), { timeZone: TZ, send });
       expect(sent.map((s) => s.payload.body)).toEqual(["Dentist at 15:00"]);
     });
+  });
+});
+
+describe("runNotificationTick's log", () => {
+  let ctx: ReturnType<typeof createTestDb>;
+  afterEach(() => ctx?.cleanup());
+
+  it("records each reminder sent, and a reminder no device takes once an hour", async () => {
+    ctx = createTestDb();
+    subscribe(ctx.db);
+    plannedEvent(ctx.db, "Dentist", "2026-09-15");
+    await runNotificationTick(ctx.db, at("2026-09-14T20:00:00Z"), { timeZone: TZ, send: fakeSender().send });
+    expect(listLogs(ctx.db, { source: "notifications" }).map((e) => e.message)).toEqual([
+      'Sent "Tomorrow: Dentist" to 1 of 1 device(s)',
+    ]);
+
+    plannedEvent(ctx.db, "Physio", "2026-09-15");
+    const { send } = fakeSender("failed");
+    for (const minute of ["01", "02", "03"]) {
+      await runNotificationTick(ctx.db, at(`2026-09-14T20:${minute}:00Z`), { timeZone: TZ, send });
+    }
+    expect(listLogs(ctx.db, { source: "notifications", level: "warn" })).toEqual([
+      expect.objectContaining({ message: 'No device accepted "Tomorrow: Physio"; retrying each minute' }),
+    ]);
   });
 });

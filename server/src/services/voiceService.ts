@@ -7,6 +7,7 @@ import { localTime } from "../lib/localClock.js";
 import { AppError } from "../lib/errors.js";
 import type { VoiceCommandResponse, VoiceParsedBy, VoiceRecord } from "@logger/shared";
 import { recordVoiceCommand } from "./voiceUndoService.js";
+import { writeLog } from "./serverLogService.js";
 
 /** The parser's answer, checked: a real action, and input that fits that action's schema. */
 function checkCall(call: VoiceCall): { action: VoiceAction; input: unknown } {
@@ -36,37 +37,67 @@ export async function handleVoiceCommand(
   /** The device token that sent it, or null for a signed-in browser. Only it may undo. */
   deviceId: number | null = null,
 ): Promise<VoiceCommandResponse> {
-  const context = buildVoiceContext(db, clock);
+  const started = Date.now();
+  // Everything the log needs to answer "why did it do that?" (docs/logs.md).
+  const trace: Record<string, unknown> = { text, device: deviceId };
+  const log = (level: "info" | "warn" | "error", outcome: string) =>
+    writeLog(db, {
+      level,
+      source: "voice",
+      message: `"${text}" → ${outcome}`,
+      data: { ...trace, ms: Date.now() - started },
+    });
 
-  let call: { action: VoiceAction; input: unknown } | null = null;
-  let parsedBy: VoiceParsedBy = "model";
-  if (parseWithModel) {
-    try {
-      call = checkCall(await parseWithModel(text, context));
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(`[voice] model parser failed, using the rules backup: ${(err as Error).message}`);
-    }
-  }
-  if (!call) {
-    const shopping = parseWithRules(text, context.lists);
-    if (!shopping) {
-      throw new AppError(422, `I need the model for that. Without it I only understand "add … to the … list".`);
-    }
-    call = { action: addToList, input: shopping };
-    parsedBy = "rules";
-  }
+  try {
+    const context = buildVoiceContext(db, clock);
 
-  const { dateISO: today, minutes: nowMinutes } = localTime(clock.now, clock.timeZone);
-  const action = call.action;
-  const input = call.input;
-  return db.transaction(() => {
-    const created: VoiceRecord[] = [];
-    const record = (r: VoiceRecord) => void created.push(r);
-    const reply = action.run(db, input, { text, parsedBy, today, nowMinutes, record });
-    const commandId =
-      created.length > 0 ? recordVoiceCommand(db, { action: action.name, created, deviceId, now: clock.now }) : null;
-    const done: VoiceCommandResponse = { ...reply, commandId };
+    let call: { action: VoiceAction; input: unknown } | null = null;
+    let parsedBy: VoiceParsedBy = "model";
+    if (parseWithModel) {
+      let answer: VoiceCall | null = null;
+      try {
+        answer = await parseWithModel(text, context);
+        call = checkCall(answer);
+      } catch (err) {
+        trace.modelError = (err as Error).message;
+        // An answer that failed its schema is the interesting part of a misunderstanding.
+        if (answer) trace.modelAnswer = answer;
+      }
+    } else {
+      trace.modelError = "no model configured (ANTHROPIC_API_KEY unset)";
+    }
+    if (!call) {
+      const shopping = parseWithRules(text, context.lists);
+      if (!shopping) {
+        throw new AppError(422, `I need the model for that. Without it I only understand "add … to the … list".`);
+      }
+      call = { action: addToList, input: shopping };
+      parsedBy = "rules";
+    }
+    trace.parsedBy = parsedBy;
+    trace.action = call.action.name;
+    trace.input = call.input;
+
+    const { dateISO: today, minutes: nowMinutes } = localTime(clock.now, clock.timeZone);
+    const action = call.action;
+    const input = call.input;
+    const done = db.transaction(() => {
+      const created: VoiceRecord[] = [];
+      const record = (r: VoiceRecord) => void created.push(r);
+      const reply = action.run(db, input, { text, parsedBy, today, nowMinutes, record });
+      const commandId =
+        created.length > 0 ? recordVoiceCommand(db, { action: action.name, created, deviceId, now: clock.now }) : null;
+      const response: VoiceCommandResponse = { ...reply, commandId };
+      return response;
+    });
+    trace.commandId = done.commandId;
+    // A fallback is a warning even when it worked: the model should have answered.
+    log(parsedBy === "rules" && parseWithModel ? "warn" : "info", `${action.name} (${parsedBy}): ${done.message}`);
     return done;
-  });
+  } catch (err) {
+    const known = err instanceof AppError;
+    if (!known) trace.stack = (err as Error)?.stack ?? null;
+    log(known ? "warn" : "error", `${known ? `refused (${err.statusCode})` : "failed"}: ${(err as Error)?.message ?? String(err)}`);
+    throw err;
+  }
 }

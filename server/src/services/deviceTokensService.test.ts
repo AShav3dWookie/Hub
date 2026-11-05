@@ -23,7 +23,7 @@ describe("deviceTokensService", () => {
     expect(created.name).toBe("Pixel 6");
     expect(created.token).toMatch(/^hub_[A-Za-z0-9_-]{43}$/);
     expect(listDeviceTokens(ctx.db)).toEqual([
-      { id: created.id, name: "Pixel 6", createdAt: created.createdAt, lastUsedAt: null },
+      { id: created.id, name: "Pixel 6", scope: "device", createdAt: created.createdAt, lastUsedAt: null },
     ]);
     const stored = ctx.db.select().from(deviceTokens).all();
     expect(JSON.stringify(stored)).not.toContain(created.token);
