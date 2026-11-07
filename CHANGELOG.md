@@ -3,6 +3,41 @@
 Notable changes to Logger, newest first. Versions are the tags `npm run release` pushes, each of
 which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/deployment.md).
 
+## [1.5.0] — 2026-11-07
+
+### Added
+
+- **The hub keeps a log** ([docs/logs.md](docs/logs.md)) of what it did and why: each voice
+  command (what it heard, whether the model or the backup rules understood it, what it saved, and
+  why the model failed when it did), a startup line with the version and whether voice uses the
+  model, server errors, and reminders sent. Kept 14 days, and it survives the container being
+  recreated.
+- **Logs-only tokens.** Settings → Devices can now make a token that reads the log and nothing
+  else; the phone's token can't read it. `npm run hub:logs` prints the log on a PC with one.
+
+### Upgrading
+
+- A database migration adds the log table and a token type column; it runs by itself on start.
+  Existing phone tokens keep working unchanged.
+
+## [1.4.0] — 2026-11-02
+
+### Added
+
+- **Voice does more than shopping.** "Dentist next Tuesday at 3" adds an appointment; hang-outs and
+  meals out can name the people there; "Mum's birthday is 4 March" adds an important date. The
+  phone shows what was saved, with **Undo** for five minutes.
+- **A time of day on appointments.** Shown on Home, in the calendar and on the entry. A timed
+  appointment is reminded an hour before instead of at 9am, still with the 9pm notice the night
+  before.
+- **The installed app picks up a new release** when you come back to it, without being closed
+  first. It waits while you're in the middle of a form.
+
+### Changed
+
+- Without the model, voice only takes commands that are clearly shopping ("add … to …"); anything
+  else answers *I need the model for that* instead of landing on the shopping list.
+
 ## [1.3.0] — 2026-11-01
 
 ### Added
