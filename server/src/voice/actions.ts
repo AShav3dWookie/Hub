@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { AppDb } from "../db/client.js";
 import { listPeople, type VoicePerson } from "./people.js";
-import type { VoiceActionName, VoiceCommandResponse, VoiceParsedBy, VoiceRecord } from "@logger/shared";
+import type { VoiceActionName, VoiceCommandResponse, VoiceRecord } from "@logger/shared";
 import { listLists } from "../services/listService.js";
 import { addDaysISO, localTime } from "../lib/localClock.js";
 import { addToList } from "./addToList.js";
@@ -25,7 +25,7 @@ export interface VoiceAction<Input extends z.ZodType = z.ZodType> {
   input: Input;
   /**
    * Must `how.record` every row it creates, so Undo can take exactly those away. The reply's
-   * `commandId` is filled in by the caller once the command is saved.
+   * `commandId` and `parsedBy` are filled in by the caller.
    */
   // Method syntax, so an action with a narrower input still fits in the registry.
   run(db: AppDb, input: z.output<Input>, how: VoiceRun): VoiceReplyWithoutId;
@@ -34,7 +34,6 @@ export interface VoiceAction<Input extends z.ZodType = z.ZodType> {
 export interface VoiceRun {
   /** The words as heard, for error messages. */
   text: string;
-  parsedBy: VoiceParsedBy;
   /** Local date and minutes past midnight when the command arrived, for "not in the past". */
   today: string;
   nowMinutes: number;
@@ -45,7 +44,7 @@ export interface VoiceRun {
 /** An action's reply before the command has an id. */
 export type VoiceReplyWithoutId = VoiceCommandResponse extends infer R
   ? R extends VoiceCommandResponse
-    ? Omit<R, "commandId">
+    ? Omit<R, "commandId" | "parsedBy">
     : never
   : never;
 

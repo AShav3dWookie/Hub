@@ -74,42 +74,30 @@ describe("handleVoiceCommand", () => {
     expect(result.list.id).toBe(main.id);
   });
 
-  it("falls back to the rules when the model fails, and says so", async () => {
-    const { main } = setup();
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const failing: VoiceParser = vi.fn().mockRejectedValue(new Error("timeout"));
+  const nothingOnAnyList = () => listLists(ctx.db).every((l) => getList(ctx.db, l.id).items.length === 0);
 
-    const result = await handleVoiceCommand(ctx.db, "add eggs and milk", failing);
-
-    expect(result.parsedBy).toBe("rules");
-    expect(itemsOn(main.id)).toEqual(["Eggs and milk"]);
-    expect(result.message).toBe("Added Eggs and milk to Shopping (simple parser — check it)");
+  it("refuses every command when there's no model, rather than guessing at it", async () => {
+    setup();
+    // What the rules backup once put on the shopping list word for word.
+    for (const said of ["add an appointment for a haircut on the 24th of November at 6:30", "add eggs"]) {
+      const err = await handleVoiceCommand(ctx.db, said, null).catch((e: unknown) => e);
+      expect(err).toMatchObject({ statusCode: 503, message: expect.stringContaining("no Anthropic key") });
+    }
+    expect(nothingOnAnyList()).toBe(true);
   });
 
   it.each([
-    ["an action that doesn't exist", { action: "delete_everything", input: {} }],
-    ["input that doesn't fit the action", { action: "add_to_list", input: { list: "Tesco", items: "eggs" } }],
-  ])("falls back to the rules when the model answers with %s", async (_case, answer) => {
-    const { main } = setup();
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const result = await handleVoiceCommand(ctx.db, "add eggs", vi.fn().mockResolvedValue(answer));
-    expect(result.parsedBy).toBe("rules");
-    expect(itemsOn(main.id)).toEqual(["Eggs"]);
-  });
-
-  it("answers that it needs the model for anything but shopping when there's no model", async () => {
+    ["fails", () => Promise.reject(new Error("timeout"))],
+    ["answers with an action that doesn't exist", () => Promise.resolve({ action: "delete_everything", input: {} })],
+    [
+      "answers with input that doesn't fit the action",
+      () => Promise.resolve({ action: "add_to_list", input: { list: "Tesco", items: "eggs" } }),
+    ],
+  ])("refuses, saving nothing, when the model %s", async (_case, parser: VoiceParser) => {
     setup();
-    const err = await handleVoiceCommand(ctx.db, "dentist next tuesday at 3", null).catch((e: unknown) => e);
-    expect(err).toMatchObject({ statusCode: 422, message: expect.stringMatching(/^I need the model for that/) });
-    expect(listLists(ctx.db).every((l) => getList(ctx.db, l.id).items.length === 0)).toBe(true);
-  });
-
-  it("answers the same when the model fails on a command that isn't shopping", async () => {
-    setup();
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const failing: VoiceParser = vi.fn().mockRejectedValue(new Error("timeout"));
-    const err = await handleVoiceCommand(ctx.db, "haircut on the 14th", failing).catch((e: unknown) => e);
-    expect(err).toMatchObject({ statusCode: 422, message: expect.stringMatching(/^I need the model for that/) });
+    const err = await handleVoiceCommand(ctx.db, "add eggs", parser).catch((e: unknown) => e);
+    expect(err).toMatchObject({ statusCode: 503, message: expect.stringMatching(/^Couldn't get through to Claude/) });
+    expect(nothingOnAnyList()).toBe(true);
   });
 
   it("gives the model the local date, weekday and time where the hub is", async () => {
@@ -123,12 +111,6 @@ describe("handleVoiceCommand", () => {
       time: "00:30",
       timeZone: "Europe/London",
     });
-  });
-
-  it("uses the rules alone when there's no model configured", async () => {
-    const { ms } = setup();
-    const result = await handleVoiceCommand(ctx.db, "add bread to the m&s bangor list", null);
-    expect(result).toMatchObject({ parsedBy: "rules", list: { id: ms.id }, added: ["Bread"] });
   });
 
   it("reports items the list already has instead of adding them twice", async () => {
@@ -179,10 +161,9 @@ describe("handleVoiceCommand's log", () => {
     expect(voiceLog()).toEqual([
       expect.objectContaining({
         level: "info",
-        message: expect.stringMatching(/^"add eggs" → add_to_list \(model\): /),
+        message: '"add eggs" → add_to_list: Added Eggs to Shopping',
         data: expect.objectContaining({
           text: "add eggs",
-          parsedBy: "model",
           action: "add_to_list",
           input: { listId: null, items: ["Eggs"] },
           commandId: expect.any(Number),
@@ -192,15 +173,16 @@ describe("handleVoiceCommand's log", () => {
     ]);
   });
 
-  it("warns when the model failed and the rules took over, saying why", async () => {
+  it("logs an error saying why, when the model failed and the command was refused", async () => {
     ctx = createTestDb();
     const parser: VoiceParser = vi.fn().mockRejectedValue(new Error("Connection error."));
-    await handle(ctx.db, "add milk", parser, CLOCK, null);
+    await expect(handle(ctx.db, "add milk", parser, CLOCK, null)).rejects.toBeInstanceOf(AppError);
 
     expect(voiceLog()).toEqual([
       expect.objectContaining({
-        level: "warn",
-        data: expect.objectContaining({ parsedBy: "rules", modelError: "Connection error." }),
+        level: "error",
+        message: expect.stringContaining('"add milk" → refused (503)'),
+        data: expect.objectContaining({ modelError: "Connection error." }),
       }),
     ]);
   });
@@ -215,14 +197,14 @@ describe("handleVoiceCommand's log", () => {
     expect(entry.data).toMatchObject({ modelAnswer: answer, modelError: expect.stringContaining("schema") });
   });
 
-  it("says there's no model, and logs the refusal, for an appointment without one", async () => {
+  it("says there's no model, and logs the refusal as an error, for an appointment without one", async () => {
     ctx = createTestDb();
     await expect(handle(ctx.db, "dentist next tuesday at 3", null, CLOCK, null)).rejects.toBeInstanceOf(AppError);
 
     expect(voiceLog()).toEqual([
       expect.objectContaining({
-        level: "warn",
-        message: expect.stringContaining('"dentist next tuesday at 3" → refused (422): I need the model'),
+        level: "error",
+        message: expect.stringContaining('"dentist next tuesday at 3" → refused (503): Voice commands need Claude'),
         data: expect.objectContaining({ modelError: expect.stringContaining("ANTHROPIC_API_KEY") }),
       }),
     ]);

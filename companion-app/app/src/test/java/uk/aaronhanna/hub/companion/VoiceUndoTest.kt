@@ -29,7 +29,7 @@ class VoiceUndoTest {
     private val notifications get() = shadowOf(context.getSystemService(NotificationManager::class.java))
     private lateinit var server: MockWebServer
 
-    private val dentist = VoiceReply("create_log", "Added Dentist, Tue 10 Nov 15:00", usedModel = true, commandId = 7)
+    private val dentist = VoiceReply("create_log", "Added Dentist, Tue 10 Nov 15:00", commandId = 7)
 
     @Before
     fun start() {

@@ -19,7 +19,7 @@ export interface VoiceCall {
 
 export type VoiceParser = (text: string, context: VoiceContext) => Promise<VoiceCall>;
 
-/** The model couldn't give a usable answer; the caller falls back to the rules. */
+/** The model couldn't give a usable answer; the caller refuses the command and saves nothing. */
 export class VoiceModelError extends Error {
   constructor(message: string) {
     super(message);
@@ -87,7 +87,7 @@ export function createModelVoiceParser({
   client,
   onUsage,
 }: ModelVoiceParserOptions): VoiceParser {
-  // A spoken command should feel instant; a slow answer is worse than the rules backup.
+  // A spoken command should feel instant, and the phone gives up waiting after 15 seconds.
   const anthropic = client ?? new Anthropic({ apiKey, timeout: 10_000, maxRetries: 1 });
   const system = systemPrompt();
   const tools = VOICE_ACTIONS.map(toolFor);

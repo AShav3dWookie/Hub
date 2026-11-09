@@ -17,11 +17,11 @@ const db = runMigrations(config.dbPath);
 writeLog(db, {
   level: "info",
   source: "server",
-  message: `Started ${config.appVersion} (voice: ${config.anthropicApiKey ? `model ${config.voiceModel}` : "rules only, no ANTHROPIC_API_KEY"})`,
+  message: `Started ${config.appVersion} (voice: ${config.anthropicApiKey ? `model ${config.voiceModel}` : "off, no ANTHROPIC_API_KEY"})`,
   data: {
     version: config.appVersion,
     auth: config.authEnabled,
-    voiceParser: config.anthropicApiKey ? "model" : "rules",
+    voiceParser: config.anthropicApiKey ? "model" : "none",
     voiceModel: config.voiceModel,
     timeZone: config.notifyTimezone,
   },

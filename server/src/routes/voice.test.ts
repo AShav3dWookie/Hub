@@ -4,6 +4,13 @@ import bcrypt from "bcryptjs";
 import { createTestDb } from "../testUtils/testDb.js";
 import type { VoiceParser } from "../lib/voiceModel.js";
 
+/** A stand-in for the model: "add X [to the shopping list]" puts X on the main list. */
+const shoppingModel = (): VoiceParser =>
+  vi.fn(async (text: string) => ({
+    action: "add_to_list",
+    input: { listId: null, items: [text.replace(/^add\s*/i, "").replace(/\s*to the shopping list$/i, "")].filter(Boolean) },
+  }));
+
 /**
  * The voice endpoint and who may call it. `config` reads AUTH_ENABLED at module load, so each
  * test re-imports the app after setting the environment (as app.test.ts does).
@@ -22,7 +29,7 @@ describe("POST /api/voice", () => {
     delete process.env.SESSION_SECRET;
   });
 
-  async function setup({ auth = false, parser = null as VoiceParser | null } = {}) {
+  async function setup({ auth = false, parser = shoppingModel() as VoiceParser | null } = {}) {
     if (auth) {
       process.env.AUTH_ENABLED = "true";
       process.env.AUTH_PASSWORD_HASH = await bcrypt.hash("correct-horse", 4);
@@ -44,9 +51,19 @@ describe("POST /api/voice", () => {
     const res = await say(app, "add eggs to the shopping list", token);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ action: "add_to_list", added: ["Eggs"], parsedBy: "rules" });
+    expect(res.body).toMatchObject({ action: "add_to_list", added: ["Eggs"], parsedBy: "model" });
     const lists = (await request(app).get("/api/lists")).body as { name: string; itemCount: number }[];
     expect(lists.find((l) => l.name === "Shopping")?.itemCount).toBe(1);
+  });
+
+  it("refuses with the reason, and adds nothing, when the hub has no model", async () => {
+    const { app, token } = await setup({ parser: null });
+    const res = await say(app, "add an appointment for a haircut on the 24th of November at 6:30", token);
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/no Anthropic key/);
+    const lists = (await request(app).get("/api/lists")).body as { itemCount: number }[];
+    expect(lists.every((l) => l.itemCount === 0)).toBe(true);
   });
 
   it("uses the model it was given", async () => {
@@ -118,11 +135,11 @@ describe("POST /api/voice", () => {
   });
 
   describe("GET /api/voice/status — the companion app's Test connection", () => {
-    it("names the device and says it would use the rules backup without a model", async () => {
-      const { app, token } = await setup({ auth: true });
+    it("names the device and says when voice has no model to understand it", async () => {
+      const { app, token } = await setup({ auth: true, parser: null });
       const res = await request(app).get("/api/voice/status").set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ device: "Pixel 6", parser: "rules" });
+      expect(res.body).toEqual({ device: "Pixel 6", parser: "none" });
     });
 
     it("says it would use the model when there is one", async () => {

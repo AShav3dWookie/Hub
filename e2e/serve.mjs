@@ -8,15 +8,20 @@
  * wipe + re-seed a scratch SQLite DB under e2e/.artifacts → start server/dist/index.js
  * with AUTH disabled on E2E_PORT. Set E2E_SKIP_BUILD=1 to reuse the previous build.
  *
+ * Voice commands go to scripts/fakeVoiceModel.mjs on E2E_MODEL_PORT, never the real API —
+ * whatever ANTHROPIC_API_KEY the shell has — so the suite is free and the same every run.
+ *
  * Nothing here touches port 3000, test-env/, or data/.
  */
 import { execFileSync, spawn } from "node:child_process";
 import { rmSync, mkdirSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { createFakeVoiceModel } from "../scripts/fakeVoiceModel.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.E2E_PORT ?? "3100";
+const MODEL_PORT = process.env.E2E_MODEL_PORT ?? "3101";
 // The published image always bakes a version in (Dockerfile APP_VERSION -> VITE_APP_VERSION for
 // the bundle, APP_VERSION for /api/health). Match that here: the shell version check compares the
 // two and deliberately does nothing on a "dev" build, so a rig without one cannot exercise it.
@@ -48,6 +53,9 @@ sh(npm, ["run", "seed:test-data", "--workspace", "server"], {
   env: { ...process.env, DB_PATH: dbPath },
 });
 
+console.log(`[e2e] starting the fake voice model on :${MODEL_PORT}`);
+const fakeModel = createFakeVoiceModel().listen(Number(MODEL_PORT), "127.0.0.1");
+
 console.log(`[e2e] starting server on :${PORT}`);
 // cwd = server/ so the app finds its static bundle at ./public (see app.ts).
 // Auth is off here. The login flow is covered by unit/integration tests and the
@@ -64,11 +72,14 @@ const server = spawn(process.execPath, [path.join("dist", "index.js")], {
     AUTH_ENABLED: "false",
     NODE_ENV: "production",
     APP_VERSION,
+    ANTHROPIC_API_KEY: "e2e-fake-key",
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${MODEL_PORT}`,
   },
 });
 
 const shutdown = () => {
   server.kill();
+  fakeModel.close();
   process.exit(0);
 };
 process.on("SIGTERM", shutdown);

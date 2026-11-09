@@ -28,7 +28,7 @@ export const addToList: VoiceAction<typeof input> = {
   name: "add_to_list",
   description: "Add items to one of the shopping lists.",
   input,
-  run(db, { listId, items: said }, { text, parsedBy, record }): VoiceReplyWithoutId {
+  run(db, { listId, items: said }, { text, record }): VoiceReplyWithoutId {
     // One entry per distinct item, compared the way the list dedupes them.
     const seen = new Set<string>();
     const items = said.map((item) => tidy(item, LIST_ITEM_MAX_LENGTH)).filter((item) => {
@@ -65,15 +65,13 @@ export const addToList: VoiceAction<typeof input> = {
         `${joinNames(alreadyOnList)} ${alreadyOnList.length === 1 ? "is" : "are"} already on ${target.name}`,
       );
     }
-    // The backup never splits items, so a multi-item command lands as one — worth a glance.
-    const message = parts.join(". ") + (parsedBy === "rules" ? " (simple parser — check it)" : "");
+    const message = parts.join(". ");
 
     return {
       action: "add_to_list",
       list: { id: target.id, name: target.name },
       added,
       alreadyOnList,
-      parsedBy,
       message,
     };
   },

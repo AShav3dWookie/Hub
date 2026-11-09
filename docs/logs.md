@@ -39,16 +39,16 @@ Each line is `time (UTC)  LEVEL  source  message {detail}`:
 
 ```
 2026-11-05T09:14:02Z INFO  server        Started 1.5.0 (voice: model claude-haiku-5-5) {...}
-2026-11-05T09:20:41Z INFO  voice         "dentist next tuesday at 3" → create_log (model): Added Dentist, Tue 10 Nov 15:00 {...}
-2026-11-05T09:22:10Z WARN  voice         "add eggs" → add_to_list (rules): Added Eggs … {"modelError":"401 invalid x-api-key",...}
+2026-11-05T09:20:41Z INFO  voice         "dentist next tuesday at 3" → create_log: Added Dentist, Tue 10 Nov 15:00 {...}
+2026-11-05T09:22:10Z ERROR voice         "add eggs" → refused (503): Couldn't get through to Claude… {"modelError":"401 invalid x-api-key",...}
 ```
 
 ## What gets logged
 
 | Source | Entries |
 | --- | --- |
-| `server` | Startup: version, auth on or off, whether voice uses the model (and which) or rules only, the time zone. **The first line to check when something behaves oddly.** |
-| `voice` | Every command: the words heard, which parser understood them, the action and input chosen, the reply or the refusal, the device, how long it took. When the model failed: `modelError` (and `modelAnswer` if its answer didn't fit). A rules fallback is a `warn`. |
+| `server` | Startup: version, auth on or off, whether voice uses the model (and which) or is off for want of a key, the time zone. **The first line to check when something behaves oddly.** |
+| `voice` | Every command: the words heard, the action and input chosen, the reply or the refusal, the device, how long it took. When the model failed: `modelError` (and `modelAnswer` if its answer didn't fit). A refusal is a `warn`, except a 503 (no key, or Claude unreachable), which is an `error`. |
 | `http` | A 500, with its stack. A refused device token (the path only, never the token), once per 10 minutes. |
 | `notifications` | Each reminder sent and to how many devices; one no device accepted (once an hour while it retries); devices the push service reported gone. |
 

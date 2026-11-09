@@ -6,8 +6,8 @@ import { gotoHome, syncFromSettings } from "./helpers/app";
  * the companion app will, see the item on the list in the app, then remove the device and watch
  * the token stop working.
  *
- * The e2e server has no ANTHROPIC_API_KEY unless the shell running Playwright does, so this
- * normally exercises the rules backup. The assertions hold for either parser.
+ * The e2e hub's model is scripts/fakeVoiceModel.mjs (see e2e/serve.mjs), so this runs the real
+ * model code path for free; the fake only knows "add <item> to <list>".
  */
 
 const devices = (page: Page) => page.getByRole("heading", { name: "Devices" }).locator("..");

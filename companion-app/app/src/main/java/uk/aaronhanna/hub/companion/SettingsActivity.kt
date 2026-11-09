@@ -28,8 +28,7 @@ internal fun describeStatus(status: VoiceStatus): String {
     val how = if (status.usesModel) {
         "Voice commands will be understood by Claude."
     } else {
-        "The hub has no Anthropic key, so voice commands use the simple backup — " +
-            "it won't split \"eggs and milk\" into two items."
+        "But the hub has no Anthropic key, so it can't take voice commands until one is set."
     }
     return "$who $how"
 }

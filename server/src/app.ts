@@ -34,7 +34,8 @@ export function createApp(
   push?: PushOptions,
   /**
    * How voice commands are understood. Omitted: built from config on first use (the real model
-   * when ANTHROPIC_API_KEY is set, otherwise none). `null`: no model, rules only. Tests pass a fake.
+   * when ANTHROPIC_API_KEY is set, otherwise none). `null`: no model, so voice commands are
+   * refused. Tests pass a fake.
    */
   voiceParser?: VoiceParser | null,
 ): Express {
