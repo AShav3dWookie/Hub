@@ -92,7 +92,8 @@ address — it never applies a link without asking, since any app could send one
 it saves and runs **Test connection**, which should say *Connected as "Pixel 6". Voice commands
 will be understood by Claude.*
 
-- *…use the simple backup…* — the hub has no `ANTHROPIC_API_KEY` ([`docs/voice.md`](../docs/voice.md)).
+- *…the hub has no Anthropic key…*: set `ANTHROPIC_API_KEY` on the hub and recreate its
+  container ([`docs/voice.md`](../docs/voice.md)). Until then every voice command is refused.
 - *Couldn't reach the hub* — the phone can't get to `COMPANION_HUB_URL`: check it's on the same
   Wi-Fi, and that the address is this PC's LAN IP. `ipconfig` (Git Bash) or `ipconfig.exe`
   (WSL2) shows it under the Wi-Fi or Ethernet adapter. A VPN on the PC can block LAN access.
@@ -221,10 +222,10 @@ them, a release still publishes the server image and skips the APK, saying so in
   9.8.2 — no Gradle wrapper; the image is the pin). `scripts/run.sh <gradle task>` rebuilds the
   image when that file changes and mounts the whole repo, so the app's version comes from the
   root `package.json`.
-- The contract test starts the hub with no `ANTHROPIC_API_KEY` (never the repo's `.env`), so it
-  uses the free rules parser and is part of the regression suite and CI; it fails if the hub
-  ever says it would use the model. The real model is checked separately and by hand with
-  `npm run voice:check`.
+- The contract test starts the hub without the repo's `.env`. It gets a fake key and points
+  `ANTHROPIC_BASE_URL` at `scripts/fakeVoiceModel.mjs`, a free stand-in for Claude that only
+  knows "add <item> to <list>", so the test is part of the regression suite and CI. The real
+  model is checked separately and by hand with `npm run voice:check`.
 - Play Services isn't there on the JVM, so the tests swap the two calls into it for stand-ins:
   `Shops.watch` (registering geofences) and `ShopsActivity.locate` (the current position).
   Everything either side of them — what's watched, what's asked, what's sent — is tested.

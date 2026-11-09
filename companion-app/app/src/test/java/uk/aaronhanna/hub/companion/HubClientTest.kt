@@ -42,7 +42,7 @@ class HubClientTest {
 
     @Test
     fun `status copes with a browser-style answer that names no device`() {
-        respond(200, """{"device":null,"parser":"rules"}""")
+        respond(200, """{"device":null,"parser":"none"}""")
         assertEquals(VoiceStatus(null, usesModel = false), client.status().ok())
     }
 
@@ -55,7 +55,7 @@ class HubClientTest {
         )
         val reply = client.sendVoice("add eggs, milk and bread to m and s").ok()
 
-        assertEquals(VoiceReply("add_to_list", "Added Eggs and Milk to M&S – Bangor", usedModel = true), reply)
+        assertEquals(VoiceReply("add_to_list", "Added Eggs and Milk to M&S – Bangor"), reply)
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
@@ -67,7 +67,7 @@ class HubClientTest {
     fun `reads a reply for any action, needing only its action and message`() {
         respond(200, """{"action":"create_log","parsedBy":"model","message":"Added Dentist, Tue 4 Nov 15:00"}""")
         assertEquals(
-            VoiceReply("create_log", "Added Dentist, Tue 4 Nov 15:00", usedModel = true),
+            VoiceReply("create_log", "Added Dentist, Tue 4 Nov 15:00"),
             client.sendVoice("dentist next tuesday at 3").ok(),
         )
     }
@@ -108,6 +108,17 @@ class HubClientTest {
     fun `a server error says so with its code`() {
         respond(503, "Service Unavailable")
         assertTrue(client.status().error().message.contains("503"))
+        respond(500, """{"error":"Internal server error"}""")
+        assertTrue(client.status().error().message.contains("500"))
+    }
+
+    @Test
+    fun `a hub that can't take voice commands says why`() {
+        respond(503, """{"error":"Voice commands need Claude, and the hub has no Anthropic key. Nothing was saved."}""")
+        assertEquals(
+            "Voice commands need Claude, and the hub has no Anthropic key. Nothing was saved.",
+            client.sendVoice("add eggs").error().message,
+        )
     }
 
     @Test

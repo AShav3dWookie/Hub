@@ -7,7 +7,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** `GET /api/voice/status`: who the token belongs to, and which parser commands will get. */
+/** `GET /api/voice/status`: who the token belongs to, and whether the hub can take voice commands. */
 data class VoiceStatus(val device: String?, val usesModel: Boolean)
 
 /**
@@ -18,7 +18,6 @@ data class VoiceStatus(val device: String?, val usesModel: Boolean)
 data class VoiceReply(
     val action: String,
     val message: String,
-    val usedModel: Boolean,
     /** For [HubClient.undoVoice]; null when the command saved nothing. */
     val commandId: Int? = null,
 )
@@ -58,7 +57,6 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
             VoiceReply(
                 action = json.getString("action"),
                 message = json.getString("message"),
-                usedModel = json.getString("parsedBy") == "model",
                 commandId = if (json.isNull("commandId")) null else json.getInt("commandId"),
             )
         }
@@ -110,6 +108,9 @@ class HubClient(private val pairing: Pairing, private val timeoutMs: Int = 15_00
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             when {
                 code == 401 -> HubResult.Failed(HubError.BadToken)
+                // A 503 is the hub saying why it can't take anything (no Anthropic key, Claude
+                // unreachable); any other 5xx is just a fault.
+                code == 503 -> HubResult.Failed(errorFrom(text) ?: HubError.ServerError(code))
                 code >= 500 -> HubResult.Failed(HubError.ServerError(code))
                 code >= 400 -> HubResult.Failed(errorFrom(text) ?: HubError.NotAHub)
                 else -> HubResult.Ok(read(text))

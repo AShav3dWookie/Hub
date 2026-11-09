@@ -12,7 +12,7 @@ import type { DeviceTokenDTO, VoiceStatusResponse } from "@logger/shared";
  * `POST /api/voice { text }` — see docs/voice.md.
  *
  * `parser` undefined means "work it out from config", done once on first use: the real model
- * when an API key is set, otherwise none (rules only). Tests pass a fake, or null.
+ * when an API key is set, otherwise none (voice commands are refused). Tests pass a fake, or null.
  */
 export function createVoiceRouter(db: AppDb, parser?: VoiceParser | null): Router {
   const router = Router();
@@ -30,7 +30,7 @@ export function createVoiceRouter(db: AppDb, parser?: VoiceParser | null): Route
   router.get("/status", (_req, res) => {
     const body: VoiceStatusResponse = {
       device: (res.locals.device as DeviceTokenDTO | undefined)?.name ?? null,
-      parser: getParser() ? "model" : "rules",
+      parser: getParser() ? "model" : "none",
     };
     res.json(body);
   });

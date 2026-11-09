@@ -38,7 +38,7 @@ test("a logs token reads what the hub made of a voice command, and nothing else"
   });
   expect(res.status()).toBe(200);
   const line = (await res.text()).split("\n").find((l) => l.includes(said));
-  expect(line).toMatch(new RegExp(`voice +"${said}" → add_to_list \\((rules|model)\\)`));
+  expect(line).toMatch(new RegExp(`voice +"${said}" → add_to_list: Added`));
 
   // Each token to its own job.
   expect((await page.request.get("/api/device/logs", { headers: bearer(phone) })).status()).toBe(403);

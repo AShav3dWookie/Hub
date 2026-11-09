@@ -245,12 +245,18 @@ new kind of write is a new action module. The response is discriminated by `acti
 
 `voiceService.handleVoiceCommand` asks the model parser first; it proposes `{ action, input }`,
 the service checks the input against that action's zod schema, and the action checks it against
-real data before writing. *Any* failure falls back to `lib/voiceRules.ts`, which only knows
-`add_to_list`, so a shopping command is never lost. `lib/voiceModel.ts` is the only importer of
+real data before writing. There is **no fallback**: no key, or *any* model failure, is a 503
+with the reason and nothing saved. A rules backup (`lib/voiceRules.ts`, removed in 1.6.0)
+used to step in, and it put "add an appointment for a haircut…" on the shopping list
+verbatim. Don't bring one back. `lib/voiceModel.ts` is the only importer of
 `@anthropic-ai/sdk`: Haiku gets one strict tool per action (schema from the zod input via
 `z.toJSONSchema`) and `tool_choice: any` with parallel calls off, so it must pick exactly one.
 `createApp(db, photosDir, push, voiceParser)`: omitted builds from config
-(`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means rules only, tests pass a fake.
+(`ANTHROPIC_API_KEY`, `VOICE_MODEL`), `null` means no model (every command a 503), tests
+pass a fake. `parsedBy` is always `"model"`, kept on the reply only because companion apps up to
+1.5 read it. Suites that drive a real hub (e2e, `companion:contract`) point
+`ANTHROPIC_BASE_URL` at `scripts/fakeVoiceModel.mjs`, a free stand-in for the Messages API that
+only knows "add <item> to <list>", so they run the real model code path.
 `npm run voice:check` (`scripts/voiceCheck.ts`) runs the **phrase table** (phrase → expected
 action and fields; every rule gets lines) against the real API: a **manual** script, never
 part of `npm test` or CI, because it costs money.
@@ -283,8 +289,8 @@ and `docs/voice.md`), never a prefix, which would also expose `/api/device-token
 message, data })` — it also echoes to the console (except under Vitest), never throws, and
 prunes to 14 days / 10,000 rows. Something that would repeat every minute uses `writeLogOnce`
 with a window. Sources: `server` (the startup line in `index.ts`: version, voice model or
-rules-only, time zone), `voice` (every command in `voiceService`: text, `parsedBy`, action,
-input, `modelError`/`modelAnswer`, reply or refusal, ms — a rules fallback is a `warn`),
+off, time zone), `voice` (every command in `voiceService`: text, action, input,
+`modelError`/`modelAnswer`, reply or refusal, ms — a 503 refusal is an `error`),
 `http` (500s from `createErrorHandler(db)` with the stack; refused tokens, path only), and
 `notifications` (sends, undelivered reminders, gone devices). Never log a token, a password or
 a key.
@@ -334,9 +340,10 @@ send is harmless.
   every variant and rejects `--tests` — then `lintVitalRelease`, the lint a release build runs,
   so CI catches what would otherwise first fail on a release tag), `companion:contract` (the app's `HubClient` against a hub
   container built from this repo), `companion:build` (APK into `companion-app/dist/`).
-- **The contract hub must never get `ANTHROPIC_API_KEY`** — the script passes an explicit empty
-  one and `HubContractTest` fails if `/api/voice/status` reports the model. That's what keeps it
-  free and in the regression suite.
+- **The contract hub must never get the real `ANTHROPIC_API_KEY`.** The script gives it a
+  fake key and `ANTHROPIC_BASE_URL` pointing at `scripts/fakeVoiceModel.mjs`, run from the hub
+  image as a second container. The real API would refuse that key even if the URL were wrong.
+  That's what keeps it free and in the regression suite.
 - Play Services doesn't run under Robolectric, so the two calls into it are swappable seams —
   `Shops.watch` (geofence registration) and `ShopsActivity.locate` (current position) — and
   tests replace them; reset them in `@After`. Test receivers by `sendBroadcast` (it supplies

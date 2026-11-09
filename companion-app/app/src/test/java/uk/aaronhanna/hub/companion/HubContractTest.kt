@@ -16,8 +16,9 @@ import java.net.URL
  * scripts/contract-test.sh (`npm run companion:contract`). It proves the app and the server
  * agree on the API — the stand-in server in HubClientTest only proves the app agrees with itself.
  *
- * The hub runs with no ANTHROPIC_API_KEY, so commands use the free rules parser: this belongs in
- * the regression suite and costs nothing. Skipped when HUB_URL isn't set (plain `companion:test`).
+ * The hub's model is scripts/fakeVoiceModel.mjs (a container beside it, with a fake key), which
+ * only knows "add <item> to <list>": this belongs in the regression suite and costs nothing.
+ * Skipped when HUB_URL isn't set (plain `companion:test`).
  */
 class HubContractTest {
     companion object {
@@ -49,12 +50,11 @@ class HubContractTest {
     private fun requireHub() = assumeTrue("HUB_URL not set — run npm run companion:contract", hubUrl != null)
 
     @Test
-    fun `test connection names the device and reports the rules parser`() {
+    fun `test connection names the device and says voice commands will be understood`() {
         requireHub()
         val status = (client.status() as HubResult.Ok).value
         assertEquals("Contract test", status.device)
-        // Also the guard that this run really is free: the hub must not have a key.
-        assertFalse("the contract hub must run without ANTHROPIC_API_KEY", status.usesModel)
+        assertTrue(status.usesModel)
     }
 
     @Test
@@ -64,7 +64,6 @@ class HubContractTest {
         val reply = (client.sendVoice("add $item to the shopping list") as HubResult.Ok).value
 
         assertEquals("add_to_list", reply.action)
-        assertFalse(reply.usedModel)
         assertTrue(reply.message.contains(item))
 
         val lists = JSONArray(http("GET", "/api/lists"))
@@ -109,11 +108,11 @@ class HubContractTest {
     }
 
     @Test
-    fun `without the model, a command that isn't shopping says it needs it rather than guessing`() {
+    fun `a command the model says no action can do comes back as the hub's refusal`() {
         requireHub()
-        val error = (client.sendVoice("dentist next tuesday at 3") as HubResult.Failed).error
+        val error = (client.sendVoice("what's on tomorrow") as HubResult.Failed).error
         assertTrue(error is HubError.Rejected)
-        assertTrue(error.message, error.message.startsWith("I need the model for that"))
+        assertTrue(error.message, error.message.startsWith("I can't do that by voice"))
     }
 
     @Test

@@ -43,7 +43,7 @@ export const addImportantDate: VoiceAction<typeof input> = {
   name: "add_important_date",
   description: "Remember a date that comes round every year for a person: a birthday, an anniversary.",
   input,
-  run(db, said, { text, parsedBy, today, record }): VoiceReplyWithoutId {
+  run(db, said, { text, today, record }): VoiceReplyWithoutId {
     const name = tidy(said.name);
     const person = listPeople(db).find((p) => p.id === said.personId);
     if (!person) {
@@ -70,7 +70,6 @@ export const addImportantDate: VoiceAction<typeof input> = {
       return {
         action: "add_important_date",
         note: null,
-        parsedBy,
         message: `${person.name}'s ${tag} is already ${when}`,
       };
     }
@@ -80,7 +79,6 @@ export const addImportantDate: VoiceAction<typeof input> = {
     return {
       action: "add_important_date",
       note: { id: note.id, entityId: person.id, tag, eventDate },
-      parsedBy,
       message: `Added ${person.name}'s ${tag}, ${when}`,
     };
   },

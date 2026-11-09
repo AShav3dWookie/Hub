@@ -40,26 +40,27 @@ describe("GET /api/device/logs", () => {
   it("shows a logs token what a voice command did and why", async () => {
     const parser: VoiceParser = vi.fn().mockRejectedValue(new Error("401 invalid x-api-key"));
     const { app, phone, logs } = await setup({ auth: true, parser });
-    await request(app).post("/api/voice").set(bearer(phone)).send({ text: "add eggs" }).expect(200);
+    await request(app).post("/api/voice").set(bearer(phone)).send({ text: "add eggs" }).expect(503);
 
     const res = await request(app).get("/api/device/logs").set(bearer(logs)).query({ source: "voice" });
     expect(res.status).toBe(200);
     const [entry] = res.body as ServerLogDTO[];
     expect(entry).toMatchObject({
-      level: "warn",
+      level: "error",
       source: "voice",
-      message: expect.stringContaining('"add eggs" → add_to_list (rules)'),
-      data: expect.objectContaining({ text: "add eggs", parsedBy: "rules", modelError: "401 invalid x-api-key" }),
+      message: expect.stringContaining('"add eggs" → refused (503)'),
+      data: expect.objectContaining({ text: "add eggs", modelError: "401 invalid x-api-key" }),
     });
   });
 
   it("answers in plain lines for a terminal", async () => {
-    const { app, phone, logs } = await setup();
+    const parser: VoiceParser = vi.fn().mockResolvedValue({ action: "add_to_list", input: { listId: null, items: ["Milk"] } });
+    const { app, phone, logs } = await setup({ parser });
     await request(app).post("/api/voice").set(bearer(phone)).send({ text: "add milk" });
 
     const res = await request(app).get("/api/device/logs").set(bearer(logs)).query({ format: "text", since: "1h" });
     expect(res.type).toBe("text/plain");
-    expect(res.text).toMatch(/^\S+Z INFO {2}voice {9}"add milk" → add_to_list \(rules\)/m);
+    expect(res.text).toMatch(/^\S+Z INFO {2}voice {9}"add milk" → add_to_list: Added Milk to Shopping/m);
   });
 
   it("keeps the phone's token and the logs token to their own jobs", async () => {

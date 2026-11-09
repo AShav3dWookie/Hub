@@ -90,7 +90,7 @@ export const createLog: VoiceAction<typeof input> = {
   name: "create_log",
   description: "Add an entry to the diary: an appointment, a hang-out, a meal out, something watched, read or played.",
   input,
-  run(db, said, { text, parsedBy, today, nowMinutes, record }): VoiceReplyWithoutId {
+  run(db, said, { text, today, nowMinutes, record }): VoiceReplyWithoutId {
     const { category } = said;
     const fields = CATEGORY_FIELDS[category];
 
@@ -150,7 +150,6 @@ export const createLog: VoiceAction<typeof input> = {
     return {
       action: "create_log",
       log: { id: log.id, entityId: log.entityId, category, title, date, time, people: tagged },
-      parsedBy,
       message: `Added ${what}${withWho}, ${when}${skipped}`,
     };
   },

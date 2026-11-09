@@ -100,8 +100,8 @@ class SettingsActivityTest {
     }
 
     @Test
-    fun `test connection reports the device and which parser the hub will use`() {
-        server.enqueue(MockResponse().setBody("""{"device":"Pixel 6","parser":"rules"}"""))
+    fun `test connection reports the device, and a hub that can't take voice commands`() {
+        server.enqueue(MockResponse().setBody("""{"device":"Pixel 6","parser":"none"}"""))
         val screen = open()
         screen.field(R.id.hub_url).setText(serverUrl)
         screen.field(R.id.token).setText(token)
@@ -109,7 +109,7 @@ class SettingsActivityTest {
 
         waitUntil { screen.text(R.id.result).startsWith("Connected") }
         assertTrue(screen.text(R.id.result).contains("\"Pixel 6\""))
-        assertTrue(screen.text(R.id.result).contains("simple backup"))
+        assertTrue(screen.text(R.id.result).contains("no Anthropic key"))
         assertEquals("Bearer $token", server.takeRequest().getHeader("Authorization"))
     }
 

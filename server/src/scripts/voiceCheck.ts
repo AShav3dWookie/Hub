@@ -15,7 +15,7 @@
  *    come back as. It is the regression net for the rules: every rule gets lines here. Reports
  *    pass/fail, latency, tokens and the cost of the run (well under a penny).
  * 2. With --server and --token: one command through a running server's POST /api/voice, which
- *    proves the server itself has the key (`parsedBy: "model"`). It really adds an item to that
+ *    proves the server itself has the key and can reach the API. It really adds an item to that
  *    server's main list ("Voice check"), so tick it off afterwards.
  */
 import fs from "node:fs";
@@ -276,14 +276,14 @@ async function checkServer(url: string, token: string): Promise<boolean> {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ text: "add voice check to the shopping list" }),
   });
-  const body = (await res.json()) as { parsedBy?: string; message?: string; error?: string };
+  const body = (await res.json()) as { message?: string; error?: string };
   console.log(`  ${res.status} ${JSON.stringify(body)}`);
-  if (res.status !== 200) {
-    console.log("  FAIL  the server refused the command (is the token right?)");
+  if (res.status === 503) {
+    console.log("  FAIL  the server has no key, or can't reach the API");
     return false;
   }
-  if (body.parsedBy !== "model") {
-    console.log("  FAIL  the server used the rules backup — it has no key, or can't reach the API");
+  if (res.status !== 200) {
+    console.log("  FAIL  the server refused the command (is the token right?)");
     return false;
   }
   console.log('  PASS  the server understood it with the model. Tick "Voice check" off its main list.');

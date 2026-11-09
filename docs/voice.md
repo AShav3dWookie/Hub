@@ -7,7 +7,7 @@ turns speech into text; the server works out what the text means and saves it.
 ```
  phone ── "add eggs and milk to marks and spencer" ──▶ POST /api/voice
                                                         │
-                        Claude Haiku: which list? which items?  (or the rules backup)
+                        Claude Haiku: which list? which items?
                                                         │
           ◀── "Added Eggs and Milk to M&S – Bangor" ────┘  items on the list, synced as usual
 ```
@@ -21,8 +21,8 @@ turns speech into text; the server works out what the text means and saves it.
    ANTHROPIC_API_KEY=sk-ant-...
    ```
 
-   Each command costs a tiny fraction of a penny; ten a day is pennies a month. Without a key,
-   voice still works using the backup parser described below.
+   Each command costs a tiny fraction of a penny; ten a day is pennies a month. Without a key
+   the hub refuses every voice command (see *When Claude can't be reached* below).
 
 2. **Create a token for the device.** Settings → **Devices** → name it (e.g. *Pixel 6*) → *Add
    device*. Copy the token into the companion app straight away: it is shown once, and the server
@@ -147,19 +147,18 @@ curl -X DELETE https://hub.aaronhanna.uk/api/voice/commands/42 -H "Authorization
 Questions ("what's on tomorrow?"), removing or changing things, and anything else no action
 covers get a 422: *I can't do that by voice (answering questions).* Nothing is saved.
 
-## The backup parser
+## When Claude can't be reached
 
-When the model can't be reached (no key, no internet, a 10-second timeout, or an answer that
-doesn't fit), a simple set of rules takes over so a shopping command is never lost. It understands
-*"add X to Y"* and matches *Y* only when every word of it is in exactly one list's name. It only
-takes a command that starts "add" or "put", or ends by naming a list; anything else (an
-appointment) answers *I need the model for that* rather than landing on the shopping list. It
-**never splits items**, so "eggs and milk" lands as a single entry *Eggs and milk*. That's why
-its replies end in *(simple parser — check it)* and report `"parsedBy": "rules"`.
+There is no backup. With no key, no internet, a 10-second timeout or an answer that doesn't fit,
+the hub answers **503** and saves nothing. The phone shows why: *Voice commands need Claude, and
+the hub has no Anthropic key*, or *Couldn't get through to Claude, so nothing was saved. Try
+again in a moment.* Until 1.6.0 a simple rules parser stepped in instead, but it took anything
+starting "add" as shopping, so *"add an appointment for a haircut on the 24th"* landed on the
+list word for word. A wrong guess is worse than asking again.
 
-Every command goes into the hub's log — what was heard, which parser understood it, the action
-and input the model chose, and why it fell back when it did — readable from the PC with
-`npm run hub:logs -- --source voice` ([logs.md](logs.md)). A fallback is logged as a warning.
+Every command goes into the hub's log: what was heard, the action and input the model chose,
+the reply, or why it was refused (`modelError`). Read it from the PC with
+`npm run hub:logs -- --source voice` ([logs.md](logs.md)). A 503 is logged as an error.
 
 ## Security
 

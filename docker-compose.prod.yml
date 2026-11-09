@@ -60,7 +60,7 @@ services:
       # https://hub.aaronhanna.uk — so these only matter if you move house or domain.
       - NOTIFY_TIMEZONE=${NOTIFY_TIMEZONE:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
-      # Voice commands (docs/voice.md). Without a key a simple backup parser is used.
+      # Voice commands (docs/voice.md). Without a key every voice command is refused.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - VOICE_MODEL=${VOICE_MODEL:-}
     # The SQLite database and the uploaded photos, together. Set DATA_DIR to an absolute host

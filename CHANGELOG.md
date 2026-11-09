@@ -3,6 +3,18 @@
 Notable changes to Logger, newest first. Versions are the tags `npm run release` pushes, each of
 which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/deployment.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Voice no longer guesses without Claude.** The backup rules parser is gone. With no
+  `ANTHROPIC_API_KEY`, or when Claude can't be reached, a voice command is refused with the
+  reason and nothing is saved. The backup took anything starting "add" as shopping, so
+  "add an appointment for a haircut on the 24th" went on the list word for word.
+- The companion app shows that reason instead of "The hub had a problem (503)", and Test
+  connection says when the hub has no key. Older app versions still work and show the generic
+  message.
+
 ## [1.5.0] — 2026-11-07
 
 ### Added

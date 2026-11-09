@@ -15,20 +15,21 @@ export interface VoiceCommandRequest {
 }
 
 /**
- * Which parser understood the command. `"rules"` means the model couldn't be reached and the
- * simple backup was used, which never splits "eggs and milk" into two items — worth a glance.
+ * Which parser understood the command. Only ever "model" since the rules backup was removed
+ * (1.6.0): a command the model can't take is refused instead. Kept on the reply because
+ * companion apps up to 1.5 read it.
  */
-export type VoiceParsedBy = "model" | "rules";
+export type VoiceParsedBy = "model";
 
 /**
  * `GET /api/voice/status` — the companion app's "Test connection". Proves the token works
- * without adding anything to a list, and says which parser commands will get.
+ * without adding anything to a list, and says whether voice commands can be understood.
  */
 export interface VoiceStatusResponse {
   /** The device the token belongs to; null when called from a signed-in browser. */
   device: string | null;
-  /** "model" when the server has an Anthropic key, "rules" when it will use the backup. */
-  parser: VoiceParsedBy;
+  /** "model" when the server has an Anthropic key; "none" when voice commands will be refused. */
+  parser: "model" | "none";
 }
 
 /** What voice can do. Each one is a module in server/src/voice/. */
