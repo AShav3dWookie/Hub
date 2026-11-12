@@ -60,12 +60,20 @@ as root, log in as root too, or the pull fails there.
 > via TrueNAS Init/Shutdown Scripts: those are stored in the config database, which ends up in
 > config backups.
 
-**2. Files.** Copy `docker-compose.prod.yml` and `.env.prod.example` to a directory on the server
-(e.g. `/srv/hub`), then:
+**2. Files.** Everything the server needs is in the repo's [`deploy/`](../deploy) folder. Copy
+`deploy/compose.yml` and `deploy/.env.example` to a directory on the server (e.g. `/srv/hub`),
+then:
 
 ```bash
-cp .env.prod.example .env
+cp .env.example .env
 ```
+
+`compose.yml` is a name `docker compose` finds by itself, so every command below runs from that
+directory with no `-f`. (Before 1.6.0 the file was called `docker-compose.prod.yml`. A server set
+up then keeps working with `-f docker-compose.prod.yml`, or rename it to `compose.yml`. Its
+contents haven't changed.)
+
+`deploy/nginx.conf` is the host nginx vhost; it isn't copied next to the compose file.
 
 **3. Fill in `.env`.**
 
@@ -85,8 +93,8 @@ Set `IMAGE_TAG` to the version you just released. Check the port is free:
 ## Deploy
 
 ```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose pull
+docker compose up -d
 curl -s localhost:8090/api/health      # {"status":"ok","version":"1.1.0"}
 ```
 
@@ -98,7 +106,7 @@ docker exec hub-app-1 printenv AUTH_PASSWORD_HASH
 
 ## Deploying through Portainer instead
 
-Paste `docker-compose.prod.yml` into **Stacks → Add stack → Web editor** and set the same
+Paste `deploy/compose.yml` into **Stacks → Add stack → Web editor** and set the same
 variables in the stack's **Environment variables** fields rather than a `.env` file. The compose
 file uses `${VAR}` substitution precisely so both routes work.
 
@@ -156,10 +164,10 @@ volume, and nothing in the deploy flow removes a bind-mounted directory.
 **Seed it from an existing database:**
 
 ```bash
-docker compose -f docker-compose.prod.yml stop app
+docker compose stop app
 docker run --rm -v hub-data:/data -v "$PWD":/backup alpine \
   sh -c 'cp /backup/logger.db* /data/ && cp -r /backup/photos /data/ 2>/dev/null || true'
-docker compose -f docker-compose.prod.yml start app
+docker compose start app
 ```
 
 Copy the `-wal` and `-shm` files too (the glob above does), or checkpoint the database first.
@@ -175,7 +183,7 @@ docker run --rm -v hub-data:/data -v "$PWD":/backup alpine \
 
 Cloudflare terminates TLS for `hub.aaronhanna.uk` and forwards to your nginx, which proxies to
 `127.0.0.1:8090`. Cloudflare never talks to the app directly, so the app's port is purely an
-nginx-to-app detail. See [`docker/nginx.prod.conf`](../docker/nginx.prod.conf) for the vhost and
+nginx-to-app detail. See [`deploy/nginx.conf`](../deploy/nginx.conf) for the vhost and
 [wan-security.md](wan-security.md) for the auth layers.
 
 Push notifications add nothing to this path: the server sends them **outbound** to the browser

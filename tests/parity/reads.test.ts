@@ -3,22 +3,22 @@ import type { SearchQuery } from "@logger/shared";
 import { createParityFixture, TODAY, type ParityFixture } from "./helpers/fixture.js";
 
 // Server read services.
-import { search as serverSearch } from "../server/src/services/searchService.js";
-import { listGalleryPhotos } from "../server/src/services/galleryService.js";
-import { getCalendarRange as serverCalendar } from "../server/src/services/calendarService.js";
-import { getUpcomingImportantDates as serverImportantDates } from "../server/src/services/importantDatesService.js";
-import { getUpcomingEvents as serverUpcomingEvents } from "../server/src/services/upcomingEventsService.js";
-import { listAlbums as serverListAlbums, getAlbumById } from "../server/src/services/albumService.js";
-import { listEntityNotes as serverListNotes } from "../server/src/services/entityNotesService.js";
-import { listLists as serverListLists, getList as serverGetList } from "../server/src/services/listService.js";
+import { search as serverSearch } from "../../server/src/services/searchService.js";
+import { listGalleryPhotos } from "../../server/src/services/galleryService.js";
+import { getCalendarRange as serverCalendar } from "../../server/src/services/calendarService.js";
+import { getUpcomingImportantDates as serverImportantDates } from "../../server/src/services/importantDatesService.js";
+import { getUpcomingEvents as serverUpcomingEvents } from "../../server/src/services/upcomingEventsService.js";
+import { listAlbums as serverListAlbums, getAlbumById } from "../../server/src/services/albumService.js";
+import { listEntityNotes as serverListNotes } from "../../server/src/services/entityNotesService.js";
+import { listLists as serverListLists, getList as serverGetList } from "../../server/src/services/listService.js";
 import {
   getEntityWithLogs,
   getPersonProfile,
-} from "../server/src/services/entityDetailService.js";
-import { searchEntitiesByTitle as serverAutocomplete } from "../server/src/services/entityService.js";
+} from "../../server/src/services/entityDetailService.js";
+import { searchEntitiesByTitle as serverAutocomplete } from "../../server/src/services/entityService.js";
 
 // The offline client's counterparts.
-import * as local from "../client/src/local/queries.js";
+import * as local from "../../client/src/local/queries.js";
 
 /**
  * The two implementations of every read path must agree.

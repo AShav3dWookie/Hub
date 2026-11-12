@@ -15,7 +15,7 @@ workspaces monorepo: `shared` (types), `server` (Express API + SPA host), `clien
   Node version is irrelevant. Open the repo in VS Code → "Reopen in Container". `node_modules`
   is a named volume; `npm ci` runs on create.
 - **`docker compose` / `npm run docker:*` / `npm run pwa:*` run from a HOST terminal**, not
-  inside the container — the compose files bind-mount `./test-env` and `./docker/*`, which a
+  inside the container — the compose files bind-mount `./test-env` and each rig's `nginx.conf`, which a
   host daemon can't resolve to a container path.
 - `.mcp.json` pins `@playwright/mcp` (a root devDependency); the browser is baked into the
   image, so there's no per-machine `install-browser` step.
@@ -279,7 +279,7 @@ a 403, a present-but-wrong one is a 401 even with auth off, no token falls throu
 `requireAuth`. Scopes (`device_tokens.scope`): `device` is the phone (everything above); `logs`
 reads `GET /api/device/logs` and nothing else (see *The hub's log*). `/api/device-tokens` is
 session-only, so a device can never mint tokens. Over the WAN those two paths skip Authelia
-through a regex `location` in nginx (`^/api/(voice|device)(/|$)`, in `docker/nginx.prod.conf`
+through a regex `location` in nginx (`^/api/(voice|device)(/|$)`, in `deploy/nginx.conf`
 and `docs/voice.md`), never a prefix, which would also expose `/api/device-tokens`.
 
 ### The hub's log
@@ -475,7 +475,7 @@ standalone, so nothing pads them otherwise. **Playwright reports every inset as 
 work can only be confirmed on a real device.
 
 Tap targets are 44px. The only deliberate exception is `REMOVE_BUTTON_CLASS` at 36px: a 44px circle
-does not fit inside a text pill. `e2e/mobile-layout.spec.ts` enforces all of this — no horizontal
+does not fit inside a text pill. `tests/e2e/mobile-layout.spec.ts` enforces all of this — no horizontal
 overflow, nothing stranded behind the tab bar, no control under 44px, and a calendar grid that keeps
 one height across 4-, 5- and 6-row months.
 
@@ -493,11 +493,11 @@ run for real. Route tests use `supertest` against `createApp()`, with a `fs.mkdt
 MemoryRouter + ToastProvider; the global `fetch` is stubbed with `vi.fn()` (no MSW). Test files are
 colocated as `*.test.ts(x)`.
 
-`e2e/mobile-layout.spec.ts` is the layout net: it runs on the existing Pixel 7 project and, as a
-by-product, writes a screenshot per route to `e2e/.artifacts/screens/` (gitignored). That is the only
+`tests/e2e/mobile-layout.spec.ts` is the layout net: it runs on the existing Pixel 7 project and, as a
+by-product, writes a screenshot per route to `tests/e2e/.artifacts/screens/` (gitignored). That is the only
 way to actually *see* a CSS change — the jsdom suite renders no styles.
 
-**parity/** is the fourth, and spans both workspaces at once. It seeds a real database, drains the
+**tests/parity/** is the fourth, and spans both workspaces at once. It seeds a real database, drains the
 server's own change-feed into `buildSnapshot`, then asserts the server service and the offline client
 query return identical output for every read path. It lives outside both workspaces because it
 imports from both, with its own vitest config and `npm run typecheck:parity`. When you change a read
@@ -572,25 +572,35 @@ chain, including that Vite really put it in the bundle.
 
 **`AUTH_PASSWORD_HASH` must have every `$` doubled in a `.env` Compose reads** — Compose
 interpolates `env_file` values too, so a raw bcrypt hash loses its salt and every login fails
-silently. `.env.prod.example` carries the escaping one-liner. `docs/deployment.md` is the guide.
+silently. `deploy/.env.example` carries the escaping one-liner. `docs/deployment.md` is the guide.
 
 ### The four compose files
+
+Each compose file reads the `.env` in its **own** folder, which is how the two env files stay
+apart: the repo-root `.env` (`.env.example`) feeds the dev container and the repo's scripts, and
+never reaches the server; `deploy/.env.example` is the server's, copied next to `compose.yml`
+there. `docs/configuration.md` is the one reference for what each hub setting does. Don't
+explain a setting again in an example file, point at it.
 
 | File | Purpose |
 | --- | --- |
 | `docker-compose.yml` | Dev. Builds from source, bind-mounts `./test-env:/app/data`, `:3000`. Project `hub` (from the directory name), container `hub-app-1`. |
-| `docker-compose.prod.yml` | **The server.** Pulls from GHCR, never builds. Named volume `hub-data`, `HOST_PORT` default **8090**. Project is also `hub` — locally always pass `-p hub-prod-test`. |
-| `docker-compose.auth.yml` | Auth rig, nginx in front, `:3300`. |
-| `docker-compose.pwa.yml` | PWA rig, nginx `:3200` + Chromium `:3210`. |
+| `deploy/compose.yml` | **The server.** Pulls from GHCR, never builds. Named volume `hub-data`, `HOST_PORT` default **8090**. Project is also `hub` — locally always pass `-p hub-prod-test`. |
+| `docker/auth/compose.yml` | Auth rig, nginx in front, `:3300`. |
+| `docker/pwa/compose.yml` | PWA rig, nginx `:3200` + Chromium `:3210`. |
 
 Host ports in use: 3000 (dev), 3099 (smoke test), 3100 (e2e), 3200/3210 (pwa rig), 3300 (auth rig),
 5173 (Vite), 8090 (production).
 
 ## Repo notes
 
-- `test-env/` and `data/` are gitignored scratch dirs (seeded DBs, local Docker mounts).
+- **Layout:** `deploy/` is only what the home server runs, `docker/<rig>/` holds a local rig's
+  compose file beside its nginx config, `tests/` holds the suites that span workspaces (`e2e/`,
+  `parity/`), and `scripts/` the repo tooling. The README has the full table.
+- `test-env/` (the seeded DB the dev container mounts) and `server/data/` (`npm run dev:server`'s
+  default DB) are gitignored scratch dirs.
 - `docker-compose.yml`'s `./test-env:/app/data` bind mount **is committed** — it is the dev
-  arrangement. Production uses the `hub-data` named volume in `docker-compose.prod.yml`.
-- `photos-plan.txt` at the root holds feature design notes.
+  arrangement. Production uses the `hub-data` named volume in `deploy/compose.yml`.
+- `docs/design/photos.md` holds the original design brief for photos.
 - `Future_features.md` is the user's private prompt-drafting file: untracked and gitignored. Don't
   read, edit or act on it. Planned work lives in the GitHub issue tracker.

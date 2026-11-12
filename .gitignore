@@ -12,7 +12,7 @@ coverage/
 .claude/
 .playwright-mcp/
 server/public/
-e2e/.artifacts/
+tests/e2e/.artifacts/
 playwright-report/
 test-results/
 

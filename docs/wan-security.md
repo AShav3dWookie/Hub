@@ -46,7 +46,7 @@ Only two things, both already wired:
 | `COOKIE_SECURE` | *unset* | Leave it unset. The cookie's `Secure` flag is then derived per request from `req.protocol`. Forcing `COOKIE_SECURE=true` on a request the cookie library sees as plain HTTP makes it **silently drop the cookie** — login appears to work then bounces straight back to `/login`. |
 
 nginx must send `proxy_set_header X-Forwarded-Proto https;` — see
-[`docker/nginx.prod.conf`](../docker/nginx.prod.conf) for a complete reference `server {}`,
+[`deploy/nginx.conf`](../deploy/nginx.conf) for a complete reference `server {}`,
 including a commented-out Authelia `auth_request` block and Cloudflare real-IP block.
 
 ## Production `.env`
@@ -115,7 +115,7 @@ Safari. The installed icon may need its own one-time login even if Safari is alr
 
 ## Testing the login flow locally first
 
-`docker-compose.auth.yml` is a production-shaped rig with **auth on** and nginx in front
+`docker/auth/compose.yml` is a production-shaped rig with **auth on** and nginx in front
 (`X-Forwarded-Proto: https`), so `Secure` cookies and `trust proxy` are genuinely exercised.
 
 ```bash
@@ -127,7 +127,7 @@ npm run docker:auth:reset    # tear down + wipe when done
 
 1. Visit `/` → redirected to `/login`; card + "Logger" heading; password field autofocused.
 2. Wrong password → **"Incorrect password."** (red, announced), stays on `/login`.
-3. `docker compose -f docker-compose.auth.yml stop app`, submit → **"Can't reach the server…"**
+3. `docker compose -f docker/auth/compose.yml stop app`, submit → **"Can't reach the server…"**
    (distinct message). `start app` again.
 4. Correct password (`test-password`) → lands on `/`.
 5. DevTools → Application → Cookies → `logger.sid`: **HttpOnly ✓, Secure ✓, SameSite=Lax ✓,
@@ -145,7 +145,7 @@ npm run docker:auth:reset    # tear down + wipe when done
 12. Log out → `test-password` is now rejected and the new password works (the database value
     overrode the compose `AUTH_PASSWORD_HASH`, with no restart).
 13. Recovery:
-    `docker compose -f docker-compose.auth.yml exec app node dist/scripts/setPassword.js 'recovered-pw-456'`
+    `docker compose -f docker/auth/compose.yml exec app node dist/scripts/setPassword.js 'recovered-pw-456'`
     → log in with `recovered-pw-456`; the previous password is rejected.
 14. `npm run docker:auth:reset && npm run docker:auth` → `test-password` works again (the volume
     was wiped, so the env seed is back in effect).
@@ -161,9 +161,9 @@ npm run docker:auth:reset    # tear down + wipe when done
 2. `openssl rand -base64 48` → `SESSION_SECRET`. Fill in the prod `.env` (table above).
 3. `npm run docker:auth` locally and run the checklist above.
 4. Deploy the published image on the home server — `npm run release`, then
-   `docker compose -f docker-compose.prod.yml pull && ... up -d`. Full instructions in
+   `docker compose pull && ... up -d`. Full instructions in
    [deployment.md](deployment.md); the server needs no checkout and builds nothing.
-5. Add [`docker/nginx.prod.conf`](../docker/nginx.prod.conf)'s `server {}` to your host nginx,
+5. Add [`deploy/nginx.conf`](../deploy/nginx.conf)'s `server {}` to your host nginx,
    set the cert paths, confirm `proxy_pass` matches `HOST_PORT` (default 8090), `nginx -t`, reload.
 6. Point Cloudflare DNS at the origin; confirm end-to-end over `https://hub.aaronhanna.uk`.
 7. Optionally enable the Authelia `auth_request` block and align session durations.

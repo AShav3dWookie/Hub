@@ -1,12 +1,13 @@
 {
-  "extends": "../tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node", "@playwright/test"],
+    "types": ["node"],
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["**/*.ts", "../playwright.config.ts"]
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../../shared" }]
 }

@@ -15,4 +15,4 @@ coverage
 .vscode
 .claude
 .playwright-mcp
-e2e/.artifacts
+tests/e2e/.artifacts/

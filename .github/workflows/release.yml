@@ -2,7 +2,7 @@
 #
 # Trigger: pushing a semver tag (`v1.2.3`), which is what `npm run release` does. Nothing
 # publishes on an ordinary push to main. The home server then pulls the tag with
-# docker-compose.prod.yml. See docs/deployment.md.
+# deploy/compose.yml. See docs/deployment.md.
 name: release
 
 on:
@@ -101,7 +101,7 @@ jobs:
             echo '```'
             echo ''
             echo 'On the server: set `IMAGE_TAG` in `.env`, then'
-            echo '`docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`'
+            echo '`docker compose pull && docker compose up -d`'
           } >> "$GITHUB_STEP_SUMMARY"
 
   # The Android companion app's APK, signed with the app's release key and attached to a GitHub

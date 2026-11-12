@@ -8,7 +8,7 @@ import { test, expect, type Page } from "@playwright/test";
  * `devices["Pixel 7"]` (412x915, ~20:9) — the real target — so these assertions are made
  * at the size that matters rather than at a desktop default.
  *
- * Screenshots land in e2e/.artifacts/screens (gitignored) as a by-product, which is the
+ * Screenshots land in tests/e2e/.artifacts/screens (gitignored) as a by-product, which is the
  * only way to actually *look* at a CSS change: the jsdom unit suite renders no styles.
  */
 
@@ -51,7 +51,7 @@ test.describe("mobile layout", () => {
     test(`${route.path} fits the viewport width and clears the nav`, async ({ page }) => {
       await open(page, route);
       await page.screenshot({
-        path: `e2e/.artifacts/screens/${slug(route.path)}.png`,
+        path: `tests/e2e/.artifacts/screens/${slug(route.path)}.png`,
         fullPage: true,
       });
 
@@ -143,7 +143,7 @@ test.describe("mobile layout", () => {
       await page.getByRole("heading", { level: 1 }).waitFor();
       await page.getByRole("button", { name: "Edit this screen" }).click();
       await expect(page.getByRole("button", { name: "Done editing" })).toBeVisible();
-      await page.screenshot({ path: `e2e/.artifacts/screens/${slug(path)}-editing.png`, fullPage: true });
+      await page.screenshot({ path: `tests/e2e/.artifacts/screens/${slug(path)}-editing.png`, fullPage: true });
 
       const found = await page.evaluate(() => {
         const wide = [...document.querySelectorAll<HTMLElement>("body *")]
@@ -197,7 +197,7 @@ test.describe("mobile layout", () => {
     await page.getByRole("button", { name: "More tabs" }).click();
     const shopping = nav.getByRole("link", { name: "Shopping" });
     await expect(shopping).toBeVisible();
-    await page.screenshot({ path: "e2e/.artifacts/screens/nav-more-open.png", fullPage: false });
+    await page.screenshot({ path: "tests/e2e/.artifacts/screens/nav-more-open.png", fullPage: false });
 
     const viewport = page.viewportSize()!;
     const navBox = (await nav.boundingBox())!;
@@ -234,7 +234,7 @@ test.describe("mobile layout", () => {
     await page.getByRole("button", { name: /Add to Sainsbury/ }).click();
     const field = page.getByRole("textbox", { name: /Add an item to Sainsbury/ });
     await expect(field).toBeFocused();
-    await page.screenshot({ path: "e2e/.artifacts/screens/shopping-quick-add.png", fullPage: true });
+    await page.screenshot({ path: "tests/e2e/.artifacts/screens/shopping-quick-add.png", fullPage: true });
 
     for (const control of [field, page.getByRole("button", { name: "Add", exact: true })]) {
       const box = await control.boundingBox();

@@ -37,7 +37,7 @@ networks:
 
 services:
   seed:
-    build: { context: ., target: runtime }
+    build: { context: ../.., target: runtime }
     image: logger-pwa:local
     working_dir: /app/server
     networks: [edge]
@@ -53,7 +53,7 @@ services:
         || node dist/scripts/seedTestData.js
 
   app:
-    build: { context: ., target: runtime }
+    build: { context: ../.., target: runtime }
     image: logger-pwa:local
     depends_on:
       seed:
@@ -79,7 +79,7 @@ services:
     ports:
       - "3200:80"
     volumes:
-      - ./docker/nginx.pwa.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
 
   # A separate "client machine": a real Chromium (same Blink engine as Chrome on

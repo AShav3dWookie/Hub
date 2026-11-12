@@ -1,3 +1,9 @@
+# Design brief: event photos
+
+> The brief photos were built from, kept for the reasoning behind the decisions. Some details
+> have moved on since (video, albums, the categories that allow photos); the code and
+> CLAUDE.md are what's current.
+
 Task: Add "Event photos" feature to logger app
 
 Repo: npm workspaces monorepo (shared, server, client) at repo root. Backend: Express 4 + Zod + Drizzle ORM (better-sqlite3). Frontend: React 18 + Vite + TS + Tailwind + React Router v7 + TanStack Query v5. Node 22 required.
