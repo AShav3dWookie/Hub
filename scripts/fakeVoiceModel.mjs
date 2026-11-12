@@ -1,6 +1,6 @@
 /**
  * A stand-in for the Anthropic Messages API, for the suites that drive a real hub end to end
- * (e2e/serve.mjs, companion-app/scripts/contract-test.sh). The hub is started with
+ * (tests/e2e/serve.mjs, companion-app/scripts/contract-test.sh). The hub is started with
  * ANTHROPIC_BASE_URL pointing here and a fake ANTHROPIC_API_KEY, so voice commands go through
  * the real model code (lib/voiceModel.ts, the SDK, the tool schemas) and cost nothing: the key
  * is no good to the real API even if the base URL were wrong.

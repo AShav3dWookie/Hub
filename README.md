@@ -9,6 +9,21 @@ A personal home-server webapp for manually logging movies, TV shows, restaurants
 - **Database**: SQLite (single file, persisted via a Docker volume)
 - **Monorepo**: npm workspaces (`shared`, `server`, `client`)
 
+## Repository layout
+
+| Path | What's there |
+| --- | --- |
+| `shared/`, `server/`, `client/` | The app: npm workspaces for the shared rules and types, the Express API, and the React PWA |
+| `companion-app/` | The Android companion app (not a workspace; it builds in its own container) |
+| `deploy/` | Everything the home server needs: `compose.yml`, `.env.example`, the nginx vhost |
+| `docker/` | Local test rigs that build from source: `auth/` (login behind nginx) and `pwa/` (a separate browser) |
+| `docker-compose.yml`, `Dockerfile` | The dev container, and the image every compose file builds or pulls |
+| `tests/` | Suites that span workspaces: `e2e/` (Playwright) and `parity/` (server vs offline reads) |
+| `scripts/` | Release, log reading and smoke-test tooling |
+| `docs/` | The guides, indexed in [docs/README.md](docs/README.md) |
+| `.env.example` | The repo-root `.env`: dev container settings and the scripts' tokens. The server's is `deploy/.env.example` |
+| `test-env/` | Gitignored: the seeded database the dev container mounts |
+
 ## Running with Docker (recommended)
 
 ### Compose
@@ -45,7 +60,7 @@ pulls it — nothing is built there.
 npm run release -- minor    # bumps, tags and pushes; CI builds and publishes the image
 ```
 
-Then on the server: `docker compose -f docker-compose.prod.yml pull && ... up -d`.
+Then on the server: `docker compose pull && ... up -d`.
 Full guide, including one-time setup, rollback and backups: **[docs/deployment.md](docs/deployment.md)**.
 
 To expose the app on the internet (password login + reverse proxy + Authelia), see
@@ -123,7 +138,9 @@ npm run docker:test    # builds the image, runs it, and polls /api/health
 
 ## Environment variables
 
-See [.env.example](.env.example) for the full list (`PORT`, `DB_PATH`, `AUTH_ENABLED`, `AUTH_PASSWORD_HASH`, `SESSION_SECRET`, `TRUST_PROXY`, `COOKIE_SECURE`, `SESSION_MAX_AGE_DAYS`).
+[docs/configuration.md](docs/configuration.md) lists every setting the hub reads, and which `.env`
+feeds it: the repo-root one ([.env.example](.env.example)) for the dev container and the repo's
+scripts, or the server's ([deploy/.env.example](deploy/.env.example)).
 
 Generate the login password hash for `.env` with:
 

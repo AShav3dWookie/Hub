@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { logPhotos } from "../server/src/db/schema.js";
+import { logPhotos } from "../../server/src/db/schema.js";
 import { eq } from "drizzle-orm";
-import { getEntityWithLogs } from "../server/src/services/entityDetailService.js";
-import { listGalleryPhotos } from "../server/src/services/galleryService.js";
+import { getEntityWithLogs } from "../../server/src/services/entityDetailService.js";
+import { listGalleryPhotos } from "../../server/src/services/galleryService.js";
 import {
   addListItem,
   createList,
@@ -12,8 +12,8 @@ import {
   listLists,
   setListLocation,
   updateList,
-} from "../server/src/services/listService.js";
-import * as local from "../client/src/local/queries.js";
+} from "../../server/src/services/listService.js";
+import * as local from "../../client/src/local/queries.js";
 import {
   attachPhoto,
   createParityFixture,

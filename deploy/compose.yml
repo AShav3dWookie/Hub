@@ -7,11 +7,11 @@
 # Deploying through Portainer instead? Add ghcr.io under Settings -> Registries and paste this
 # file into a stack; set the variables below in the stack's environment fields.
 #
-#   cp .env.prod.example .env    # then fill it in
+#   cp .env.example .env    # then fill it in
 #
 # Deploy / upgrade:
-#   docker compose -f docker-compose.prod.yml pull
-#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose pull
+#   docker compose up -d
 #   curl -s localhost:8090/api/health      # confirms which version is live
 #
 # Rollback: set IMAGE_TAG to the previous version in .env and repeat those two commands.
@@ -28,12 +28,12 @@ services:
   app:
     image: ghcr.io/ashav3dwookie/hub:${IMAGE_TAG:-latest}
     # Published on the LAN, not bound to 127.0.0.1: host nginx proxies to it (see
-    # docker/nginx.prod.conf). That also means http://<lan-ip>:${HOST_PORT} reaches the app
+    # nginx.conf). That also means http://<lan-ip>:${HOST_PORT} reaches the app
     # directly, bypassing nginx and therefore Authelia — which is why AUTH_ENABLED defaults to
     # true here. Close it with a firewall rule if you want only nginx to reach it.
     ports:
       - "${HOST_PORT:-8090}:3000"
-    # Config comes from .env next to this file (copy .env.prod.example), or from the stack's
+    # Config comes from .env next to this file (copy .env.example), or from the stack's
     # environment-variable fields if you deploy through Portainer. Written as explicit `${VAR}`
     # substitution rather than `env_file` so that both routes work: Portainer feeds substitution,
     # and does not reliably materialise a .env file for env_file to read.

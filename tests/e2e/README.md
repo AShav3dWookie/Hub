@@ -12,11 +12,11 @@ npx playwright install chromium      # once — downloads the browser to the OS 
 npm run test:e2e                      # build → serve on :3100 → run
 E2E_SKIP_BUILD=1 npm run test:e2e     # reuse the previous build (fast iteration)
 npm run test:e2e:report               # open the HTML report of the last run
-node e2e/serve.mjs                     # just stand the app up on :3100 for hands-on poking
+node tests/e2e/serve.mjs                  # just stand the app up on :3100 for hands-on poking
 ```
 
-`e2e/serve.mjs` builds everything, copies `client/dist` into `server/public`, wipes and
-re-seeds a scratch SQLite DB at `e2e/.artifacts/e2e.db`, and starts `server/dist/index.js`
+`tests/e2e/serve.mjs` builds everything, copies `client/dist` into `server/public`, wipes and
+re-seeds a scratch SQLite DB at `tests/e2e/.artifacts/e2e.db`, and starts `server/dist/index.js`
 with auth disabled on `E2E_PORT` (default 3100). It never touches port 3000, `test-env/`, or
 `data/`. Playwright starts it automatically (`webServer`) and, outside CI, reuses an
 already-running instance.

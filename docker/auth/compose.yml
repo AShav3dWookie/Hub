@@ -24,7 +24,7 @@ networks:
 
 services:
   seed:
-    build: { context: ., target: runtime }
+    build: { context: ../.., target: runtime }
     image: logger-auth:local
     working_dir: /app/server
     networks: [edge]
@@ -40,7 +40,7 @@ services:
         || node dist/scripts/seedTestData.js
 
   app:
-    build: { context: ., target: runtime }
+    build: { context: ../.., target: runtime }
     image: logger-auth:local
     depends_on:
       seed:
@@ -71,7 +71,7 @@ services:
     ports:
       - "3300:80"
     volumes:
-      - ./docker/nginx.auth.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
 
 volumes:

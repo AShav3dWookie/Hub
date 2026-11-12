@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { SyncChangesResponse } from "@logger/shared";
-import { E2E_BASE_URL } from "../playwright.config";
+import { E2E_BASE_URL } from "./playwright.config";
 import { HOME_HEADING, enterEditMode, gotoHome, gotoTab, outboxCount, readStore, serviceWorkerState, syncFromSettings } from "./helpers/app";
 
 /**

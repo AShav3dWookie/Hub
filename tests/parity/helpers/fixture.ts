@@ -1,19 +1,19 @@
-import { createTestDb } from "../../server/src/testUtils/testDb.js";
-import type { AppDb } from "../../server/src/db/client.js";
-import { logPhotos, logs } from "../../server/src/db/schema.js";
-import { createBareEntity } from "../../server/src/services/entityService.js";
-import { createLog } from "../../server/src/services/logService.js";
-import { createEntityNote } from "../../server/src/services/entityNotesService.js";
-import { createAlbum, addAlbumEvent } from "../../server/src/services/albumService.js";
-import { getChanges } from "../../server/src/services/syncService.js";
+import { createTestDb } from "../../../server/src/testUtils/testDb.js";
+import type { AppDb } from "../../../server/src/db/client.js";
+import { logPhotos, logs } from "../../../server/src/db/schema.js";
+import { createBareEntity } from "../../../server/src/services/entityService.js";
+import { createLog } from "../../../server/src/services/logService.js";
+import { createEntityNote } from "../../../server/src/services/entityNotesService.js";
+import { createAlbum, addAlbumEvent } from "../../../server/src/services/albumService.js";
+import { getChanges } from "../../../server/src/services/syncService.js";
 import {
   addListItem,
   createList,
   deleteListItem,
   setListLocation,
   updateList,
-} from "../../server/src/services/listService.js";
-import { buildSnapshot, type LocalSnapshot } from "../../client/src/local/snapshot.js";
+} from "../../../server/src/services/listService.js";
+import { buildSnapshot, type LocalSnapshot } from "../../../client/src/local/snapshot.js";
 import type {
   AlbumSyncDTO,
   EntityNoteSyncDTO,

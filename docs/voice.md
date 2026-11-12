@@ -15,7 +15,7 @@ turns speech into text; the server works out what the text means and saves it.
 ## Setting it up
 
 1. **Give the server an API key.** Create one at <https://console.anthropic.com>, then put it in
-   the `.env` next to `docker-compose.prod.yml` and recreate the container:
+   the `.env` next to `deploy/compose.yml` and recreate the container:
 
    ```bash
    ANTHROPIC_API_KEY=sk-ant-...
@@ -181,7 +181,7 @@ the reply, or why it was refused (`modelError`). Read it from the PC with
 
 A `location` beside the site's `location /`, without its `auth_request`. nginx checks a regex
 location before `location /`, so these two paths skip Authelia and nothing else does
-(`docker/nginx.prod.conf` has it too):
+(`deploy/nginx.conf` has it too):
 
 ```nginx
 location ~ ^/api/(voice|device)(/|$) {

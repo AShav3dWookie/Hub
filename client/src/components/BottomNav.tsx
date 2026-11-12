@@ -119,7 +119,7 @@ export function BottomNav() {
         onPointerDown={handlePointerDown}
         onClickCapture={handleClickCapture}
         // touch-none: without it a swipe up the bar also scrolls the page beneath it (by ~70px
-        // in e2e/bottom-nav.spec.ts). The bar itself scrolls nothing, so it gives up nothing.
+        // in tests/e2e/bottom-nav.spec.ts). The bar itself scrolls nothing, so it gives up nothing.
         // pb-[env(...)] keeps the labels out of the home-indicator gesture zone; the app sets
         // viewport-fit=cover and runs standalone, so nothing else would.
         className="fixed inset-x-0 bottom-0 z-40 touch-none border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"

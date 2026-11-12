@@ -82,7 +82,7 @@ cat <<EOF
 
     once the run is green, on the home server:
       # set IMAGE_TAG=$NEW in .env, then
-      docker compose -f docker-compose.prod.yml pull
-      docker compose -f docker-compose.prod.yml up -d
+      docker compose pull
+      docker compose up -d
       curl -s localhost:8090/api/health   # -> {"status":"ok","version":"$NEW"}
 EOF

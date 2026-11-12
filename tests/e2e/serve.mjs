@@ -1,11 +1,11 @@
 /**
  * Builds the whole app and serves the production bundle for the e2e / PWA test suite.
  *
- * Runs as Playwright's `webServer` (see playwright.config.ts) and is also runnable
- * standalone for hands-on poking:  `node e2e/serve.mjs`  →  http://localhost:3100
+ * Runs as Playwright's `webServer` (see playwright.config.ts beside it) and is also runnable
+ * standalone for hands-on poking:  `node tests/e2e/serve.mjs`  →  http://localhost:3100
  *
  * Steps: build (shared → server → client) → copy client/dist into server/public →
- * wipe + re-seed a scratch SQLite DB under e2e/.artifacts → start server/dist/index.js
+ * wipe + re-seed a scratch SQLite DB under tests/e2e/.artifacts → start server/dist/index.js
  * with AUTH disabled on E2E_PORT. Set E2E_SKIP_BUILD=1 to reuse the previous build.
  *
  * Voice commands go to scripts/fakeVoiceModel.mjs on E2E_MODEL_PORT, never the real API —
@@ -17,16 +17,16 @@ import { execFileSync, spawn } from "node:child_process";
 import { rmSync, mkdirSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { createFakeVoiceModel } from "../scripts/fakeVoiceModel.mjs";
+import { createFakeVoiceModel } from "../../scripts/fakeVoiceModel.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PORT = process.env.E2E_PORT ?? "3100";
 const MODEL_PORT = process.env.E2E_MODEL_PORT ?? "3101";
 // The published image always bakes a version in (Dockerfile APP_VERSION -> VITE_APP_VERSION for
 // the bundle, APP_VERSION for /api/health). Match that here: the shell version check compares the
 // two and deliberately does nothing on a "dev" build, so a rig without one cannot exercise it.
 const APP_VERSION = process.env.E2E_APP_VERSION ?? "9.9.9";
-const artifactsDir = path.join(root, "e2e", ".artifacts");
+const artifactsDir = path.join(root, "tests", "e2e", ".artifacts");
 const dbPath = path.join(artifactsDir, "e2e.db");
 
 // `shell: true` so Windows resolves `npm` via PATHEXT — execFileSync("npm.cmd") throws
@@ -59,7 +59,7 @@ const fakeModel = createFakeVoiceModel().listen(Number(MODEL_PORT), "127.0.0.1")
 console.log(`[e2e] starting server on :${PORT}`);
 // cwd = server/ so the app finds its static bundle at ./public (see app.ts).
 // Auth is off here. The login flow is covered by unit/integration tests and the
-// docker-compose.auth.yml rig (see docs/wan-security.md); if an auth-on e2e pass
+// docker/auth/compose.yml rig (see docs/wan-security.md); if an auth-on e2e pass
 // is ever wanted, gate it behind an env flag and set AUTH_ENABLED / SESSION_SECRET
 // / AUTH_PASSWORD_HASH below.
 const server = spawn(process.execPath, [path.join("dist", "index.js")], {
