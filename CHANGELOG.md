@@ -3,7 +3,7 @@
 Notable changes to Logger, newest first. Versions are the tags `npm run release` pushes, each of
 which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/deployment.md).
 
-## [Unreleased]
+## [1.6.0] — 2026-11-12
 
 ### Changed
 
@@ -14,6 +14,12 @@ which publishes `ghcr.io/ashav3dwookie/hub` — see [docs/deployment.md](docs/de
 - The companion app shows that reason instead of "The hub had a problem (503)", and Test
   connection says when the hub has no key. Older app versions still work and show the generic
   message.
+
+### Upgrading
+
+- Check `ANTHROPIC_API_KEY` is set in the server's `.env` before pulling 1.6.0: without it every
+  voice command is now refused rather than guessed at. The startup line in the hub's log says
+  `voice: off` when it is missing.
 
 ## [1.5.0] — 2026-11-07
 
